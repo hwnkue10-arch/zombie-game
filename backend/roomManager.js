@@ -246,8 +246,8 @@ class RoomManager {
       this.slots[0].name = "HOST_P1";
       this.slots[0].role = "LOCAL";
     } else {
-      this.slots[slotId].name = DEFAULT_AI_NAMES[slotId];
-      this.slots[slotId].role = "AI";
+      this.slots[slotId].name = `EMPTY_${slotId + 1}`;
+      this.slots[slotId].role = "EMPTY";
     }
     console.log(`[RoomManager] Player '${name}' (P${slotId + 1}) disconnected. Slot reverted to ${this.slots[slotId].role}.`);
     this.broadcastLobbyState();

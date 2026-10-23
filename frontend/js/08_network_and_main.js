@@ -23,11 +23,16 @@
       if (!game.running) return;
       const me = game.players[mySlotIndex];
       if (!me) return;
+      const curR = game.rooms[game.currentRoomIndex];
       const snap = {
         timestamp: Date.now(),
         seed: game.seed,
+        elapsedTime: game.elapsedTime || 0,
         currentRoomIndex: game.currentRoomIndex,
         totalRooms: game.totalRooms,
+        wavePhase: game.wavePhase,
+        waveTimer: game.waveTimer,
+        waveNumber: game.waveNumber,
         bioPoints: game.bioPoints,
         weaponParts: game.weaponParts,
         partsCrafted: game.partsCrafted,
@@ -37,11 +42,23 @@
         totalKills: game.totalKills,
         totalRevives: game.totalRevives,
         friendlyFire: game.friendlyFire,
+        playerX: me.x,
+        playerZ: me.z,
         currentWeapon: me.currentWeapon,
         medkits: me.medkits,
-        stimpacks: me.stimpacks,
+        stims: me.stims,
         hp: Math.max(30, me.hp),
         suitUpgrades: me.suitUpgrades ? { ...me.suitUpgrades } : {},
+        doorsState: (game.doors || []).map(d => [d.open ? 1 : 0, d.lockedPermanently ? 1 : 0]),
+        roomsState: (game.rooms || []).map(r => [r.unlocked ? 1 : 0, r.cleared ? 1 : 0, r.lockedBehind ? 1 : 0]),
+        curRoomState: curR ? {
+          progress: curR.progress,
+          unlockStage: curR.unlockStage,
+          completedStage: curR.completedStage,
+          waitingForWaveDefense: curR.waitingForWaveDefense,
+          roomWaveCount: curR.roomWaveCount,
+          sectorTimer: curR.sectorTimer
+        } : null,
         inventory: me.inventory.map(inv => ({
           unlocked: inv.unlocked,
           stats: { ...inv.stats },
@@ -53,38 +70,38 @@
         }))
       };
       try {
-        localStorage.setItem("boxhead_active_session", JSON.stringify(snap));
+        sessionStorage.setItem("boxhead_f5_ingame_state", JSON.stringify(snap));
+        localStorage.removeItem("boxhead_active_session");
       } catch (e) {}
     }
 
     function clearSavedGameSession() {
       try {
+        sessionStorage.removeItem("boxhead_f5_ingame_state");
         localStorage.removeItem("boxhead_active_session");
       } catch (e) {}
       const banner = document.getElementById("resume-banner");
       if (banner) banner.classList.add("hidden");
     }
 
-    function checkAndPromptResumeSession() {
+    function getActiveRefreshSnapshot() {
       try {
-        const raw = localStorage.getItem("boxhead_active_session");
-        if (!raw) return;
-        const snap = JSON.parse(raw);
-        if (!snap || !snap.seed) return;
-        // Check if within 24 hours
-        if (Date.now() - snap.timestamp > 24 * 60 * 60 * 1000) {
-          clearSavedGameSession();
-          return;
-        }
+        localStorage.removeItem("boxhead_active_session");
         const banner = document.getElementById("resume-banner");
-        const titleEl = document.getElementById("resume-banner-title");
-        const descEl = document.getElementById("resume-banner-desc");
-        if (banner && titleEl && descEl) {
-          titleEl.textContent = `이전 작전 세션이 감지되었습니다 (Sector ${snap.currentRoomIndex + 1} / ${snap.totalRooms || 10})`;
-          descEl.textContent = `보유 BP: ${(snap.bioPoints || 0).toLocaleString()} BP · 처치: ${snap.totalKills || 0}마리 · 무기 강화 및 슈트 업그레이드 보존됨`;
-          banner.classList.remove("hidden");
+        if (banner) banner.classList.add("hidden");
+        const raw = sessionStorage.getItem("boxhead_f5_ingame_state");
+        if (!raw) return null;
+        const snap = JSON.parse(raw);
+        if (!snap || !snap.seed) return null;
+        // 게임 진행 중 새로고침(F5)한 경우에만 즉시 인게임 복구 (60초 이내 새로고침)
+        if (Date.now() - (snap.timestamp || 0) > 60 * 1000) {
+          clearSavedGameSession();
+          return null;
         }
-      } catch (e) {}
+        return snap;
+      } catch (e) {
+        return null;
+      }
     }
 
     function startNewGameSession(customSeed, fromRemotePacket, restoredData) {
@@ -127,6 +144,44 @@
       spawnSquadPlayers();
 
       if (restoredData) {
+        if (restoredData.elapsedTime) game.elapsedTime = restoredData.elapsedTime;
+        if (restoredData.wavePhase) game.wavePhase = restoredData.wavePhase;
+        if (restoredData.waveTimer !== undefined) game.waveTimer = restoredData.waveTimer;
+        if (restoredData.waveNumber !== undefined) game.waveNumber = restoredData.waveNumber;
+
+        if (Array.isArray(restoredData.roomsState)) {
+          restoredData.roomsState.forEach((rs, rIdx) => {
+            if (game.rooms[rIdx]) {
+              game.rooms[rIdx].unlocked = !!rs[0];
+              game.rooms[rIdx].cleared = !!rs[1];
+              game.rooms[rIdx].lockedBehind = !!rs[2];
+            }
+          });
+        } else {
+          for (let ri = 0; ri <= game.currentRoomIndex; ri++) {
+            if (game.rooms[ri]) {
+              game.rooms[ri].unlocked = true;
+              if (ri < game.currentRoomIndex) game.rooms[ri].cleared = true;
+            }
+          }
+        }
+
+        if (Array.isArray(restoredData.doorsState)) {
+          restoredData.doorsState.forEach((ds, dIdx) => {
+            const d = game.doors[dIdx];
+            if (d) {
+              d.open = !!ds[0];
+              d.lockedPermanently = !!ds[1];
+              if (d.mesh) {
+                d.mesh.position.y = d.open ? -4.2 : 2.0;
+                if (d.lockedPermanently && d.mesh.material) {
+                  d.mesh.material.color.setHex(0x991b1b);
+                }
+              }
+            }
+          });
+        }
+
         const p = game.players[mySlotIndex];
         if (p) {
           if (restoredData.suitUpgrades) p.suitUpgrades = { ...restoredData.suitUpgrades };
@@ -145,19 +200,37 @@
           }
           if (restoredData.currentWeapon !== undefined) p.currentWeapon = restoredData.currentWeapon;
           if (restoredData.medkits !== undefined) p.medkits = restoredData.medkits;
-          if (restoredData.stimpacks !== undefined) p.stimpacks = restoredData.stimpacks;
+          if (restoredData.stims !== undefined) p.stims = restoredData.stims;
           if (restoredData.hp !== undefined) p.hp = restoredData.hp;
+          p.maxStamina = getPlayerMaxStamina(p);
+          p.stamina = p.maxStamina;
         }
 
         const targetRoom = game.rooms[game.currentRoomIndex] || game.rooms[0];
         if (targetRoom) {
+          targetRoom.unlocked = true;
+          if (restoredData.curRoomState) {
+            targetRoom.progress = restoredData.curRoomState.progress || 0;
+            targetRoom.unlockStage = restoredData.curRoomState.unlockStage || 0;
+            targetRoom.completedStage = restoredData.curRoomState.completedStage || 0;
+            targetRoom.waitingForWaveDefense = restoredData.curRoomState.waitingForWaveDefense ?? true;
+            targetRoom.roomWaveCount = restoredData.curRoomState.roomWaveCount || 1;
+            if (restoredData.curRoomState.sectorTimer !== undefined) {
+              targetRoom.sectorTimer = restoredData.curRoomState.sectorTimer;
+            }
+            if (!targetRoom.waitingForWaveDefense && targetRoom.unlockStage > (targetRoom.completedStage || 0)) {
+              spawnRandomMissionStepForRoom(targetRoom, targetRoom.unlockStage);
+            }
+          }
+          const spawnX = (restoredData.playerX !== undefined) ? restoredData.playerX : targetRoom.wx;
+          const spawnZ = (restoredData.playerZ !== undefined) ? restoredData.playerZ : targetRoom.wz;
           game.players.forEach(pl => {
-            pl.x = targetRoom.wx;
-            pl.z = targetRoom.wz;
-            if (pl.mesh) pl.mesh.position.set(targetRoom.wx, 0, targetRoom.wz);
+            pl.x = spawnX;
+            pl.z = spawnZ;
+            if (pl.visual && pl.visual.group) pl.visual.group.position.set(spawnX, 0, spawnZ);
           });
-          camera.position.set(targetRoom.wx, 44, targetRoom.wz + 34);
-          camera.lookAt(targetRoom.wx, 0, targetRoom.wz);
+          camera.position.set(spawnX, 44, spawnZ + 34);
+          camera.lookAt(spawnX, 0, spawnZ);
           relocateArmoryForCalmPhase(targetRoom);
         }
       } else {
@@ -194,6 +267,7 @@
 
     function finishGameSession(victory) {
       game.running = false;
+      clearSavedGameSession();
       const modal = document.getElementById("result-modal");
       const badge = document.getElementById("result-badge");
       const title = document.getElementById("result-title");
@@ -227,6 +301,7 @@
 
     function returnToWaitingRoomLobby() {
       game.running = false;
+      clearSavedGameSession();
       document.getElementById("result-modal").classList.add("hidden");
       document.getElementById("upgrade-modal").classList.add("hidden");
       document.getElementById("settings-modal").classList.add("hidden");
@@ -390,14 +465,63 @@
                 }
               }
             } else if (msg.type === "WORLD_SNAPSHOT" && game.running && isRemoteClient) {
-              // 호스트(P1) 권위 월드·좀비·웨이브·미션 스냅샷 동기화 -> 4인 화면의 좀비/보스/웨이브 오차 0%!
+              // 호스트(P1) 권위 월드·좀비·웨이브·미션·격벽(Door) 스냅샷 동기화 -> 친구가 다음 섹터로 이동할 때 벽에 막히는 버그 100% 해결!
               game.wavePhase = msg.wavePhase || game.wavePhase;
               game.waveTimer = msg.waveTimer !== undefined ? msg.waveTimer : game.waveTimer;
+
+              let needVisUpdate = false;
+              if (Array.isArray(msg.roomsState)) {
+                msg.roomsState.forEach((rs, rIdx) => {
+                  const r = game.rooms[rIdx];
+                  if (!r) return;
+                  const u = !!rs[0];
+                  const c = !!rs[1];
+                  const lb = !!rs[2];
+                  if (r.unlocked !== u || r.cleared !== c) needVisUpdate = true;
+                  r.unlocked = u;
+                  r.cleared = c;
+                  r.lockedBehind = lb;
+                });
+              }
+
+              if (Array.isArray(msg.doorsState)) {
+                msg.doorsState.forEach((ds, dIdx) => {
+                  const d = game.doors[dIdx];
+                  if (!d) return;
+                  const shouldOpen = !!ds[0];
+                  const shouldLock = !!ds[1];
+                  if (d.open !== shouldOpen || d.lockedPermanently !== shouldLock) {
+                    d.open = shouldOpen;
+                    d.lockedPermanently = shouldLock;
+                    needVisUpdate = true;
+                    if (d.mesh) {
+                      d.mesh.position.y = d.open ? -4.2 : 2.0;
+                      if (d.lockedPermanently && d.mesh.material) {
+                        d.mesh.material.color.setHex(0x991b1b);
+                        if (d.mesh.material.emissive) d.mesh.material.emissive.setHex(0x450a0a);
+                      }
+                    }
+                  }
+                });
+              }
+
               if (msg.roomIdx !== undefined && msg.roomIdx !== game.currentRoomIndex) {
                 game.currentRoomIndex = msg.roomIdx;
                 if (game.rooms[msg.roomIdx]) game.rooms[msg.roomIdx].unlocked = true;
+                // 이전 섹터에서 다음 섹터로 열리는 연결 격벽도 확실히 개방 보장!
+                game.doors.forEach(d => {
+                  if (d.toRoom <= msg.roomIdx && !d.lockedPermanently) {
+                    d.open = true;
+                    if (d.mesh) d.mesh.position.y = -4.2;
+                  }
+                });
+                needVisUpdate = true;
+              }
+
+              if (needVisUpdate) {
                 updateRoomVisibility();
               }
+
               const cr = game.rooms[game.currentRoomIndex];
               if (cr && msg.roomState) {
                 cr.progress = msg.roomState.progress;
@@ -411,6 +535,18 @@
                 cr.gasWaveActive = msg.roomState.gasWaveActive;
                 cr.gasWaveProgress = msg.roomState.gasWaveProgress;
               }
+
+              // 후방 격벽이 봉쇄(lockedBehind)되었을 때 원격 플레이어가 아직 이전 방에 남아있다면 현재 섹터 안으로 자동 합류!
+              const meP = game.players[mySlotIndex];
+              if (cr && cr.lockedBehind && meP) {
+                const hw = cr.hw || cr.half;
+                const hd = cr.hd || cr.half;
+                if (Math.abs(meP.x - cr.wx) >= hw || Math.abs(meP.z - cr.wz) >= hd) {
+                  meP.x = cr.wx + (mySlotIndex - 1.5) * 1.5;
+                  meP.z = cr.wz + 1.2;
+                }
+              }
+
               if (Array.isArray(msg.zombies)) {
                 while (game.zombies.length > msg.zombies.length) {
                   const rem = game.zombies.pop();
@@ -481,6 +617,8 @@
           roomIdx: game.currentRoomIndex,
           wavePhase: game.wavePhase,
           waveTimer: Math.round(game.waveTimer * 10) / 10,
+          doorsState: (game.doors || []).map(d => [d.open ? 1 : 0, d.lockedPermanently ? 1 : 0]),
+          roomsState: (game.rooms || []).map(r => [r.unlocked ? 1 : 0, r.cleared ? 1 : 0, r.lockedBehind ? 1 : 0]),
           roomState: cr ? {
             progress: cr.progress,
             unlockStage: cr.unlockStage,
@@ -863,19 +1001,24 @@
         wsInput.value = wsProto + window.location.host;
       }
 
-      // 4. Check for active session recovery
-      checkAndPromptResumeSession();
-
-      // 5. Connect WebSocket automatically immediately
+      // 4. Clean up any legacy resume banner and connect WebSocket automatically
+      const banner = document.getElementById("resume-banner");
+      if (banner) banner.classList.add("hidden");
       connectHamachiServer();
     }
 
     window.onload = () => {
       initProfileAndAutoConnect();
       renderLobbySlots();
-      generateProceduralDungeon(2026);
-      camera.position.set(0, 44, 34);
-      camera.lookAt(0, 0, 0);
+      const refreshSnap = getActiveRefreshSnapshot();
+      if (refreshSnap) {
+        // 게임 도중 새로고침(F5)한 경우 로비로 튕기지 않고 진행 중이던 인게임 화면을 즉시 그대로 유지!
+        startNewGameSession(refreshSnap.seed, true, refreshSnap);
+      } else {
+        generateProceduralDungeon(2026);
+        camera.position.set(0, 44, 34);
+        camera.lookAt(0, 0, 0);
+      }
       lastFrameTime = performance.now();
       requestAnimationFrame(animate);
     };

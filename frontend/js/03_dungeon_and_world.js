@@ -412,7 +412,8 @@
       });
       game.armoryVaults.forEach(v => {
         const r = game.rooms[v.roomIndex];
-        const showArmory = !!(r && r.unlocked && (r.isBossRoom || v.activeInCalm));
+        const showArmory = !!(r && r.unlocked);
+        v.activeInCalm = true;
         if (v.mesh) v.mesh.visible = showArmory;
       });
       if (game.boss && game.boss.group) {
@@ -589,6 +590,13 @@
         }
       });
 
+      // 외벽 매립형 상시 무기고 위치 선정 (출입문이 없는 외벽 중앙에 매립 배치하여 내부 벽 끼임 원천 차단!)
+      const armSide = sides.find(sd => room.connectedDirs[sd.dir] === undefined) || sides[0];
+      const armX = room.wx + armSide.x + armSide.inNormX * 1.4;
+      const armZ = room.wz + armSide.z + armSide.inNormZ * 1.4;
+      const armRotY = armSide.dir === "N" ? 0 : (armSide.dir === "S" ? Math.PI : (armSide.dir === "W" ? Math.PI / 2 : -Math.PI / 2));
+      room.armoryFixedPos = { x: armX, z: armZ, rotY: armRotY, inNormX: armSide.inNormX, inNormZ: armSide.inNormZ };
+
       if (!room.isBossRoom) {
         const subWallMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.75 });
         const pillarMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6 });
@@ -608,12 +616,15 @@
           { dx: 0, dz: 24, w: 14, d: 1.8 }
         ];
         partitionLayouts.forEach(pl => {
+          const px = room.wx + pl.dx;
+          const pz = room.wz + pl.dz;
+          if (Math.hypot(px - armX, pz - armZ) < 10.5) return;
           if (rng() < 0.86) {
             const pm = new THREE.Mesh(new THREE.BoxGeometry(pl.w, 3.5, pl.d), subWallMat);
-            pm.position.set(room.wx + pl.dx, 1.75, room.wz + pl.dz);
+            pm.position.set(px, 1.75, pz);
             pm.castShadow = true;
             group.add(pm);
-            addWallCollider(room.wx + pl.dx, room.wz + pl.dz, pl.w, pl.d);
+            addWallCollider(px, pz, pl.w, pl.d);
           }
         });
 
@@ -635,10 +646,13 @@
           { dx: 8, dz: h - 15, w: 11, d: 1.6 }
         ];
         mazeOffsets.forEach(mo => {
+          const mx = room.wx + mo.dx;
+          const mz = room.wz + mo.dz;
+          if (Math.hypot(mx - armX, mz - armZ) < 10.5) return;
           const mm = new THREE.Mesh(new THREE.BoxGeometry(mo.w, 3.2, mo.d), subWallMat);
-          mm.position.set(room.wx + mo.dx, 1.6, room.wz + mo.dz);
+          mm.position.set(mx, 1.6, mz);
           group.add(mm);
-          addWallCollider(room.wx + mo.dx, room.wz + mo.dz, mo.w, mo.d);
+          addWallCollider(mx, mz, mo.w, mo.d);
         });
 
         if (room.envType === "TOXIC_FOG" || room.envType === "BLACKOUT") {
@@ -688,12 +702,13 @@
       // [v3.1] 비정형 섹터 구조물(L자 격리동, 중앙 팔각 반응로 코어, 십자 물류창고) 및 다채로운 전술 엄폐 오브젝트 생성
       buildCustomSectorShapeAndProps(room, group, rng);
 
-      // [v3.1] 소강상태(CALM) 전용 다이나믹 팝업 무기고 생성 (웨이브 중 지하 수납, 소강기 시 안전 랜덤 좌표로 지상 융기!)
+      // [v3.2 상시 활성 외벽 매립형 무기고] 웨이브와 무관하게 고정 위치에서 항상 활성화!
       spawnArmoryVault(
-        room.wx,
-        room.wz - hd + 14,
-        0,
-        0, 1,
+        armX,
+        armZ,
+        armRotY,
+        armSide.inNormX,
+        armSide.inNormZ,
         room.index,
         true
       );
@@ -1219,10 +1234,10 @@
       vGroup.position.set(x, 0, z);
       entitiesGroup.add(vGroup);
 
-      const interactX = x;
-      const interactZ = z;
+      const interactX = x + (inNormX || 0) * 1.6;
+      const interactZ = z + (inNormZ || 0) * 1.6;
 
-      // 상공으로 뻗어 오르는 황금빛 비콘 기둥 (소강기 무기고 출현 위치를 멀리서도 즉시 식별!)
+      // 상공으로 뻗어 오르는 황금빛 비콘 기둥 (상시 무기고 위치를 멀리서도 즉시 식별!)
       const beaconBeam = new THREE.Mesh(
         new THREE.CylinderGeometry(0.45, 1.55, 22, 12),
         new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.42 })
@@ -1248,60 +1263,43 @@
       game.armoryVaults.push(vaultObj);
       const sym = registerWorldSymbol(
         interactX, 4.2, interactZ,
-        "🔧소강기팝업무기고[T/U]",
+        "🔧상시무기고[B/T/U]",
         "bg-indigo-950/95 border-amber-400 text-amber-200",
         vaultObj, roomIndex
       );
       vaultObj.sym = sym;
     }
 
-    // [v3.1] 웨이브(SURGE) 중에는 무기고가 지하로 수납되어 사라지고, 소강상태(CALM)에만 랜덤 위치로 솟아오름!
+    // [v3.2 개편] 무기고는 이동하거나 숨지 않고 고정된 자리에서 웨이브와 무관하게 상시 활성화!
     function relocateArmoryForCalmPhase(room) {
       if (!room) return;
       const v = game.armoryVaults.find(av => av.roomIndex === room.index);
       if (!v) return;
-      if (room.isBossRoom) {
-        v.activeInCalm = true;
-        if (v.mesh) v.mesh.visible = true;
-        return;
-      }
-      const pos = findRandomSafeMissionPos(room);
-      v.wallX = pos.x;
-      v.wallZ = pos.z;
-      v.x = pos.x;
-      v.z = pos.z;
       v.activeInCalm = true;
       v.unlocked = true;
       if (v.mesh) {
-        v.mesh.position.set(pos.x, 0, pos.z);
         v.mesh.visible = !!room.unlocked;
       }
       if (v.sym) {
-        v.sym.x = v.x;
-        v.sym.z = v.z;
-        v.sym.el.textContent = "🔧소강기무기고[T/U]";
+        v.sym.el.textContent = "🔧상시무기고[B/T/U]";
       }
     }
 
     function hideArmoriesDuringSurge() {
+      // 무기고 상시 활성화 유지 (웨이브 중에도 비활성화되지 않음)
       game.armoryVaults.forEach(v => {
         const r = game.rooms[v.roomIndex];
-        if (r && r.isBossRoom) return;
-        v.activeInCalm = false;
-        if (v.mesh) v.mesh.visible = false;
+        v.activeInCalm = true;
+        if (v.mesh) v.mesh.visible = !!(r && r.unlocked);
       });
-      const upgModal = document.getElementById("upgrade-modal");
-      if (upgModal && !upgModal.classList.contains("hidden")) {
-        upgModal.classList.add("hidden");
-      }
     }
 
     function isPlayerNearArmory(player) {
       if (!player) return false;
       return game.armoryVaults.some(v => {
         const r = game.rooms[v.roomIndex];
-        const isAvail = v.unlocked && (v.activeInCalm || (r && r.isBossRoom));
-        return isAvail && Math.hypot(v.x - player.x, v.z - player.z) <= 6.2;
+        const isAvail = v.unlocked && r && r.unlocked;
+        return isAvail && Math.hypot(v.x - player.x, v.z - player.z) <= 6.8;
       });
     }
 

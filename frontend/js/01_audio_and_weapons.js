@@ -129,9 +129,9 @@
         fireRate: 0.18, damage: 44, speed: 44, spread: 0.02, pellets: 1,
         stun: 0.35, knockback: 0.85, weakMult: 2.2,
         color: 0xfacc15, sound: "pistol", unlockedAtStart: true,
-        tier1Name: "할로우 포인트 (약점배율+0.6 · 관통+1 · 소형충격파)",
-        awakenName: "아킴보 매그넘 (2연발 동시사격 + 대구경 관통 충격파)",
-        roleDesc: "무한탄약 · 보스/중간보스 약점 2.2배 피해 · 기절 처형 시 탄약 드랍"
+        tier1Name: "할로우 포인트 (약점+0.6 · 관통+1 · 충격파)",
+        awakenName: "아킴보 매그넘 (2연발 동시사격 + 관통 충격파)",
+        roleDesc: "무한탄약 · 보스 약점 2.2배 · 기절 처치 시 탄약 드랍"
       },
       {
         id: 1, key: "2", name: "컴뱃 산탄총", eng: "Combat Shotgun",
@@ -140,31 +140,31 @@
         fireRate: 0.52, damage: 30, speed: 36, spread: 0.28, pellets: 8,
         stun: 0.58, knockback: 2.7, weakMult: 1.15,
         color: 0xf97316, sound: "shotgun", unlockedAtStart: false,
-        tier1Name: "소이 산탄 (산탄수+2 · 피격 적 3초 화상 지속피해)",
-        awakenName: "드래곤 브레스 (피격 지점 3.5초 고열 화염장판 생성)",
-        roleDesc: "전용 12게이지 산탄 사용 · 근접 군중 밀치기 및 기절 특화"
+        tier1Name: "소이 산탄 (산탄+2 · 3초 화상 지속피해)",
+        awakenName: "드래곤 브레스 (피격 지점 3.5초 화염장판)",
+        roleDesc: "근접 산탄 화력 · 다수 적 밀치기 및 기절 특화"
       },
       {
         id: 2, key: "3", name: "기관단총 UZI", eng: "Micro UZI",
-        ammoType: "SMG", infinite: false, startAmmo: 160, maxAmmo: 420, packAmmo: 90, packCost: 75, baseCost: 52,
+        ammoType: "SMG", infinite: false, startAmmo: 220, maxAmmo: 560, packAmmo: 130, packCost: 75, baseCost: 52,
         reqParts: 2, unlockBpCost: 600,
-        fireRate: 0.066, damage: 22, speed: 42, spread: 0.10, pellets: 1,
+        fireRate: 0.066, damage: 30, speed: 42, spread: 0.09, pellets: 1,
         stun: 0.18, knockback: 0.45, weakMult: 1.15,
         color: 0x38bdf8, sound: "uzi", unlockedAtStart: false,
-        tier1Name: "정전기 탄환 (피격 시 인근 1마리 전이 스파크 +45% 피해)",
-        awakenName: "쇼크 과부하 (인근 3마리 연쇄 감전 스파크 + 감전기절)",
-        roleDesc: "전용 9mm 기관단총탄 사용 · 초고속 탄막 및 전이 스파크"
+        tier1Name: "정전기 탄환 (인근 1마리 전이 스파크 +45%딜)",
+        awakenName: "쇼크 과부하 (3마리 연쇄 감전 + 감전기절)",
+        roleDesc: "초고속 연사 탄막 · 탄약 드랍 1.2% & 탄약팩 획득량 증가"
       },
       {
         id: 3, key: "4", name: "중화기 돌격소총", eng: "Heavy Rifle",
-        ammoType: "RIFLE", infinite: false, startAmmo: 85, maxAmmo: 220, packAmmo: 45, packCost: 90, baseCost: 60,
+        ammoType: "RIFLE", infinite: false, startAmmo: 120, maxAmmo: 320, packAmmo: 70, packCost: 90, baseCost: 60,
         reqParts: 3, unlockBpCost: 1800,
         fireRate: 0.105, damage: 55, speed: 48, spread: 0.03, pellets: 1,
         stun: 0.32, knockback: 0.95, weakMult: 1.5,
         color: 0x4ade80, sound: "rifle", unlockedAtStart: false,
-        tier1Name: "고폭 균열탄 (피격 시 반경 2.0m 소형 파편 폭발)",
-        awakenName: "철갑 파편탄 (반경 3.8m 십자 파편 대폭발 + 장갑 100% 무시)",
-        roleDesc: "전용 7.62mm 철갑소총탄 사용 · 장거리 고화력 주력 소총"
+        tier1Name: "고폭 균열탄 (피격 시 반경 2m 파편 폭발)",
+        awakenName: "철갑 파편탄 (반경 3.8m 폭발 + 장갑무시)",
+        roleDesc: "고화력 주력 소총 · 탄약 드랍 1.2% & 탄약팩 획득량 증가"
       },
       {
         id: 4, key: "5", name: "유탄발사기", eng: "Grenade Launcher",
@@ -173,9 +173,9 @@
         fireRate: 0.70, damage: 195, speed: 26, spread: 0.04, pellets: 1,
         stun: 0.90, knockback: 3.5, explosiveRadius: 5.8, weakMult: 1.25,
         color: 0xf43f5e, sound: "shotgun", unlockedAtStart: false,
-        tier1Name: "집속 파편탄 (폭발 반경+25% · 자탄 2발 추가 폭발 · 오사 35%감소)",
-        awakenName: "확산 클러스터 (자탄 4발 연쇄 폭격 + 아군오사 70%감소)",
-        roleDesc: "전용 40mm 유탄 사용 · 대규모 호드 폭격 및 보스 기둥 철거"
+        tier1Name: "집속 파편탄 (반경+25% · 자탄 2발 · 오사감소)",
+        awakenName: "확산 클러스터 (자탄 4발 폭격 · 오사 70%감소)",
+        roleDesc: "광역 유탄 폭격 · 대규모 호드 및 기둥 철거"
       },
       {
         id: 5, key: "6", name: "플라즈마 레일건", eng: "Plasma Railgun",
@@ -184,9 +184,9 @@
         fireRate: 0.78, damage: 295, speed: 75, spread: 0.0, pellets: 1,
         stun: 1.15, knockback: 2.3, piercing: true, weakMult: 1.85,
         color: 0x22d3ee, sound: "railgun", unlockedAtStart: false,
-        tier1Name: "과충전 이온빔 (빔 두께+35% · 1.5초 단기 전류 잔상)",
-        awakenName: "초전도 플라즈마 (3.5초 고출력 전류장 생성 + 보스 2.2배 극딜)",
-        roleDesc: "전용 플라즈마 셀 사용 · 일직선 전 적 관통 및 보스 극딜"
+        tier1Name: "과충전 이온빔 (두께+35% · 1.5초 전류장)",
+        awakenName: "초전도 플라즈마 (3.5초 전류장 · 보스 2.2배딜)",
+        roleDesc: "일직선 전 적 관통 · 보스 및 중장갑 극딜"
       },
       {
         id: 6, key: "7", name: "전술 바리케이드", eng: "Auto-Barricade",
@@ -195,88 +195,88 @@
         fireRate: 0.38, damage: 38, speed: 0, spread: 0, pellets: 1,
         stun: 0.35, knockback: 0.7, placeType: "barricade",
         color: 0xa8a29e, sound: "pickup", unlockedAtStart: true,
-        tier1Name: "고압 전류 철조망 (접근 좀비 반사딜 2배 + 1.2초마다 전기충격)",
-        awakenName: "오토 센트리 포탑 (0.38초마다 주변 감염체 자동 사격 터렛 가동)",
-        roleDesc: "전용 방벽 키트 사용 · 길목 봉쇄 및 전류/포탑 화력 지원"
+        tier1Name: "고압 전류 철조망 (반사딜 개방/증폭 + 소형 포탑)",
+        awakenName: "오토 센트리 포탑 (고속 관통 자동사격 터렛 가동)",
+        roleDesc: "길목 봉쇄 방벽 · 반사딜 강화는 중반(5섹터+)부터 해금"
       },
       {
-        id: 7, key: "8", name: "빙결 배럴", eng: "Cryo-Barrel",
+        id: 7, key: "8", name: "고폭 폭약통", eng: "Explosive Barrel",
         ammoType: "BARREL", infinite: false, startAmmo: 6, maxAmmo: 18, packAmmo: 4, packCost: 75, baseCost: 48,
         reqParts: 0, unlockBpCost: 0,
         fireRate: 0.42, damage: 680, speed: 0, spread: 0, pellets: 1,
-        stun: 4.5, knockback: 4.5, placeType: "barrel", explosiveRadius: 7.5,
-        color: 0x38bdf8, sound: "pickup", unlockedAtStart: true,
-        tier1Name: "급속 냉각 가스통 (폭발 시 반경 8.5m 5.5초 완전 빙결 + 쇄빙 추가피해)",
-        awakenName: "절대영도 퍼마프로스트 (반경 10.5m 극저온 대폭발 + 7초간 영구동토 빙결장판 생성)",
-        roleDesc: "극저온 빙결 배럴 설치 · 총격/폭발 시 대폭발, 감염체 완전 빙결(이동·공격 0) 및 영구동토 생성"
+        stun: 1.4, knockback: 4.5, placeType: "barrel", explosiveRadius: 7.5,
+        color: 0xef4444, sound: "pickup", unlockedAtStart: true,
+        tier1Name: "냉각 폭약통 (반경 8.8m 5.5초 완전 빙결 + 쇄빙)",
+        awakenName: "절대영도 냉각장판 (10.5m 빙결 + 7.5초 냉각장판)",
+        roleDesc: "고폭 드럼통 설치 (15Lv 코어: 빙결 / 30Lv 코어: 냉각장판)"
       }
     ];
 
     // 무기별 맞춤형 5대 강화 스탯 정의 (피스톨은 탄약효율/사거리 제외, 장거리 총기는 사거리 제외, 바리케이드/폭약통은 전용 설치 스탯!)
     const WEAPON_STAT_POOLS = [
-      // 0: 전술 피스톨 (무한탄약 -> 탄약효율 제외, 사거리 제외 -> 관통·약점치명·처형보급 특화)
+      // 0: 전술 피스톨
       [
-        { key: "atk", label: "대미지", desc: "화력 +25%" },
-        { key: "spd", label: "연사력", desc: "공속 +16%" },
-        { key: "stun", label: "저지력", desc: "넉백+경직 통합" },
-        { key: "area", label: "관통력", desc: "관통+1·장갑무시" },
-        { key: "knock", label: "약점·처형", desc: "보스배율·처형보급↑" }
+        { key: "atk", label: "대미지", desc: "화력+25%" },
+        { key: "spd", label: "연사력", desc: "공속+16%" },
+        { key: "stun", label: "저지력", desc: "기절·넉백↑" },
+        { key: "area", label: "관통력", desc: "관통+1" },
+        { key: "knock", label: "약점·보급", desc: "약점·드랍↑" }
       ],
-      // 1: 컴뱃 산탄총 (근접 돌파 -> 사거리·탄수 및 탄약효율 포함)
+      // 1: 컴뱃 산탄총
       [
-        { key: "atk", label: "산탄화력", desc: "화력 +25%" },
-        { key: "spd", label: "펌프연사", desc: "공속 +15%" },
-        { key: "area", label: "사거리·탄수", desc: "사거리+22%·산탄+1" },
-        { key: "stun", label: "저지력", desc: "강력넉백+기절" },
-        { key: "knock", label: "탄약효율", desc: "무소모확률 +11%" }
+        { key: "atk", label: "산탄화력", desc: "화력+25%" },
+        { key: "spd", label: "펌프연사", desc: "공속+15%" },
+        { key: "area", label: "사거리·탄수", desc: "사거리·탄+1" },
+        { key: "stun", label: "저지력", desc: "기절·넉백↑" },
+        { key: "knock", label: "탄약효율", desc: "무소모+6.5%" }
       ],
       // 2: 기관단총 UZI
       [
-        { key: "atk", label: "대미지", desc: "화력 +25%" },
-        { key: "spd", label: "초고속연사", desc: "공속 +16%" },
-        { key: "area", label: "유효사거리", desc: "사거리·집탄 +22%" },
-        { key: "stun", label: "저지력", desc: "경직+넉백 통합" },
-        { key: "knock", label: "탄약효율", desc: "무소모확률 +11%" }
+        { key: "atk", label: "대미지", desc: "화력+25%" },
+        { key: "spd", label: "초고속연사", desc: "공속+16%" },
+        { key: "area", label: "유효사거리", desc: "사거리+22%" },
+        { key: "stun", label: "저지력", desc: "기절·넉백↑" },
+        { key: "knock", label: "탄약효율", desc: "무소모+6.5%" }
       ],
-      // 3: 중화기 돌격소총 (기본 사거리 김 -> 사거리 제외, 관통력 + 탄약효율 탑재)
+      // 3: 중화기 돌격소총
       [
-        { key: "atk", label: "철갑화력", desc: "화력 +26%" },
-        { key: "spd", label: "연사력", desc: "공속 +15%" },
-        { key: "stun", label: "저지력", desc: "넉백+경직 통합" },
-        { key: "area", label: "관통·장갑", desc: "관통+1·장갑무시" },
-        { key: "knock", label: "탄약효율", desc: "무소모확률 +11%" }
+        { key: "atk", label: "철갑화력", desc: "화력+25%" },
+        { key: "spd", label: "연사력", desc: "공속+15%" },
+        { key: "stun", label: "저지력", desc: "기절·넉백↑" },
+        { key: "area", label: "관통·장갑", desc: "관통+1" },
+        { key: "knock", label: "탄약효율", desc: "무소모+6.5%" }
       ],
       // 4: 유탄발사기
       [
-        { key: "atk", label: "폭발화력", desc: "화력 +26%" },
-        { key: "spd", label: "장전속도", desc: "공속 +15%" },
-        { key: "area", label: "폭발반경", desc: "폭발범위 +22%" },
-        { key: "stun", label: "충격파저지", desc: "광역기절+넉백" },
-        { key: "knock", label: "탄약·안전", desc: "무소모+오사감소" }
+        { key: "atk", label: "폭발화력", desc: "화력+25%" },
+        { key: "spd", label: "장전속도", desc: "공속+15%" },
+        { key: "area", label: "폭발반경", desc: "범위+22%" },
+        { key: "stun", label: "충격저지", desc: "광역기절↑" },
+        { key: "knock", label: "탄약효율", desc: "무소모+6.5%" }
       ],
-      // 5: 플라즈마 레일건 (기본 사거리·관통 무제한 -> 빔두께 및 에너지효율 탑재)
+      // 5: 플라즈마 레일건
       [
-        { key: "atk", label: "코어출력", desc: "화력 +28%" },
-        { key: "spd", label: "충전속도", desc: "공속 +16%" },
-        { key: "area", label: "빔두께·전류", desc: "빔폭+25%·장판강화" },
-        { key: "stun", label: "감전저지", desc: "장시간기절+넉백" },
-        { key: "knock", label: "에너지효율", desc: "무소모확률 +11%" }
+        { key: "atk", label: "코어출력", desc: "화력+25%" },
+        { key: "spd", label: "충전속도", desc: "공속+16%" },
+        { key: "area", label: "빔폭·전류", desc: "빔폭+22%" },
+        { key: "stun", label: "감전저지", desc: "기절·넉백↑" },
+        { key: "knock", label: "셀효율", desc: "무소모+6.5%" }
       ],
-      // 6: 전술 바리케이드 (설치형 구조물 전용 5대 스탯!)
+      // 6: 전술 바리케이드 (반사딜은 중반 5섹터(index 4)부터 강화 가능!)
       [
-        { key: "atk", label: "포탑·반사딜", desc: "터렛·가시화력 +35%" },
-        { key: "spd", label: "내구도증폭", desc: "구조물체력 +160" },
-        { key: "area", label: "방벽크기·사거리", desc: "크기·사거리 +22%" },
-        { key: "stun", label: "충격파저지", desc: "접근좀비 기절·넉백" },
-        { key: "knock", label: "설치효율", desc: "무소모확률 +12%" }
+        { key: "atk", label: "반사·포탑딜", desc: "5S+ 반사·포탑↑", reqSector: 4 },
+        { key: "spd", label: "내구도", desc: "체력+170" },
+        { key: "area", label: "방벽크기", desc: "폭·사거리↑" },
+        { key: "stun", label: "충격저지", desc: "접근기절↑" },
+        { key: "knock", label: "설치효율", desc: "무소모+6.5%" }
       ],
-      // 7: 빙결 배럴 (설치형 극저온 지뢰 전용 5대 스탯!)
+      // 7: 고폭 폭약통
       [
-        { key: "atk", label: "기폭화력", desc: "폭발피해 +30%" },
-        { key: "spd", label: "설치·기폭성능", desc: "설치속도·빙결시간↑" },
-        { key: "area", label: "유폭반경", desc: "폭발·빙결범위 +25%" },
-        { key: "stun", label: "충격파저지", desc: "광역기절+대형넉백" },
-        { key: "knock", label: "설치효율", desc: "무소모확률 +12%" }
+        { key: "atk", label: "기폭화력", desc: "폭발딜+35%" },
+        { key: "spd", label: "설치속도", desc: "설치공속↑" },
+        { key: "area", label: "폭발반경", desc: "범위+1.1m" },
+        { key: "stun", label: "충격저지", desc: "기절·빙결↑" },
+        { key: "knock", label: "설치효율", desc: "무소모+6.5%" }
       ]
     ];
     function getWeaponStatDefs(wIdx) {
@@ -316,72 +316,72 @@
     // =========================================================================
     // [v3.2] 2b. 전술 슈트 · 의료 · 기동력 강화 시스템 (7종) 및 부품 합성 비용
     // =========================================================================
-    const SUIT_UPGRADE_DEFS = [
-      {
+    const SUIT_UPGRADE_DEFS = {
+      medkitCap: {
         key: "medkitCap",
         icon: "🩹",
-        name: "구급상자 파우치 확장",
-        desc: "구급상자[Q] 최대 소지 한도 +1개 증가 (기본 1개 ➔ 최대 4개 · 강화 시 즉시 +1 보충)",
+        name: "구급상자 파우치",
+        desc: "구급키트[Q] 최대 소지 +1 (최대 4개 · 즉시 +1 보충)",
         maxLv: 3,
-        reqRooms: [1, 4, 7], // S2, S5, S8 해금 (0-indexed: 1, 4, 7)
+        reqRooms: [1, 4, 7],
         costs: [2200, 12000, 45000]
       },
-      {
+      stimCap: {
         key: "stimCap",
         icon: "⚡",
-        name: "스팀팩 전술 벨트 확장",
-        desc: "스팀팩[E] 최대 소지 한도 +1개 증가 (기본 1개 ➔ 최대 4개 · 강화 시 즉시 +1 보충)",
+        name: "스팀팩 벨트",
+        desc: "스팀팩[E] 최대 소지 +1 (최대 4개 · 즉시 +1 보충)",
         maxLv: 3,
-        reqRooms: [1, 4, 7], // S2, S5, S8 해금
+        reqRooms: [1, 4, 7],
         costs: [2500, 14000, 52000]
       },
-      {
+      maxStamina: {
         key: "maxStamina",
         icon: "🫁",
-        name: "인공 심폐기 (최대 스태미너)",
-        desc: "전술 질주·점프 최대 스태미너 +25 증가 (기본 50 ➔ 최대 150 · 스태미너 용량 3배)",
+        name: "최대 스태미너",
+        desc: "최대 스태미너 +25 증가 (기본 50 ➔ 최대 150 ST)",
         maxLv: 4,
-        reqRooms: [0, 2, 4, 6], // S1, S3, S5, S7 해금
+        reqRooms: [0, 2, 4, 6],
         costs: [900, 3800, 13500, 38000]
       },
-      {
+      staminaRegen: {
         key: "staminaRegen",
         icon: "🔋",
-        name: "생체 대사 가속기 (스태미너 회복)",
-        desc: "비질주 시 초당 스태미너 회복량 +6.5/s 증가 (기본 10/s ➔ 최대 36/s · 충전속도 3.6배)",
+        name: "스태미너 회복력",
+        desc: "초당 스태미너 회복 +6.5/s (기본 10/s ➔ 최대 36/s)",
         maxLv: 4,
-        reqRooms: [0, 2, 4, 6], // S1, S3, S5, S7 해금
+        reqRooms: [0, 2, 4, 6],
         costs: [900, 3800, 13500, 38000]
       },
-      {
+      dashCd: {
         key: "dashCd",
         icon: "🚀",
-        name: "부스터 고효율화 (점프 스태미너 절감)",
-        desc: "전술 점프·회피[Space] 스태미너 소모량 -5 ST 절감 (기본 35 ST ➔ 최저 15 ST 소모)",
+        name: "점프 스태미너 절감",
+        desc: "[Space] 점프 소모량 -5 ST 감소 (35 ST ➔ 15 ST)",
         maxLv: 4,
-        reqRooms: [0, 2, 5, 7], // S1, S3, S6, S8 해금
+        reqRooms: [0, 2, 5, 7],
         costs: [1200, 4800, 18000, 48000]
       },
-      {
+      bashCd: {
         key: "bashCd",
         icon: "👊",
-        name: "충격파 증폭기 (기절 밀치기 쿨감)",
-        desc: "360° 기절 밀치기[V] 재사용 대기시간 -0.40초 단축 (기본 3.8초 ➔ 최단 2.2초) & 패링 반경 증가",
+        name: "기절 밀치기 강화",
+        desc: "[V] 기절기 쿨타임 -0.4초 단축 & 충격 반경 증가",
         maxLv: 4,
-        reqRooms: [0, 2, 5, 7], // S1, S3, S6, S8 해금
+        reqRooms: [0, 2, 5, 7],
         costs: [1200, 4800, 18000, 48000]
       },
-      {
+      syringe: {
         key: "syringe",
         icon: "💉",
-        name: "나노 의료 주사기 특수개조",
-        desc: "[5섹터 해금] 구급상자를 주사기로 개조! 자가치료(2.8초➔0.6초 무감속)·아군치료(1.8초➔0.4초)·회복량 80HP",
+        name: "나노 의료 주사기",
+        desc: "[5섹터+] 자가치료 0.6초(무감속)·아군치료 0.4초·+80HP",
         maxLv: 1,
-        reqRooms: [4], // S5(중반) 해금
+        reqRooms: [4],
         costs: [38000],
         isSpecial: true
       }
-    ];
+    };
 
     function getPlayerMaxMedkits(player) {
       const lv = (player && player.suitUpgrades && player.suitUpgrades.medkitCap) || 0;

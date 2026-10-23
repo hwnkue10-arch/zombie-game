@@ -326,12 +326,15 @@
       const secCap = getSectorMaxStatLv(); // 현재 섹터에서 허용되는 스탯당 최대 레벨 (1~10)
       const maxTotalHere = secCap * 5;
 
-      const available = statDefs.filter(st => inv.stats[st.key] < secCap);
+      const available = statDefs.filter(st => inv.stats[st.key] < secCap && (!st.reqSector || (game.currentRoomIndex || 0) >= st.reqSector));
       if (available.length === 0) {
         if (toastEl) {
+          const hasSectorLocked = statDefs.some(st => inv.stats[st.key] < secCap && st.reqSector && (game.currentRoomIndex || 0) < st.reqSector);
           toastEl.textContent = secCap >= 10
             ? `🏆 [${WEAPONS[wIdx].name}] 모든 스탯이 최종 한계(Lv.50 MAX)에 도달했습니다!`
-            : `🔒 현재 섹터(${game.currentRoomIndex + 1}섹터) 강화 상한(Lv.${maxTotalHere})에 도달했습니다! 다음 섹터 진입 시 상한이 해금됩니다.`;
+            : hasSectorLocked
+              ? `🔒 [${WEAPONS[wIdx].name}] 현재 해금된 스탯이 모두 상한에 도달했습니다! (반사·포탑딜은 5섹터부터 강화 가능)`
+              : `🔒 현재 섹터(${game.currentRoomIndex + 1}섹터) 강화 상한(Lv.${maxTotalHere})에 도달했습니다! 다음 섹터 진입 시 상한이 해금됩니다.`;
         }
         return;
       }
@@ -662,10 +665,10 @@
       if (armoryBanner) {
         if (nearArmory) {
           armoryBanner.className = "h-9 px-3 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-xs font-bold text-emerald-200 flex items-center truncate";
-          armoryBanner.textContent = `🟢 무기고 연결됨 — 현재 섹터(${game.currentRoomIndex + 1}섹터) 무기 강화 상한: 스탯당 Lv.${secCap} (총 Lv.${maxTotalHere}/50)`;
+          armoryBanner.textContent = `🟢 상시 무기고 연결됨 — 현재 섹터(${game.currentRoomIndex + 1}섹터) 강화 상한: 스탯당 Lv.${secCap} (총 Lv.${maxTotalHere}/50)`;
         } else {
           armoryBanner.className = "h-9 px-3 rounded-xl bg-rose-950/90 border border-rose-400/50 text-xs font-bold text-rose-200 flex items-center truncate";
-          armoryBanner.textContent = `🔴 무기고 반경 밖 — 소강기 [🔧무기고] 앞(6.2m)에서 강화·구매 가능 (현재 상한 Lv.${maxTotalHere}/50)`;
+          armoryBanner.textContent = `🔴 무기고 반경 밖 — 외벽 [🔧상시무기고] 앞(6.8m)에서 언제든 강화·구매 가능 (현재 상한 Lv.${maxTotalHere}/50)`;
         }
       }
 
@@ -788,11 +791,11 @@
           sCard.innerHTML = `
             <div>
               <div class="flex items-center justify-between gap-1">
-                <span class="text-xs font-black text-white truncate">${def.icon} ${def.name}</span>
+                <span class="text-xs font-black text-white">${def.icon} ${def.name}</span>
                 <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono-code font-bold text-cyan-300 shrink-0">Lv.${curLv}/${def.maxLv}</span>
               </div>
               <div class="text-[11px] font-mono-code text-amber-300 font-bold mt-0.5">${statNowText}</div>
-              <div class="text-[10px] text-slate-400 mt-0.5 leading-tight">${def.desc}</div>
+              <div class="text-[10px] text-slate-300 mt-0.5 leading-snug break-keep">${def.desc}</div>
             </div>
             <button type="button" data-suit-upg="${sKey}" ${!canUpg ? "disabled" : ""}
                     class="w-full py-1.5 px-2 rounded-lg border text-xs font-extrabold transition ${btnColorClass}">
@@ -818,7 +821,8 @@
         const inv = me.inventory[wIdx];
         const statDefs = getWeaponStatDefs(wIdx);
         const isAllMax = statDefs.every(st => inv.stats[st.key] >= 10);
-        const isSectorCapped = !isAllMax && statDefs.every(st => inv.stats[st.key] >= secCap);
+        const rollableDefs = statDefs.filter(st => !st.reqSector || (game.currentRoomIndex || 0) >= st.reqSector);
+        const isSectorCapped = !isAllMax && rollableDefs.every(st => inv.stats[st.key] >= secCap);
         const avgLv = Math.floor(inv.totalLv / 5);
         const rollCost = getUpgradeCost(wIdx, avgLv, inv.totalLv);
         const maxA = getWeaponMaxAmmo(me, wIdx);
@@ -924,17 +928,17 @@
           }
 
           const pureBanner = pureBonus.label
-            ? `<div class="text-emerald-300 font-extrabold truncate">✔ ${pureBonus.label} (비코어 패시브 가동중)</div>`
-            : `<div class="text-slate-400 truncate">• 비코어 순수스탯 루트: 15Lv(+30%) · 30Lv(+65%&관통+1) · 45Lv(+115%&관통+2&공속+20%&장갑무시)</div>`;
+            ? `<div class="text-emerald-300 font-extrabold leading-snug break-keep">✔ ${pureBonus.label}</div>`
+            : `<div class="text-slate-400 leading-snug break-keep">• 비코어 순수스탯: 15Lv(+30%) · 30Lv(+65%&관통+1) · 45Lv(+115%&관통+2&장갑무시)</div>`;
 
           specialRowHtml = `
             <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-800 text-[11px]">
               <div class="space-y-0.5 min-w-0 flex-1">
-                <div class="${inv.tier1Special ? 'text-fuchsia-300 font-bold' : 'text-slate-400'} truncate">
-                  ${inv.tier1Special ? '✔' : '•'} <b>15Lv</b>: ${w.tier1Name}
+                <div class="${inv.tier1Special ? 'text-fuchsia-300 font-bold' : 'text-slate-300'} leading-snug break-keep">
+                  ${inv.tier1Special ? '✔' : '•'} <b>15Lv(코어)</b>: ${w.tier1Name}
                 </div>
-                <div class="${inv.awakened ? 'text-cyan-300 font-bold' : 'text-slate-400'} truncate">
-                  ${inv.awakened ? '✔' : '•'} <b>30Lv</b>: ${w.awakenName} ${inv.transcended ? '(⚡45Lv 3차초월x1.55)' : ''}
+                <div class="${inv.awakened ? 'text-cyan-300 font-bold' : 'text-slate-300'} leading-snug break-keep">
+                  ${inv.awakened ? '✔' : '•'} <b>30Lv(코어)</b>: ${w.awakenName} ${inv.transcended ? '(⚡45Lv 초월x1.55)' : ''}
                 </div>
                 ${pureBanner}
               </div>
@@ -947,21 +951,24 @@
         if (inv.unlocked) {
           statsHtml = `<div class="grid grid-cols-5 gap-1.5 pt-1">` + statDefs.map(st => {
             const curLv = inv.stats[st.key];
+            const isSecLocked = Boolean(st.reqSector && (game.currentRoomIndex || 0) < st.reqSector);
             const isSecMax = curLv >= secCap;
-            const canClickStat = canRollStat && !isSecMax;
+            const canClickStat = canRollStat && !isSecMax && !isSecLocked;
             const statBoxClass = canClickStat
               ? "border-amber-400/70 bg-slate-900 hover:bg-amber-950/40 text-slate-100 cursor-pointer"
-              : "border-slate-700 bg-slate-800/80 text-slate-500 cursor-not-allowed opacity-60";
+              : "border-slate-700 bg-slate-800/80 text-slate-500 cursor-not-allowed opacity-65";
+            const lvText = isSecLocked ? `🔒${st.reqSector + 1}섹터` : `Lv.${curLv}/${secCap}`;
             return `
-              <button type="button" data-upg-w="${wIdx}" title="${st.desc} (클릭 시 ${rollCost.toLocaleString()} BP로 랜덤 스탯 강화)" ${!canClickStat ? "disabled" : ""}
+              <button type="button" data-upg-w="${wIdx}" title="${st.desc}" ${!canClickStat ? "disabled" : ""}
                       class="p-1.5 rounded-xl border text-center transition ${statBoxClass}">
-                <div class="text-[11px] font-bold ${canClickStat ? 'text-slate-200' : 'text-slate-500'} truncate">${st.label}</div>
-                <div class="text-xs font-mono-code font-black ${canClickStat ? 'text-cyan-300' : 'text-slate-400'} mt-0.5">Lv.${curLv}/${secCap}</div>
+                <div class="text-[11px] font-bold ${canClickStat ? 'text-slate-100' : 'text-slate-400'} leading-tight">${st.label}</div>
+                <div class="text-[9px] ${canClickStat ? 'text-amber-300' : 'text-slate-500'} leading-tight mt-0.5">${st.desc}</div>
+                <div class="text-xs font-mono-code font-black ${isSecLocked ? 'text-rose-400' : (canClickStat ? 'text-cyan-300' : 'text-slate-400')} mt-0.5">${lvText}</div>
               </button>
             `;
           }).join("") + `</div>`;
         } else {
-          statsHtml = `<div class="text-xs text-slate-400 py-2">${w.roleDesc}</div>`;
+          statsHtml = `<div class="text-xs text-slate-300 py-2 leading-snug break-keep">${w.roleDesc}</div>`;
         }
 
         card.innerHTML = `
@@ -1355,64 +1362,78 @@
         return;
       }
 
-      // 1. 위력 및 반경 계산 (기본 680 + 섹터별 스케일링 + 개별 강화 배율)
+      // 1. 위력 및 반경 계산 (기본 고폭 드럼통 / 15Lv 코어: 광역 빙결 / 30Lv 코어: 영구동토 냉각장판)
       const secScale = 1 + (game.currentRoomIndex || 0) * 0.35;
       const baseDmg = (barrel.baseDmg || 680) * secScale;
       const finalDmg = Math.round(baseDmg * (barrel.dmgMult || 1));
-      const expRadius = (barrel.awakened ? 10.5 : (barrel.tier1Special ? 8.8 : 7.6)) + (barrel.areaLv || 0) * 1.1;
-      const freezeSec = (barrel.awakened ? 7.5 : (barrel.tier1Special ? 6.0 : 5.0)) + (barrel.stunBonus || 0);
+      const hasFreeze = Boolean(barrel.tier1Special || barrel.awakened);
+      const hasCryoField = Boolean(barrel.awakened);
+      const expRadius = (barrel.awakened ? 10.5 : (barrel.tier1Special ? 8.8 : 7.5)) + (barrel.areaLv || 0) * 1.1;
+      const freezeSec = (barrel.awakened ? 7.5 : 5.5) + (barrel.stunBonus || 0);
 
       SoundFX.play("explosion");
-      SoundFX.play("ice");
+      if (hasFreeze) SoundFX.play("ice");
 
-      // 2. 극저온 동결 폭발 구체 (Cyan Ice Blast VFX)
+      // 2. 폭발 구체 VFX (기본: 적황색 화염 대폭발 / 15Lv·30Lv 코어: 시안 얼음 폭풍)
       const expMesh = new THREE.Mesh(
         new THREE.SphereGeometry(expRadius * 0.88, 18, 18),
-        new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.88 })
+        new THREE.MeshBasicMaterial({
+          color: hasFreeze ? 0x38bdf8 : 0xf97316,
+          transparent: true,
+          opacity: 0.88
+        })
       );
       expMesh.position.set(barrel.x, 0.9, barrel.z);
       effectsGroup.add(expMesh);
       game.particles.push({ mesh: expMesh, life: 0.38, maxLife: 0.38, expand: 1.55 });
 
-      // 얼음 충격파 링 (Ground Shockwave)
+      // 충격파 링 (Ground Shockwave)
       const ringGeo = new THREE.RingGeometry(0.5, expRadius, 32);
-      const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: hasFreeze ? 0x00f0ff : 0xef4444,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide
+      });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
       ringMesh.rotation.x = -Math.PI / 2;
       ringMesh.position.set(barrel.x, 0.08, barrel.z);
       effectsGroup.add(ringMesh);
       game.particles.push({ mesh: ringMesh, life: 0.45, maxLife: 0.45, expand: 1.4 });
 
-      // 얼음 파편 파티클 16개 방사
-      for (let p = 0; p < 16; p++) {
-        const ang = (p / 16) * Math.PI * 2 + Math.random() * 0.3;
+      // 파편 파티클 14개 방사
+      for (let p = 0; p < 14; p++) {
+        const ang = (p / 14) * Math.PI * 2 + Math.random() * 0.3;
         const spd = 6.0 + Math.random() * 8.0;
-        const pGeo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
-        const pMat = new THREE.MeshBasicMaterial({ color: p % 2 === 0 ? 0x38bdf8 : 0xe0f2fe });
+        const pGeo = new THREE.BoxGeometry(0.32, 0.32, 0.32);
+        const pColor = hasFreeze
+          ? (p % 2 === 0 ? 0x38bdf8 : 0xe0f2fe)
+          : (p % 2 === 0 ? 0xf97316 : 0xfacc15);
+        const pMat = new THREE.MeshBasicMaterial({ color: pColor });
         const pMesh = new THREE.Mesh(pGeo, pMat);
         pMesh.position.set(barrel.x, 0.6, barrel.z);
         effectsGroup.add(pMesh);
         game.particles.push({
           mesh: pMesh,
-          life: 0.65,
-          maxLife: 0.65,
+          life: 0.6,
+          maxLife: 0.6,
           vx: Math.cos(ang) * spd,
           vy: 3.5 + Math.random() * 4.0,
           vz: Math.sin(ang) * spd
         });
       }
 
-      // 3. 반경 내 감염체 대미지 및 100% 완전 동결 (Freeze)
+      // 3. 반경 내 감염체 폭발 피해 (15Lv/30Lv 코어 개조 시에만 완전 동결 부여!)
       for (let i = game.zombies.length - 1; i >= 0; i--) {
         const zmb = game.zombies[i];
         const dist = Math.hypot(zmb.x - barrel.x, zmb.z - barrel.z);
         if (dist <= expRadius) {
           const falloff = 1 - (dist / expRadius) * 0.35;
           const hitDmg = Math.round(finalDmg * falloff);
-          damageZombie(i, hitDmg, (zmb.x - barrel.x) * 2.2, (zmb.z - barrel.z) * 2.2, 1.0, 7);
+          const baseStun = 1.4 + (barrel.stunBonus || 0);
+          damageZombie(i, hitDmg, (zmb.x - barrel.x) * 2.2, (zmb.z - barrel.z) * 2.2, baseStun, 7);
 
-          // 살아남은 좀비에 대해 완전 동결 적용!
-          if (game.zombies[i] && game.zombies[i].hp > 0) {
+          if (hasFreeze && game.zombies[i] && game.zombies[i].hp > 0) {
             const zTarget = game.zombies[i];
             const actualDur = zTarget.spec.isMidBoss ? Math.max(2.5, freezeSec * 0.5) : freezeSec;
             zTarget.freezeTimer = Math.max(zTarget.freezeTimer || 0, actualDur);
@@ -1437,25 +1458,27 @@
         }
       }
 
-      // 5. 영구동토 빙결 장판 생성 (모든 배럴 폭발 시 확정 생성!)
-      const cRad = 5.2 + (barrel.areaLv || 0) * 0.6 + (barrel.awakened ? 2.5 : 0);
-      const cMesh = new THREE.Mesh(
-        new THREE.CircleGeometry(cRad, 24),
-        new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.58 })
-      );
-      cMesh.rotation.x = -Math.PI / 2;
-      cMesh.position.set(barrel.x, 0.06, barrel.z);
-      effectsGroup.add(cMesh);
-      game.flamePools.push({
-        x: barrel.x,
-        z: barrel.z,
-        radius: cRad,
-        dps: Math.round(160 * secScale * (barrel.dmgMult || 1)),
-        life: barrel.awakened ? 7.5 : 5.5,
-        isCryo: true,
-        wIdx: 7,
-        mesh: cMesh
-      });
+      // 5. 영구동토 냉각 장판 생성 — 오직 30Lv 코어 각성(awakened) 시에만 생성!
+      if (hasCryoField) {
+        const cRad = 5.5 + (barrel.areaLv || 0) * 0.65;
+        const cMesh = new THREE.Mesh(
+          new THREE.CircleGeometry(cRad, 24),
+          new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.58 })
+        );
+        cMesh.rotation.x = -Math.PI / 2;
+        cMesh.position.set(barrel.x, 0.06, barrel.z);
+        effectsGroup.add(cMesh);
+        game.flamePools.push({
+          x: barrel.x,
+          z: barrel.z,
+          radius: cRad,
+          dps: Math.round(165 * secScale * (barrel.dmgMult || 1)),
+          life: 7.5,
+          isCryo: true,
+          wIdx: 7,
+          mesh: cMesh
+        });
+      }
 
       // 6. 팀킬 처리
       if (game.friendlyFire) {
@@ -1712,13 +1735,16 @@
         }
 
         // 일반 좀비는 무기부품 드랍 제외 (부품 가치 보존), 오직 최상위 엘리트(골리앗/데빌)만 0.1% 희귀 드랍
+        // 연발 총기(UZI id:2 / 돌격소총 id:3) 사용 중이거나 해당 총기로 처치 시 탄약팩 드랍률 1.2% 적용!
         const isElite = (zmb.typeKey === "GOLIATH" || zmb.typeKey === "DEVIL");
         const partChance = isElite ? 0.001 : 0.0;
+        const holdingRapidGun = mePlayer && (mePlayer.currentWeapon === 2 || mePlayer.currentWeapon === 3);
+        const ammoDropChance = (weaponIdx === 2 || weaponIdx === 3 || holdingRapidGun) ? 0.012 : 0.0055;
         const r = Math.random();
-        if (r < 0.0055) spawnPickup(zx, zz, "AMMO_PACK");
-        else if (r < 0.0055 + partChance) spawnPickup(zx, zz, "PART");
-        else if (r < 0.0055 + partChance + 0.0018) spawnPickup(zx, zz, "MEDKIT");
-        else if (r < 0.0055 + partChance + 0.0032) spawnPickup(zx, zz, "STIM");
+        if (r < ammoDropChance) spawnPickup(zx, zz, "AMMO_PACK");
+        else if (r < ammoDropChance + partChance) spawnPickup(zx, zz, "PART");
+        else if (r < ammoDropChance + partChance + 0.0018) spawnPickup(zx, zz, "MEDKIT");
+        else if (r < ammoDropChance + partChance + 0.0032) spawnPickup(zx, zz, "STIM");
       }
     }
 

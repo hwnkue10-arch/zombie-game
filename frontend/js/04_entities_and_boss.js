@@ -627,6 +627,8 @@
       const maxTurretAmmo = 160 + (st.atk || 0) * 18 + (st.area || 0) * 18;
 
       const maxHpVal = 380 + st.spd * 170 + (tier1Special ? 220 : 0);
+      const canReflect = ((st.atk || 0) > 0 && (game.currentRoomIndex || 0) >= 4) || !!tier1Special || !!awakened;
+      const thornsVal = canReflect ? Math.round((14 + (st.atk || 0) * 14) * (tier1Special ? 1.8 : 1.0)) : 0;
       game.barricades.push({
         ownerId: pid,
         x, z,
@@ -642,7 +644,7 @@
         hpFillMat,
         crackGroupMed,
         crackGroupLow,
-        thornsDmg: (20 + st.atk * 15) * (tier1Special ? 2.0 : 1.0),
+        thornsDmg: thornsVal,
         turretDmg: Math.round(42 * (1 + st.atk * 0.35)),
         turretRange: 14.0 * sizeScale,
         stunDur: 0.22 + st.stun * 0.22,
@@ -705,33 +707,39 @@
         }
       }
       const group = new THREE.Group();
+      const isCryoBarrel = Boolean(tier1Special || awakened);
 
-      // [v3.1 빙결 배럴 외형 혁신] 일반 빨간 드럼통이 아닌 세련된 극저온 냉각 캡슐 외형 구현
+      // 기본 상태는 적색 고폭 드럼통, 15Lv/30Lv 코어 개조 시에만 극저온 냉각 배럴 외형 적용!
+      const bodyColor = awakened ? 0x0284c7 : (tier1Special ? 0x0ea5e9 : 0xdc2626);
       const tankBody = new THREE.Mesh(
         new THREE.CylinderGeometry(0.60, 0.60, 1.48, 16),
         new THREE.MeshStandardMaterial({
-          color: awakened ? 0x0284c7 : (tier1Special ? 0x0369a1 : 0x0ea5e9),
-          roughness: 0.25,
-          metalness: 0.35
+          color: bodyColor,
+          roughness: isCryoBarrel ? 0.25 : 0.45,
+          metalness: isCryoBarrel ? 0.35 : 0.25
         })
       );
       tankBody.position.y = 0.74;
       group.add(tankBody);
 
-      // 상하단 냉각 강화 림 (화이트 프로스트)
-      const rimMat = new THREE.MeshStandardMaterial({ color: 0xe0f2fe, roughness: 0.45, metalness: 0.15 });
+      // 상하단 강화 림
+      const rimMat = new THREE.MeshStandardMaterial({
+        color: isCryoBarrel ? 0xe0f2fe : 0x1e293b,
+        roughness: 0.45,
+        metalness: 0.25
+      });
       const topRim = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.14, 16), rimMat);
       topRim.position.y = 1.41;
       const btmRim = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.14, 16), rimMat);
       btmRim.position.y = 0.07;
       group.add(topRim, btmRim);
 
-      // 중앙 극저온 발광 코어 링 (Cyan Frost Glow)
+      // 중앙 경고/발광 밴드
       const coreMat = new THREE.MeshStandardMaterial({
-        color: 0x38bdf8,
-        emissive: awakened ? 0x00f0ff : (tier1Special ? 0x38bdf8 : 0x0284c7),
+        color: isCryoBarrel ? 0x38bdf8 : 0xfacc15,
+        emissive: awakened ? 0x00f0ff : (tier1Special ? 0x38bdf8 : 0xb45309),
         emissiveIntensity: awakened ? 1.0 : (tier1Special ? 0.75 : 0.45),
-        roughness: 0.15
+        roughness: 0.2
       });
       const coreBand = new THREE.Mesh(new THREE.CylinderGeometry(0.63, 0.63, 0.32, 16), coreMat);
       coreBand.position.y = 0.74;
@@ -751,7 +759,7 @@
         ownerId: pid,
         roomIndex: roomIndex !== undefined ? roomIndex : game.currentRoomIndex,
         x, z, radius: 0.75,
-        isCryo: true,
+        isCryo: isCryoBarrel,
         baseDmg: 680,
         tier1Special: !!tier1Special,
         awakened: !!awakened,

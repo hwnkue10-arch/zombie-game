@@ -404,13 +404,22 @@
       }
 
       // 1b. 이전 섹터 원웨이(One-Way) 영구 격벽 봉쇄 (비정형 hw/hd 지원):
+      // 멀티플레이 시 방장 혼자 들어갔다고 문이 바로 닫히지 않도록, 생존 중인 모든 플레이어가 진입했거나 이전 섹터가 붕괴되었을 때만 후방 격벽 봉쇄!
       const mePlayer = game.players[mySlotIndex] || game.players[0];
       if (mePlayer && curRoom && curRoom.index > 0 && !curRoom.lockedBehind) {
         const insideMarginX = (curRoom.hw || curRoom.half) - 3.5;
         const insideMarginZ = (curRoom.hd || curRoom.half) - 3.5;
-        if (Math.abs(mePlayer.x - curRoom.wx) < insideMarginX && Math.abs(mePlayer.z - curRoom.wz) < insideMarginZ) {
+        const prevIdx = curRoom.index - 1;
+        const prevRoom = game.rooms[prevIdx];
+        const activeHumans = game.players.filter(pl => !pl.downed && (pl.role === "LOCAL" || pl.role === "REMOTE"));
+        const allHumansInside = activeHumans.length > 0 && activeHumans.every(pl =>
+          Math.abs(pl.x - curRoom.wx) < insideMarginX && Math.abs(pl.z - curRoom.wz) < insideMarginZ
+        );
+        const meInsideAndCollapsed = (prevRoom && prevRoom.collapsed) &&
+          Math.abs(mePlayer.x - curRoom.wx) < insideMarginX && Math.abs(mePlayer.z - curRoom.wz) < insideMarginZ;
+
+        if (allHumansInside || meInsideAndCollapsed) {
           curRoom.lockedBehind = true;
-          const prevIdx = curRoom.index - 1;
           const backDoor = game.doors.find(d => d.fromRoom === prevIdx && d.toRoom === curRoom.index);
           if (backDoor) {
             backDoor.open = false;
@@ -1777,9 +1786,14 @@
               bar.hp -= (z.scaledDmg || z.spec.dmg);
               z.attackCooldown = 0.85;
               // 바리케이드 피격 시 균열(Crack) 및 파손 상태 실시간 업데이트 + 파편 연출!
+              // 반사딜(thornsDmg)은 중반(5섹터+) 강화 또는 15Lv 코어개조 시에만 작동!
               updateBarricadeDamageVisual(bar);
               spawnBloodParticles(bar.x, 1.0, bar.z, 0x78716c, 2);
-              damageZombie(i, bar.thornsDmg || 20, (z.x - bar.x) * 0.6, (z.z - bar.z) * 0.6, bar.stunDur || 0.22, 6);
+              if ((bar.thornsDmg || 0) > 0) {
+                damageZombie(i, bar.thornsDmg, (z.x - bar.x) * 0.6, (z.z - bar.z) * 0.6, bar.stunDur || 0.22, 6);
+              } else {
+                moveEntityWithCollision(z, (z.x - bar.x) * 0.14, (z.z - bar.z) * 0.14, z.radius);
+              }
               if (bar.hp <= 0) {
                 spawnBloodParticles(bar.x, 1.0, bar.z, 0xef4444, 6);
                 entitiesGroup.remove(bar.mesh);
@@ -2346,7 +2360,9 @@
               tp.inventory.forEach((inv, wIdx) => {
                 if (inv.unlocked && !WEAPONS[wIdx].infinite) {
                   const maxA = getWeaponMaxAmmo(tp, wIdx);
-                  inv.ammo = Math.min(maxA, inv.ammo + Math.ceil(WEAPONS[wIdx].packAmmo * 0.5));
+                  // 연발 총기(UZI id:2 / 돌격소총 id:3)는 탄약팩 습득 시 75% 회복(기타 총기 50%)으로 탄 수급 대폭 개선!
+                  const packRatio = (wIdx === 2 || wIdx === 3) ? 0.75 : 0.5;
+                  inv.ammo = Math.min(maxA, inv.ammo + Math.ceil(WEAPONS[wIdx].packAmmo * packRatio));
                 }
               });
             }
