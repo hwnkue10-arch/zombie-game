@@ -205,7 +205,11 @@
             return `✅ 모든 목표 달성! 열린 통로로 전진 · ${timerTag}`;
           }
           if (curRoom.waitingForWaveDefense) {
-            return `🌊 웨이브 방어 시 무작위 위치에 [${compStg + 1}/${maxSteps}단계] 출현 · ${timerTag}`;
+            if (game.waveTimer > 0) {
+              return `🌊 [웨이브 방어] 버티기: ${Math.ceil(game.waveTimer)}s (종료 후 잔당 5마리 이하 소탕) · ${timerTag}`;
+            } else {
+              return `⚔️ [잔당 소탕] 남은 좀비: ${game.zombies.length}마리 (5마리 이하 처치 시 완료) · ${timerTag}`;
+            }
           }
           const hint = curRoom.activeMissionTargetPos
             ? getCompassDirectionHint(me.x, me.z, curRoom.activeMissionTargetPos.x, curRoom.activeMissionTargetPos.z)
@@ -213,7 +217,16 @@
           return `🧭 [${unlockStg}/${maxSteps}단계] 수색: ${hint} 방향 · ${timerTag}`;
         };
 
-        if (curRoom.isBossRoom && game.boss) {
+        if (curRoom.waitingForWaveDefense) {
+          if (game.waveTimer > 0) {
+            objText.textContent = `🌊 호드 웨이브 방어 중! 버티기: ${Math.ceil(game.waveTimer)}초 (잔당 5마리 이하 소탕 필요)`;
+            objBar.style.width = Math.min(100, Math.max(0, (1 - game.waveTimer / 18.0) * 100)) + "%";
+          } else {
+            objText.textContent = `⚔️ 잔당 소탕 단계! 남은 좀비: ${game.zombies.length}마리 (5마리 이하 처치 시 다음 목표 해금)`;
+            objBar.style.width = Math.min(100, Math.max(0, (1 - Math.max(0, game.zombies.length - 5) / 25) * 100)) + "%";
+          }
+          if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.condType === "THERMITE" ? 3 : (curRoom.reqWaves || curRoom.targetVal || 3));
+        } else if (curRoom.isBossRoom && game.boss) {
           objText.textContent = "🎯 목표: 변이 심장 '더 코어' 파괴";
           if (objSub) objSub.textContent = `보스 무적기믹 파훼 · 무기고 상시개방`;
           objBar.style.width = ((1 - game.boss.hp / game.boss.maxHp) * 100) + "%";

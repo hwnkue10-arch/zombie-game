@@ -432,6 +432,10 @@
             }
           }
           SoundFX.play("explosion");
+          const collapseBanner = document.getElementById("hud-collapse-banner");
+          if (collapseBanner) collapseBanner.classList.add("hidden");
+          if (game.collapseState) game.collapseState.active = false;
+
           const safeBanner = document.getElementById("hud-safe-banner");
           if (safeBanner) {
             document.getElementById("hud-safe-banner-text").textContent =
@@ -469,7 +473,7 @@
             const collapseBanner = document.getElementById("hud-collapse-banner");
             if (collapseBanner) {
               document.getElementById("hud-collapse-msg").textContent =
-                "☣️ 제한시간 초과: 전 감염체 광폭화(이속·공격력 +35%) & 맹독 가스가 출구 쪽으로 조여옵니다!";
+                "☣️ 독가스 살포 & 🔥호드 광폭화 (탈출 통로로 전진!)";
               collapseBanner.classList.remove("hidden");
             }
           }
@@ -477,13 +481,14 @@
           hideArmoriesDuringSurge();
           const collapseTimerEl = document.getElementById("hud-collapse-timer");
           if (collapseTimerEl && !game.collapseState.active) {
-            collapseTimerEl.textContent = "GAS+BERSERK";
+            const gasPct = Math.min(100, Math.round((curRoom.gasWaveProgress || 0) * 100));
+            collapseTimerEl.textContent = `GAS ${gasPct}%`;
           }
         }
 
-        // [v3.1] 출구(nextDir) 반대편 외벽에서 시작하여 출구 문 쪽으로 서서히 전진하는 지향성 독가스 업데이트
+        // [v3.1] 출구(nextDir) 반대편 외벽에서 시작하여 출구 문 쪽으로 서서히 전진하는 지향성 독가스 업데이트 (최대 100% 맵 전체 잠식!)
         if (curRoom.gasWaveActive) {
-          curRoom.gasWaveProgress = Math.min(0.84, (curRoom.gasWaveProgress || 0) + dt * 0.012);
+          curRoom.gasWaveProgress = Math.min(1.0, (curRoom.gasWaveProgress || 0) + dt * 0.016);
           const prog = curRoom.gasWaveProgress;
           const rw = curRoom.w || curRoom.size;
           const rd = curRoom.d || curRoom.size;
@@ -661,40 +666,44 @@
           }
           SoundFX.play("alarm");
         } else {
-          // SURGE 웨이브를 끝까지 막아낸 순간 -> CALM 소강기 돌입 & 랜덤 위치에 무기고 지상 융기!
-          game.wavePhase = "CALM";
-          game.waveTimer = 18.0;
+          // SURGE 웨이브 방어 체크: 웨이브 방어 중(waitingForWaveDefense)일 때는 잔당 5마리 이하 소탕까지 완료해야 소강기로 진입!
+          if (curRoom && curRoom.waitingForWaveDefense && game.zombies.length > 5) {
+            game.waveTimer = 0; // 방어 타이머는 완료됨, 잔당 소탕 대기 상태 유지
+          } else {
+            game.wavePhase = "CALM";
+            game.waveTimer = 18.0;
 
-          if (curRoom) {
-            relocateArmoryForCalmPhase(curRoom);
-          }
+            if (curRoom) {
+              relocateArmoryForCalmPhase(curRoom);
+            }
 
-          if (curRoom && !curRoom.cleared && !curRoom.isBossRoom) {
-            if (curRoom.waitingForWaveDefense) {
-              curRoom.unlockStage = (curRoom.unlockStage || 0) + 1;
-              curRoom.waitingForWaveDefense = false;
-              spawnRandomMissionStepForRoom(curRoom, curRoom.unlockStage);
-              SoundFX.play("pickup");
+            if (curRoom && !curRoom.cleared && !curRoom.isBossRoom) {
+              if (curRoom.waitingForWaveDefense) {
+                curRoom.unlockStage = (curRoom.unlockStage || 0) + 1;
+                curRoom.waitingForWaveDefense = false;
+                spawnRandomMissionStepForRoom(curRoom, curRoom.unlockStage);
+                SoundFX.play("pickup");
 
-              const meP = game.players[mySlotIndex] || game.players[0];
-              const dirHint = (meP && curRoom.activeMissionTargetPos)
-                ? getCompassDirectionHint(meP.x, meP.z, curRoom.activeMissionTargetPos.x, curRoom.activeMissionTargetPos.z)
-                : "섹터 내부";
+                const meP = game.players[mySlotIndex] || game.players[0];
+                const dirHint = (meP && curRoom.activeMissionTargetPos)
+                  ? getCompassDirectionHint(meP.x, meP.z, curRoom.activeMissionTargetPos.x, curRoom.activeMissionTargetPos.z)
+                  : "섹터 내부";
 
-              const safeBanner = document.getElementById("hud-safe-banner");
-              if (safeBanner) {
-                document.getElementById("hud-safe-banner-text").textContent =
-                  `🔓 웨이브 방어 성공! [${curRoom.unlockStage}단계 목표(${dirHint})] & 🔧전술 무기고가 랜덤 위치에 출현했습니다!`;
-                safeBanner.classList.remove("hidden");
-                setTimeout(() => safeBanner.classList.add("hidden"), 5200);
-              }
-            } else {
-              const safeBanner = document.getElementById("hud-safe-banner");
-              if (safeBanner) {
-                document.getElementById("hud-safe-banner-text").textContent =
-                  `🛡️ 소강상태(18s): 🔧무기고가 출현했습니다! 먼저 [${curRoom.unlockStage}단계 목표]를 완수하세요!`;
-                safeBanner.classList.remove("hidden");
-                setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                const safeBanner = document.getElementById("hud-safe-banner");
+                if (safeBanner) {
+                  document.getElementById("hud-safe-banner-text").textContent =
+                    `🔓 웨이브 방어 & 잔당 소탕 성공! [${curRoom.unlockStage}단계 목표(${dirHint})] & 🔧전술 무기고 출현!`;
+                  safeBanner.classList.remove("hidden");
+                  setTimeout(() => safeBanner.classList.add("hidden"), 5200);
+                }
+              } else {
+                const safeBanner = document.getElementById("hud-safe-banner");
+                if (safeBanner) {
+                  document.getElementById("hud-safe-banner-text").textContent =
+                    `🛡️ 소강상태(18s): 🔧무기고가 출현했습니다! 먼저 [${curRoom.unlockStage}단계 목표]를 완수하세요!`;
+                  safeBanner.classList.remove("hidden");
+                  setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                }
               }
             }
           }
@@ -710,25 +719,24 @@
         });
       }
 
-      // [v3.1] 무한 스폰 타이머 유지 + 섹터 강화 한계치(secCapLv 1~10) 연동 동시 출현 상한(56마리 -> 240마리)
+      // [v3.1] 무한 누적 스폰 구조: 좀비를 잡지 않으면 1섹터라도 계속 스폰되어 쌓이는 구조 (엔진 안전선 360마리)
       game.spawnTimer -= dt;
       const isSurge = (game.wavePhase === "SURGE") || (curRoom && (curRoom.collapsing || curRoom.berserkActive));
       const rWave = curRoom ? (curRoom.roomWaveCount || 1) : 1;
       const secCapLv = getSectorMaxStatLv(); // 1 ~ 10
-      const maxSwarm = isSurge
-        ? Math.min(240, Math.round(56 + (secCapLv - 1) * 20.4))
-        : Math.min(90, 26 + secCapLv * 6);
+      const isWaveCleanup = (curRoom && curRoom.waitingForWaveDefense && game.waveTimer <= 0);
+      const maxSwarm = 360; // 상한으로 인한 스폰 중단 방지 — 잡지 않으면 계속 누적됨!
 
-      if (game.spawnTimer <= 0 && game.zombies.length < maxSwarm) {
+      if (game.spawnTimer <= 0 && game.zombies.length < maxSwarm && !isWaveCleanup) {
         game.spawnTimer = isSurge
-          ? Math.max(0.26, 0.68 - game.currentRoomIndex * 0.035 - rWave * 0.02)
-          : Math.max(1.35, 2.1 - game.currentRoomIndex * 0.05);
+          ? Math.max(0.42, 1.05 - game.currentRoomIndex * 0.04 - rWave * 0.02)
+          : Math.max(1.35, 2.3 - game.currentRoomIndex * 0.06);
 
         if (curRoom) {
           const activeHoles = (curRoom.spawnHoles || []).filter(h => h.active);
           if (activeHoles.length > 0) {
             const packSize = isSurge
-              ? Math.min(18, 6 + Math.floor(secCapLv * 0.95) + Math.floor(rWave * 0.6))
+              ? Math.min(16, 4 + Math.floor(secCapLv * 0.8) + Math.floor(rWave * 0.5))
               : (2 + Math.floor(Math.random() * 3));
             const hole = activeHoles[Math.floor(Math.random() * activeHoles.length)];
 
@@ -1563,6 +1571,7 @@
     }
 
     function updateZombiesAndTurrets(dt) {
+      const curRoom = game.rooms[game.currentRoomIndex];
       // [v3.1] 바리케이드 센트리 포탑: 내장 탄약 160~340발 + 기본 2마리 관통 + 탄약 소진 시 8초 자동 냉각/재장전 후 100% 재가동!
       game.barricades.forEach(bar => {
         if (!bar.hasTurret) return;

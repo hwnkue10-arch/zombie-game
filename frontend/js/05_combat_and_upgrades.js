@@ -1505,9 +1505,8 @@
           }
         }
 
-        if (game.comboCount === 65 || game.comboCount === 140 || game.comboCount === 230) {
-          spawnPickup(zx, zz, "PART");
-          spawnPickup(zx + 1.0, zz, "AMMO_PACK");
+        if (game.comboCount === 100 || game.comboCount === 200) {
+          spawnPickup(zx, zz, "AMMO_PACK");
         }
 
         const mePlayer = game.players[mySlotIndex];
@@ -1520,14 +1519,14 @@
           triggerExplosion(zx, zz, 4.0, 58, -1, false);
         }
 
-        // 엘리트 감염체(골리앗·블러드 데빌)는 ⚙️무기 부품 드랍 확률 3.5배!
+        // 일반 좀비는 무기부품 드랍 제외 (부품 가치 보존), 오직 최상위 엘리트(골리앗/데빌)만 0.1% 희귀 드랍
         const isElite = (zmb.typeKey === "GOLIATH" || zmb.typeKey === "DEVIL");
-        const partChance = isElite ? 0.0085 : 0.0022;
+        const partChance = isElite ? 0.001 : 0.0;
         const r = Math.random();
         if (r < 0.0055) spawnPickup(zx, zz, "AMMO_PACK");
         else if (r < 0.0055 + partChance) spawnPickup(zx, zz, "PART");
-        else if (r < 0.0055 + partChance + 0.0020) spawnPickup(zx, zz, "MEDKIT");
-        else if (r < 0.0055 + partChance + 0.0036) spawnPickup(zx, zz, "STIM");
+        else if (r < 0.0055 + partChance + 0.0018) spawnPickup(zx, zz, "MEDKIT");
+        else if (r < 0.0055 + partChance + 0.0032) spawnPickup(zx, zz, "STIM");
       }
     }
 

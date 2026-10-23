@@ -511,16 +511,7 @@
     function spawnBarricade(x, z, awakened, stats, nx, nz, tier1Special, ownerId) {
       const st = stats || { atk: 0, spd: 0, area: 0, stun: 0, knock: 0 };
       const pid = ownerId !== undefined ? ownerId : mySlotIndex;
-      // [v3.1] 인당 바리케이드 최대 설치 상한 6개 (초과 시 본인의 가장 오래된 바리케이드 자동 철거)
-      const myBars = game.barricades.filter(b => b.ownerId === pid);
-      if (myBars.length >= 6) {
-        const oldest = myBars[0];
-        const idxOld = game.barricades.indexOf(oldest);
-        if (idxOld !== -1) {
-          entitiesGroup.remove(oldest.mesh);
-          game.barricades.splice(idxOld, 1);
-        }
-      }
+      // 일반 방벽은 설치 수 제한 없이 전술 배치 가능 (단, 상단 자동 센트리 포탑만 인당 최대 3기 제한 유지)
       const sizeScale = 1 + st.area * 0.18;
       const isVertical = Math.abs(nx || 0) > Math.abs(nz || 0);
       const barLen = 2.9 * sizeScale;

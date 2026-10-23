@@ -25,11 +25,11 @@
   <div id="ingame-hud" class="hidden fixed inset-0 z-20 pointer-events-none flex flex-col justify-between p-3 sm:p-4">
 
     <!-- Top Floating Notification Banners (Out of normal layout flow -> ZERO UI shift when appearing!) -->
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2 pointer-events-none w-full max-w-lg px-4">
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2 pointer-events-none w-full max-w-xl px-4">
       <div id="hud-collapse-banner" class="hidden hud-glass-red rounded-2xl px-4 py-2.5 w-full text-center animate-danger shadow-2xl">
-        <div class="text-xs sm:text-sm font-extrabold text-rose-100 flex items-center justify-between gap-3">
-          <span id="hud-collapse-msg" class="truncate">⚠️ 섹터 붕괴 진행 중 — 열린 통로로 즉시 탈출하세요!</span>
-          <span id="hud-collapse-timer" class="font-mono-code text-sm sm:text-base font-black text-amber-300 shrink-0 w-14 text-right">18.0s</span>
+        <div class="text-xs sm:text-sm font-extrabold text-rose-100 flex items-center justify-between gap-3 overflow-hidden">
+          <span id="hud-collapse-msg" class="truncate flex-1 min-w-0 text-left">⚠️ 섹터 붕괴 진행 중 — 열린 통로로 즉시 탈출하세요!</span>
+          <span id="hud-collapse-timer" class="font-mono-code text-xs sm:text-sm font-black text-amber-300 shrink-0 text-right whitespace-nowrap">18.0s</span>
         </div>
       </div>
 
