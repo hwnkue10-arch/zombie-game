@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>BOXHEAD: THE CORE v3.1 — 전장의 안개 · 비정형 섹터 · 소강기 팝업 무기고 · 코어 상점/추출 & 지향성 독가스 에디션</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="relative w-full h-full overflow-hidden">
+
+  <!-- 3D Scene Container -->
+  <div id="game-canvas-container"></div>
+
+  <!-- Vignette Overlay -->
+  <div id="damage-vignette" class="pointer-events-none fixed inset-0 z-10 transition-opacity duration-300 opacity-0"
+       style="background: radial-gradient(circle, transparent 52%, rgba(220, 38, 38, 0.72) 100%);"></div>
+
+  <!-- Floating 3D World Labels (On-Character Mini HP Bar & Downed Ally Icon Only) -->
+  <div id="floating-labels" class="pointer-events-none fixed inset-0 z-10 overflow-hidden"></div>
+
+  <!-- ==================== IN-GAME EYE-COMFORT ZERO-SHIFT TACTICAL HUD (v2.8) ==================== -->
+  <div id="ingame-hud" class="hidden fixed inset-0 z-20 pointer-events-none flex flex-col justify-between p-3 sm:p-4">
+
+    <!-- Top Floating Notification Banners (Out of normal layout flow -> ZERO UI shift when appearing!) -->
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2 pointer-events-none w-full max-w-lg px-4">
+      <div id="hud-collapse-banner" class="hidden hud-glass-red rounded-2xl px-4 py-2.5 w-full text-center animate-danger shadow-2xl">
+        <div class="text-xs sm:text-sm font-extrabold text-rose-100 flex items-center justify-between gap-3">
+          <span id="hud-collapse-msg" class="truncate">⚠️ 섹터 붕괴 진행 중 — 열린 통로로 즉시 탈출하세요!</span>
+          <span id="hud-collapse-timer" class="font-mono-code text-sm sm:text-base font-black text-amber-300 shrink-0 w-14 text-right">18.0s</span>
+        </div>
+      </div>
+
+      <div id="hud-safe-banner" class="hidden hud-glass rounded-2xl px-4 py-2.5 w-full text-center border border-emerald-400/50 shadow-2xl">
+        <span id="hud-safe-banner-text" class="text-xs sm:text-sm font-bold text-emerald-200 block truncate">✅ 통로 개방 완료</span>
+      </div>
+    </div>
+
+    <!-- Top Row: Left (Player Vitals & Squad), Center (Boss Health Only), Right (Radar & Fixed-Height Mission Card) -->
+    <div class="flex items-start justify-between gap-3 w-full">
+
+      <!-- TOP-LEFT: Spacious, Eye-Comfortable Player Vitals, Action Buttons & Squad Status (Fixed Width & Height Rows) -->
+      <div id="squad-status-panel" class="hud-glass rounded-2xl p-3.5 pointer-events-auto flex flex-col gap-2.5 w-[290px] sm:w-[328px]">
+
+        <!-- Row 1: Player HP Bar + Fixed-Width Status & Ailment Slot (HP Bar NEVER shrinks!) -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between h-5">
+            <div class="flex items-center gap-2">
+              <span id="hud-player-state-badge" class="px-2 py-0.5 rounded-md text-xs font-extrabold bg-emerald-600 text-white shrink-0 min-w-[54px] text-center">♥ 정상</span>
+              <span class="text-xs font-bold text-slate-300">생체 신호</span>
+            </div>
+            <!-- Fixed-height/width slot for status ailments & overcharge so nothing shifts -->
+            <div class="flex items-center justify-end gap-1 min-w-[96px] h-5">
+              <span id="hud-overcharge-badge" class="hidden px-1.5 py-0.5 rounded bg-amber-500/25 border border-amber-400/40 text-[11px] text-amber-200 font-bold">🔥과충전</span>
+              <span id="hud-ailment-badges" class="flex items-center gap-1"></span>
+            </div>
+          </div>
+
+          <div class="w-full bg-slate-950 h-6 rounded-xl overflow-hidden border border-slate-700/90 relative flex items-center shadow-inner">
+            <div id="hud-my-hp-bar" class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-150" style="width: 100%;"></div>
+            <div id="hud-my-temphp-bar" class="bg-amber-400/90 h-full transition-all duration-150" style="width: 0%;"></div>
+            <span id="hud-my-hp-text" class="absolute inset-0 flex items-center justify-center text-xs sm:text-sm font-mono-code font-extrabold text-white drop-shadow">100 / 100</span>
+          </div>
+
+          <!-- Stamina Bar for [Shift] Tactical Sprint -->
+          <div class="w-full bg-slate-950 h-3.5 rounded-lg overflow-hidden border border-slate-800 relative flex items-center">
+            <div id="hud-my-stamina-bar" class="bg-gradient-to-r from-sky-500 to-cyan-300 h-full transition-all duration-75" style="width: 100%;"></div>
+            <span id="hud-my-stamina-text" class="absolute inset-0 flex items-center justify-center text-[10px] font-mono-code font-bold text-slate-100 drop-shadow">⚡ STAMINA 100 / 100 [Shift 질주]</span>
+          </div>
+        </div>
+
+        <!-- Row 2: 4 Ergonomic Tactical Action Buttons with Clear Labels & Fixed Height (h-11) -->
+        <div class="grid grid-cols-4 gap-1.5 text-xs font-mono-code">
+          <button id="btn-use-medkit" type="button" title="구급키트 / 나노 주사기 치료 [Q]" class="h-11 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/35 text-emerald-100 font-bold flex flex-col items-center justify-center leading-tight transition">
+            <span id="hud-medkit-label" class="text-[11px] text-emerald-300 font-sans font-bold">🩹 치료[Q]</span>
+            <span class="text-xs font-extrabold"><span id="hud-medkit-count">1</span><span class="text-slate-400 text-[10px]">/<span id="hud-medkit-max">1</span></span></span>
+          </button>
+          <button id="btn-use-stim" type="button" title="아드레날린 스팀팩 [E]" class="h-11 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-500/35 text-amber-100 font-bold flex flex-col items-center justify-center leading-tight transition">
+            <span class="text-[11px] text-amber-300 font-sans font-bold">⚡ 스팀[E]</span>
+            <span class="text-xs font-extrabold"><span id="hud-stim-count">1</span><span class="text-slate-400 text-[10px]">/<span id="hud-stim-max">1</span></span></span>
+          </button>
+          <button id="btn-dash" type="button" title="전술 회피·점프 월담 [Space / 우클릭]" class="h-11 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-400/35 text-indigo-100 font-bold flex flex-col items-center justify-center leading-tight transition">
+            <span class="text-[11px] text-indigo-300 font-sans font-bold">🚀 점프[Space]</span><span id="hud-dash-status" class="text-xs font-extrabold text-cyan-200">READY</span>
+          </button>
+          <button id="btn-bash" type="button" title="360° 전방위 기절 밀치기·패링 [V]" class="h-11 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-400/35 text-rose-100 font-bold flex flex-col items-center justify-center leading-tight transition">
+            <span class="text-[11px] text-rose-300 font-sans font-bold">👊 기절[V]</span><span id="hud-bash-status" class="text-xs font-extrabold text-rose-200">READY</span>
+          </button>
+        </div>
+
+        <!-- Row 3: Fixed 3-Column Resource Strip (Tabular Nums -> Never Jitters!) -->
+        <div class="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-800/90 text-xs font-mono-code">
+          <div class="bg-slate-900/90 rounded-lg px-2 py-1.5 border border-slate-800 flex items-center justify-between">
+            <span class="text-slate-400 font-sans text-[11px] font-semibold">BP</span>
+            <span id="hud-bio-points" class="text-amber-300 font-extrabold">110</span>
+          </div>
+          <div class="bg-slate-900/90 rounded-lg px-2 py-1.5 border border-slate-800 flex items-center justify-between">
+            <span class="text-slate-400 font-sans text-[11px] font-semibold">부품·코어</span>
+            <span id="hud-materials-text" class="text-sky-300 font-bold">0 / 0</span>
+          </div>
+          <div class="bg-slate-900/90 rounded-lg px-2 py-1.5 border border-slate-800 flex items-center justify-between">
+            <span id="hud-resonance-badge" class="text-cyan-300 font-bold">⚡+0%</span>
+            <span id="hud-combo-text" class="text-rose-400 font-extrabold">-</span>
+          </div>
+        </div>
+
+        <!-- Row 4: Clean 3-Column Squad Status Strip (Fixed Height) -->
+        <div id="squad-members-list" class="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-800/70 min-h-[38px]"></div>
+
+        <div class="hidden">
+          <span id="hud-ff-badge">ON</span>
+          <span id="hud-net-mode">HOST</span>
+          <span id="hud-session-timer">00:00</span>
+        </div>
+      </div>
+
+      <!-- TOP-CENTER: Boss & Mid-Boss Health Bars (Clean & Legible) -->
+      <div class="flex flex-col items-center flex-1 max-w-lg mx-auto gap-2 pointer-events-none pt-1">
+        <!-- Mid-Boss Health Bar -->
+        <div id="hud-midboss-container" class="hidden hud-glass rounded-2xl px-4 py-2.5 w-full border border-amber-500/50 shadow-xl">
+          <div class="flex items-center justify-between text-xs sm:text-sm font-extrabold text-amber-300 mb-1.5 gap-2">
+            <span id="hud-midboss-name" class="truncate">⚠️ 중간보스 출현</span>
+            <span id="hud-midboss-hp-text" class="font-mono-code shrink-0 text-amber-200">18500</span>
+          </div>
+          <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800">
+            <div id="hud-midboss-bar" class="bg-gradient-to-r from-amber-600 to-yellow-400 h-full transition-all duration-150" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <!-- Final Boss 'THE CORE' Health Bar -->
+        <div id="hud-boss-container" class="hidden hud-glass-red rounded-2xl px-4 py-3 w-full pointer-events-auto shadow-2xl">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 text-xs font-black bg-red-600 text-white rounded-md uppercase" id="hud-boss-phase">P1</span>
+              <span class="text-sm font-black text-red-100">변이 생체 심장 : THE CORE</span>
+            </div>
+            <span id="hud-boss-hp-text" class="text-xs sm:text-sm font-mono-code font-bold text-red-200">90000</span>
+          </div>
+          <div class="w-full bg-black/75 h-3.5 rounded-full overflow-hidden border border-red-400/50 relative">
+            <div id="hud-boss-bar" class="bg-gradient-to-r from-red-700 via-rose-500 to-amber-400 h-full transition-all duration-150" style="width: 100%;"></div>
+            <div id="hud-boss-shield-overlay" class="hidden absolute inset-0 bg-cyan-600/85 flex items-center justify-center text-xs font-black text-white">
+              🛡️ 무적 보호막 활성 — 기믹을 먼저 파훼하세요
+            </div>
+          </div>
+          <div id="hud-boss-pattern-alert" class="text-xs text-amber-200 font-bold mt-1 text-center h-4 truncate"></div>
+        </div>
+      </div>
+
+      <!-- TOP-RIGHT: Larger Minimap Radar + Labelled Utility Buttons + Fixed-Height Mission Card -->
+      <div class="flex flex-col items-end gap-2.5 pointer-events-auto w-[290px] sm:w-[328px]">
+        <div class="hud-glass rounded-2xl p-3 flex flex-col items-center gap-2.5 w-full">
+          <canvas id="minimap-canvas" width="240" height="148" class="rounded-xl bg-slate-950/95 border border-slate-800 w-full h-[132px]"></canvas>
+          <span id="hud-seed-label" class="hidden">#SEED</span>
+
+          <!-- 6 Clear Utility Buttons with Readable Labels -->
+          <div class="grid grid-cols-6 gap-1.5 w-full">
+            <button id="btn-open-upgrade" type="button" title="무기 강화소 [T / U]" class="h-9 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition flex items-center justify-center">
+              🔧<span class="hidden"> 무기 강화 / 탄약 조합 [U]</span>
+            </button>
+            <button id="btn-open-settings" type="button" title="환경설정 (3D 멀미 방지 / 그래픽 / 오디오) [O]" class="h-9 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-black transition flex items-center justify-center">
+              ⚙️
+            </button>
+            <button id="btn-toggle-sound" type="button" title="사운드 켜기/끄기" class="h-9 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 transition flex items-center justify-center">
+              🔊<span class="hidden"> 사운드</span>
+            </button>
+            <button id="btn-cam-zoom" type="button" title="카메라 시야 거리 조절" class="h-9 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 transition flex items-center justify-center">
+              🎥<span class="hidden"> 시야줌</span>
+            </button>
+            <button id="btn-toggle-touch" type="button" title="모바일 터치패드 표시" class="h-9 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 transition flex items-center justify-center">
+              📱<span class="hidden">패드</span>
+            </button>
+            <button id="btn-return-lobby-top" type="button" title="대기실로 복귀" class="h-9 rounded-xl bg-rose-950/85 hover:bg-rose-900 border border-rose-500/35 text-xs text-rose-200 transition flex items-center justify-center after:content-['🏠']">
+              <span class="hidden">대기실 복귀</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Fixed-Height Sector & Objective Card (Strict height & single-line truncation -> ZERO vertical layout shift!) -->
+        <div class="hud-glass rounded-2xl px-3.5 py-3 w-full text-left flex flex-col justify-between h-[112px] border border-amber-500/35">
+          <div class="flex items-center justify-between text-xs font-mono-code font-bold h-5">
+            <div class="flex items-center gap-1.5">
+              <span id="hud-room-title" class="text-amber-400 font-black">섹터 1/10</span>
+              <span id="hud-env-tag" class="text-emerald-300 text-[11px]"></span>
+            </div>
+            <span id="hud-zombie-count" class="text-slate-200 font-bold">🛡️ 10s · 💀 0</span>
+          </div>
+          <span id="hud-SubMission-tag" class="hidden">MISSION</span>
+
+          <div id="hud-objective-text" class="text-xs sm:text-[13px] font-extrabold text-amber-100 truncate h-5 leading-5">
+            🎯 목표: 감염체 섬멸 작전
+          </div>
+          <div id="hud-objective-sub" class="text-[11px] font-mono-code text-slate-300 truncate h-4 leading-4">
+            웨이브 1 방어 중 · 섹터BP 0/850
+          </div>
+          <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-700/80 mt-0.5">
+            <div id="hud-objective-bar" class="bg-gradient-to-r from-amber-500 via-emerald-400 to-cyan-400 h-full transition-all duration-150" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom Area: Fixed-Height Context Prompt Slot + Touch Pad + Spacious 8-Weapon Hotbar -->
+    <div class="flex flex-col items-center gap-2 w-full mt-auto">
+
+      <!-- Fixed-Height Context Prompt Slot (h-9 reserved so showing/hiding [F] prompt NEVER shifts anything!) -->
+      <div class="flex items-center justify-center gap-2 pointer-events-none h-9">
+        <div id="hud-interact-prompt" class="hidden hud-glass rounded-full px-4 py-1.5 flex items-center gap-3 border border-amber-400/60 shadow-xl">
+          <span id="hud-interact-title" class="text-xs sm:text-sm font-extrabold text-amber-300">[F] 상호작용</span>
+          <span id="hud-interact-desc" class="hidden"></span>
+          <div class="w-24 bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-700">
+            <div id="hud-interact-bar" class="bg-amber-400 h-full transition-all duration-75" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <div id="hud-heal-progress-box" class="hidden hud-glass rounded-full px-4 py-1.5 flex items-center gap-3 border border-emerald-400/60 shadow-xl">
+          <span id="hud-heal-title" class="text-xs sm:text-sm font-extrabold text-emerald-300">🩹 응급 붕대 치료 중...</span>
+          <div class="w-24 bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-700">
+            <div id="hud-heal-bar" class="bg-emerald-400 h-full transition-all duration-75" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <div id="hud-downed-banner" class="hidden hud-glass-red rounded-full px-4 py-1.5 text-center border border-rose-500 shadow-xl">
+          <span class="text-xs sm:text-sm font-extrabold text-rose-100">🩸 빈사 상태 — 아군의 [F] 구출 대기 중 (권총 방어 가능)</span>
+        </div>
+      </div>
+
+      <!-- Touch Controls Overlay -->
+      <div id="touch-controls-bar" class="hidden w-full flex justify-between items-end px-2 pb-1 pointer-events-auto">
+        <div class="grid grid-cols-3 gap-1.5 w-32 h-32 hud-glass p-1.5 rounded-2xl">
+          <button type="button" data-touch-action="q" class="bg-emerald-800/80 rounded-lg text-[10px] font-bold">Q(치료)</button>
+          <button type="button" data-touch-move="w" class="bg-slate-800 active:bg-amber-500 rounded-lg font-bold text-sm">W</button>
+          <button type="button" data-touch-action="e" class="bg-amber-700/80 rounded-lg text-[10px] font-bold">E(스팀)</button>
+          <button type="button" data-touch-move="a" class="bg-slate-800 active:bg-amber-500 rounded-lg font-bold text-sm">A</button>
+          <button type="button" data-touch-action="f" class="bg-sky-600 rounded-lg font-black text-xs">F</button>
+          <button type="button" data-touch-move="d" class="bg-slate-800 active:bg-amber-500 rounded-lg font-bold text-sm">D</button>
+          <button type="button" data-touch-action="shift" class="bg-cyan-700 rounded-lg text-[10px] font-bold">질주</button>
+          <button type="button" data-touch-move="s" class="bg-slate-800 active:bg-amber-500 rounded-lg font-bold text-sm">S</button>
+          <button type="button" data-touch-action="space" class="bg-indigo-700 rounded-lg text-[10px] font-bold">점프</button>
+        </div>
+        <div class="grid grid-cols-3 gap-1.5 w-32 h-32 hud-glass p-1.5 rounded-2xl">
+          <button type="button" data-touch-aim="ul" class="bg-red-950/80 active:bg-red-600 rounded-lg text-sm">↖</button>
+          <button type="button" data-touch-aim="u" class="bg-red-900/90 active:bg-red-600 rounded-lg text-sm font-bold">↑</button>
+          <button type="button" data-touch-aim="ur" class="bg-red-950/80 active:bg-red-600 rounded-lg text-sm">↗</button>
+          <button type="button" data-touch-aim="l" class="bg-red-900/90 active:bg-red-600 rounded-lg text-sm font-bold">←</button>
+          <div class="flex items-center justify-center text-[10px] font-bold text-red-300">사격</div>
+          <button type="button" data-touch-aim="r" class="bg-red-900/90 active:bg-red-600 rounded-lg text-sm font-bold">→</button>
+          <button type="button" data-touch-aim="dl" class="bg-red-950/80 active:bg-red-600 rounded-lg text-sm">↙</button>
+          <button type="button" data-touch-aim="d" class="bg-red-900/90 active:bg-red-600 rounded-lg text-sm font-bold">↓</button>
+          <button type="button" data-touch-aim="dr" class="bg-red-950/80 active:bg-red-600 rounded-lg text-sm">↘</button>
+        </div>
+      </div>
+
+      <!-- Spacious, Eye-Comfortable Bottom Weapon & Dedicated Ammo Dock -->
+      <div class="hud-glass rounded-2xl px-3.5 py-2.5 pointer-events-auto w-full max-w-3xl flex flex-col gap-2">
+        <!-- Fixed 2-Column Header Bar (No horizontal jitter when switching weapons!) -->
+        <div class="grid grid-cols-2 items-center gap-2 px-1 h-6 text-xs font-mono-code">
+          <span id="hud-cur-weapon-ammo" class="text-amber-300 font-extrabold truncate">🔫 전술 피스톨 : ∞ 무한탄</span>
+          <div class="flex justify-end">
+            <span id="hud-armory-prox" class="px-2.5 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-300 font-bold text-[11px] truncate">🔐 무기고 밖 (강화·구매는 무기고 근처)</span>
+          </div>
+          <span class="hidden">
+            <b id="hud-ammo-light">0</b>
+            <b id="hud-ammo-heavy">0</b>
+            <b id="hud-ammo-energy">0</b>
+          </span>
+        </div>
+        <!-- 8 Readable, Fixed-Height Weapon Slots -->
+        <div id="weapon-slots-container" class="grid grid-cols-8 gap-1.5"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== SPACIOUS CENTERED WEAPON UPGRADE & AMMO MODAL [T / U] ==================== -->
+  <div id="upgrade-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm pointer-events-auto">
+    <div class="hud-glass rounded-3xl max-w-4xl w-full max-h-[88vh] p-4 sm:p-6 border border-amber-500/40 shadow-2xl flex flex-col gap-3.5 overflow-hidden">
+
+      <!-- Modal Header -->
+      <div class="flex flex-col gap-2.5 border-b border-slate-800 pb-3 shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5">
+            <h3 class="text-base sm:text-lg font-black text-white">🔧 전술 무기고 정비 · 강화소 <span class="text-xs font-mono-code text-amber-300 ml-1">[단축키 T / U]</span></h3>
+            <span id="upg-resonance-info" class="px-2.5 py-1 rounded-lg bg-cyan-950/90 border border-cyan-500/40 text-cyan-200 text-xs font-mono-code font-bold">
+              숙련도 공명: 0개 (화력 +0%)
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span class="px-3 py-1.5 rounded-xl bg-slate-900 border border-amber-400/40 text-amber-300 font-mono-code text-xs sm:text-sm font-extrabold">
+              🪙 BP <span id="upg-bp-display">0</span> · ⚙️ 부품 <span id="upg-parts-display">0</span> · 🧬 코어 <span id="upg-cores-display">0</span>/6
+            </span>
+            <button id="btn-close-upgrade" type="button" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs sm:text-sm font-bold text-slate-100 transition">
+              닫기 [U / ESC]
+            </button>
+          </div>
+        </div>
+
+        <!-- Fixed-Height Status & Toast Feedback Bars (Never jumps when clicking upgrade!) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div id="upg-armory-status" class="h-9 px-3 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-xs font-bold text-emerald-200 flex items-center truncate">
+            🟢 무기고 정비 구역 연결됨 — 무기 강화·특수개조·개별 탄약 구매 가능
+          </div>
+          <div id="upg-roll-toast" class="h-9 px-3 rounded-xl bg-slate-900/95 border border-amber-400/35 text-xs font-bold text-amber-200 flex items-center truncate">
+            🎲 섹터 돌파마다 강화 상한(+5Lv, 최대 50Lv)이 해금됩니다! [15Lv 1차개조 · 30Lv 최종각성 · 45Lv 초월]
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Supply, Per-Weapon Ammo Refill & Core/Part Shop Strip -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 bg-slate-950/90 p-2.5 rounded-2xl border border-slate-800 shrink-0">
+        <button id="btn-buy-light" type="button" aria-label="장착무기 탄약 보충" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-sky-500/35 text-left transition flex flex-col justify-between h-14">
+          <div class="text-xs font-extrabold text-sky-300 truncate">장착무기 탄약</div>
+          <div id="upg-buy-light-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">개별 정가 보충</div>
+        </button>
+        <button id="btn-buy-heavy" type="button" aria-label="전 총기 +1팩 220 BP" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/35 text-left transition flex flex-col justify-between h-14">
+          <div class="text-xs font-extrabold text-emerald-300 truncate">전 총기 +1팩</div>
+          <div class="text-[11px] font-mono-code text-amber-300 font-bold truncate">220 BP</div>
+        </button>
+        <button id="btn-buy-energy" type="button" aria-label="방벽+5 폭통+4 120 BP" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-rose-500/35 text-left transition flex flex-col justify-between h-14">
+          <div class="text-xs font-extrabold text-rose-300 truncate">방벽+5·폭통+4</div>
+          <div class="text-[11px] font-mono-code text-amber-300 font-bold truncate">120 BP</div>
+        </button>
+        <button id="btn-buy-medkit" type="button" aria-label="구급키트 (+1) 110 BP" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-teal-500/35 text-left transition flex flex-col justify-between h-14">
+          <div id="upg-buy-medkit-title" class="text-xs font-extrabold text-teal-300 truncate">구급키트 (+1)</div>
+          <div id="upg-buy-medkit-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">110 BP</div>
+        </button>
+        <button id="btn-buy-stim" type="button" aria-label="스팀팩 (+1) 90 BP" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-yellow-500/35 text-left transition flex flex-col justify-between h-14">
+          <div id="upg-buy-stim-title" class="text-xs font-extrabold text-yellow-300 truncate">스팀팩 (+1)</div>
+          <div id="upg-buy-stim-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">90 BP</div>
+        </button>
+        <button id="btn-craft-part" type="button" aria-label="무기 부품 합성 (+1 부품)" class="p-2 rounded-xl bg-indigo-950/80 hover:bg-indigo-900/80 border border-indigo-400/50 text-left transition flex flex-col justify-between h-14">
+          <div class="text-xs font-extrabold text-indigo-200 truncate">⚙️ 부품 합성 (+1)</div>
+          <div id="upg-craft-part-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">450 BP</div>
+        </button>
+        <button id="btn-buy-core" type="button" aria-label="변이 코어 상점 구매" class="p-2 rounded-xl bg-fuchsia-950/80 hover:bg-fuchsia-900/80 border border-fuchsia-400/50 text-left transition flex flex-col justify-between h-14">
+          <div class="text-xs font-extrabold text-fuchsia-200 truncate">🛒 변이코어 구매</div>
+          <div id="upg-buy-core-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">3S 해금 (750BP)</div>
+        </button>
+        <button id="btn-sell-core" type="button" aria-label="변이 코어 추출 판매 환급" class="p-2 rounded-xl bg-cyan-950/80 hover:bg-cyan-900/80 border border-cyan-400/50 text-left transition flex flex-col justify-between h-14">
+          <div class="text-xs font-extrabold text-cyan-200 truncate">🧬 코어 추출판매</div>
+          <div id="upg-sell-core-label" class="text-[11px] font-mono-code text-emerald-300 font-bold truncate">+900 BP 환급</div>
+        </button>
+      </div>
+
+      <!-- Scrollable Container for Tactical Suit / Medical Upgrades AND Weapon Upgrades -->
+      <div class="overflow-y-auto pr-1 flex-1 flex flex-col gap-3">
+        <!-- Tactical Suit, Stamina, Cooldown & Nano-Syringe Upgrades -->
+        <div class="bg-slate-950/85 rounded-2xl p-3 border border-cyan-500/35">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <span class="text-xs sm:text-sm font-black text-cyan-300">🧬 전술 신체 · 의료 · 기동 강화 (구급상자·스팀팩 확장 / 스태미너 / 쿨감 / 주사기 개조)</span>
+            <span class="text-[11px] font-mono-code text-slate-400">섹터 조건 충족 및 무기고 근처에서 강화 가능</span>
+          </div>
+          <div id="upgrade-suit-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2"></div>
+        </div>
+
+        <!-- 2-Column Weapon Upgrade Cards Grid -->
+        <div>
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2 px-1">
+            <span class="text-xs sm:text-sm font-black text-amber-300">🔫 전술 무기 해금 (⚙️부품+BP) 및 스탯 랜덤 강화 (8종)</span>
+            <span class="text-[11px] font-mono-code text-slate-400">📦보급상자·섹터돌파·중간보스·합성으로 ⚙️부품 획득</span>
+          </div>
+          <div id="upgrade-weapons-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ==================== CLEAN LOBBY / WAITING ROOM MODAL ==================== -->
+  <div id="lobby-screen" class="fixed inset-0 z-30 flex items-center justify-center p-3 sm:p-5 bg-slate-950/90 backdrop-blur-md overflow-y-auto">
+    <div class="hud-glass rounded-3xl max-w-4xl w-full p-5 sm:p-6 border border-slate-700/80 shadow-2xl my-auto">
+
+      <!-- Clean Header -->
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3.5 mb-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white uppercase">4-PLAYER CO-OP</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">v3.1 TACTICAL OVERHAUL · 전장의안개 · 비정형맵 · 팝업무기고</span>
+          </div>
+          <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
+            BOXHEAD : <span class="text-red-500">THE CORE</span>
+          </h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btn-lobby-settings" type="button" class="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-400/50 text-cyan-200 text-xs font-bold transition">
+            ⚙️ 환경설정 (3D 멀미 방지)
+          </button>
+          <button id="btn-open-hamachi-guide" type="button" class="px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/40 text-indigo-200 text-xs font-bold transition">
+            🖧 하마치 멀티 서버 가이드
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Left: Network & 4-Player Squad Slots (7 cols) -->
+        <div class="lg:col-span-7 flex flex-col gap-3">
+          <div class="bg-slate-900/90 rounded-2xl p-3.5 border border-slate-800">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-slate-300">호스트 & 하마치 연결</span>
+              <span id="lobby-conn-status" class="text-[11px] font-mono-code font-bold text-emerald-400">● 로컬 리슨 호스트 준비됨</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] text-slate-400 mb-0.5">내 닉네임</label>
+                <input id="input-player-name" type="text" value="HOST_P1" maxlength="12"
+                       class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-amber-400" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-slate-400 mb-0.5">서버 주소 (`npm start` 연동)</label>
+                <div class="flex gap-1">
+                  <input id="input-server-url" type="text" value="ws://localhost:3000"
+                         class="w-full px-2 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs font-mono-code text-slate-200 focus:outline-none" />
+                  <button id="btn-connect-ws" type="button" class="px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white whitespace-nowrap">
+                    접속
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4 Squad Slots -->
+          <div class="bg-slate-900/90 rounded-2xl p-3.5 border border-slate-800 flex-1">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-slate-300">스쿼드 대기실 (최대 4인)</span>
+              <span class="text-[10px] text-slate-400">AI 전환 및 방장 강퇴(🚫) 가능 · 4인 정원 초과 시 입장 차단</span>
+            </div>
+            <div id="lobby-slots-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+          </div>
+        </div>
+
+        <!-- Right: Session Settings & Start Button (5 cols) -->
+        <div class="lg:col-span-5 flex flex-col gap-3 justify-between">
+          <div class="bg-slate-900/90 rounded-2xl p-3.5 border border-slate-800 flex flex-col gap-2.5">
+            <span class="text-xs font-bold text-slate-300">원정 작전 설정</span>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">캠페인 모드 (플레이 타임 호흡)</label>
+              <select id="select-pacing" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-amber-300">
+                <option value="marathon" selected>대규모 정규 원정 (1시간~1시간 20분 호흡 · 대량 호드)</option>
+                <option value="standard">전술 압축 원정 (25~35분 호흡 · 빠른 교전)</option>
+                <option value="blitz">고속 돌파 테스트 (빠른 기믹/보스전 검증)</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">총 섹터(방) 수</label>
+                <select id="select-room-count" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-slate-200">
+                  <option value="10" selected>10개 대형 섹터 (1시간+ 표준)</option>
+                  <option value="7">7개 대형 섹터 (중장기)</option>
+                  <option value="5">5개 대형 섹터 (단기)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">특수 환경 & 미로 탈출 기믹</label>
+                <div class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-amber-500/40 text-[11px] font-bold text-amber-300">
+                  자동 활성 (암전·독안개·미로붕괴)
+                </div>
+                <select id="select-collapse-chance" class="hidden">
+                  <option value="0.7" selected>자동 탈출 기믹</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">아군 오사 (팀킬)</label>
+                <select id="select-friendly-fire" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-red-300">
+                  <option value="1" selected>팀킬 ON</option>
+                  <option value="0">팀킬 OFF</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">빈사 구출 시간</label>
+                <select id="select-revive-time" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-sky-300">
+                  <option value="8" selected>8초간 [F] 유지</option>
+                  <option value="10">10초간 [F] 유지</option>
+                  <option value="5">5초간 [F] 유지</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Compact Controls Cheat-Sheet (마우스 360° & 키보드 획일화) -->
+            <div class="rounded-xl bg-slate-950 p-2.5 border border-slate-800 text-[11px] text-slate-300 grid grid-cols-2 gap-1 font-mono-code">
+              <div><b class="text-amber-300">WASD</b> : 8방향 이동</div>
+              <div><b class="text-amber-300">좌클릭 / ↑↓←→</b> : 사격·설치</div>
+              <div><b class="text-cyan-300">Shift 유지</b> : 스태미너 질주</div>
+              <div><b class="text-sky-300">Space / 우클릭</b> : 점프·회피</div>
+              <div><b class="text-rose-300">V</b> : 360° 기절·보스패링</div>
+              <div><b class="text-teal-300">Q / E</b> : 구급키트 / 스팀팩</div>
+              <div><b class="text-emerald-300">F 유지</b> : 상호작용·구출·힐</div>
+              <div><b class="text-fuchsia-300">1~8·휠 / B(T/U)</b> : 교체·무기고</div>
+            </div>
+          </div>
+
+          <button id="btn-start-game" type="button"
+                  class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-amber-500 to-red-600 hover:from-red-500 hover:to-amber-400 text-white font-black text-base tracking-wide shadow-xl transition">
+            🚀 작전 시작 (START EXPEDITION)
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== GAME OVER / VICTORY MODAL ==================== -->
+  <div id="result-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+    <div class="hud-glass rounded-3xl max-w-lg w-full p-6 text-center border border-slate-700 shadow-2xl">
+      <div id="result-badge" class="inline-block px-3 py-1 rounded-full text-xs font-black uppercase bg-red-600 text-white mb-2">
+        SQUAD WIPED
+      </div>
+      <h2 id="result-title" class="text-2xl font-black text-white">전원 빈사 — 작전 실패</h2>
+      <p id="result-subtitle" class="text-xs text-slate-300 mt-1">대기실로 복귀하여 전열을 재정비하고 다시 시작하세요.</p>
+
+      <div class="grid grid-cols-2 gap-2 my-4 text-left bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 font-mono-code text-xs">
+        <div>도달 섹터: <b id="stat-room" class="text-amber-400">Sector 1</b></div>
+        <div>생존 시간: <b id="stat-time" class="text-slate-100">00:00</b></div>
+        <div>처치 감염체: <b id="stat-kills" class="text-emerald-400">0</b></div>
+        <div>팀원 구출: <b id="stat-revives" class="text-sky-400">0</b></div>
+        <div>팀킬 피해량: <b id="stat-ff" class="text-rose-400">0</b></div>
+        <div>더 코어 잔여HP: <b id="stat-boss" class="text-red-400">100%</b></div>
+      </div>
+
+      <button id="btn-back-to-lobby" type="button"
+              class="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm transition shadow-lg">
+        🏠 대기실(방)로 돌아가기
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== ENVIRONMENT SETTINGS MODAL [O] (3D 멀미 방지 & 각종 설정) ==================== -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div class="hud-glass rounded-3xl max-w-lg w-full p-5 border border-cyan-500/50 shadow-2xl text-left max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3.5">
+        <div>
+          <h3 class="text-base font-black text-white flex items-center gap-2">⚙️ 환경설정 (Settings) <span class="text-[10px] font-mono-code px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/40">단축키 [O]</span></h3>
+          <p class="text-[11px] text-slate-400 mt-0.5">3D 멀미 방지(화면 기울임 끄기), 카메라, 닉네임, 오디오 및 그래픽 옵션을 실시간 조절합니다.</p>
+        </div>
+        <button id="btn-close-settings" type="button" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200">닫기 ✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <!-- 1. 3D 멀미 방지 (이동 시 화면 기울임 끄기) -->
+        <div class="p-3 rounded-2xl bg-cyan-950/40 border border-cyan-500/40 flex items-center justify-between gap-3">
+          <div>
+            <div class="font-black text-cyan-200">🛡️ 3D 멀미 방지 (이동 시 화면 기울임·회전 끄기)</div>
+            <div class="text-[10px] text-slate-300 mt-0.5">이동·회피 시 카메라 각도가 기울어지거나 흔들리는 현상을 완전히 고정합니다.</div>
+          </div>
+          <select id="opt-anti-motion" class="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-cyan-400/60 text-xs font-black text-cyan-300 shrink-0">
+            <option value="1" selected>켜짐 (화면 기울임 끄기)</option>
+            <option value="0">꺼짐 (다이내믹 기울임)</option>
+          </select>
+        </div>
+
+        <!-- 2. 카메라 이동 추적 감도 -->
+        <div class="p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-between gap-3">
+          <div>
+            <div class="font-bold text-white">🎥 카메라 이동 추적 방식</div>
+            <div class="text-[10px] text-slate-400">캐릭터 이동 시 카메라가 따라오는 딜레이를 설정합니다.</div>
+          </div>
+          <select id="opt-cam-smooth" class="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-amber-300 shrink-0">
+            <option value="0" selected>즉시 고정 (딜레이 0% · 멀미 최소)</option>
+            <option value="1">부드러운 추적 (Lerp)</option>
+          </select>
+        </div>
+
+        <!-- 3. 카메라 시야 거리 (줌) -->
+        <div class="p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-between gap-3">
+          <div>
+            <div class="font-bold text-white">🔭 카메라 시야 거리 (Zoom)</div>
+            <div class="text-[10px] text-slate-400">전장 시야 높이와 거리를 조절합니다.</div>
+          </div>
+          <select id="opt-cam-zoom" class="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-slate-200 shrink-0">
+            <option value="0">근접 시야 (Close)</option>
+            <option value="1" selected>표준 전술 시야 (Standard)</option>
+            <option value="2">광각 시야 (Wide)</option>
+          </select>
+        </div>
+
+        <!-- 4. 내 닉네임 실시간 변경 & 머리 위 닉네임 표시 -->
+        <div class="p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block font-bold text-white mb-1">🏷️ 내 캐릭터 닉네임</label>
+            <input id="opt-nickname-input" type="text" value="HOST_P1" maxlength="12"
+                   class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-amber-300 focus:outline-none focus:border-cyan-400" />
+          </div>
+          <div>
+            <label class="block font-bold text-white mb-1">👤 머리 위 닉네임 표시</label>
+            <select id="opt-show-nicknames" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-emerald-300">
+              <option value="all" selected>모든 스쿼드 표시 (나+팀원)</option>
+              <option value="me">내 캐릭터만 표시</option>
+              <option value="none">모두 숨기기</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 5. 마스터 볼륨 & 사운드 -->
+        <div class="p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-between gap-3">
+          <div class="flex-1">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-bold text-white">🔊 마스터 효과음 볼륨</span>
+              <span id="opt-vol-label" class="font-mono-code text-amber-300 font-bold">80%</span>
+            </div>
+            <input id="opt-master-volume" type="range" min="0" max="100" value="80" class="w-full accent-amber-400 cursor-pointer" />
+          </div>
+          <select id="opt-sound-mute" class="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-slate-200 shrink-0">
+            <option value="0" selected>사운드 켜짐</option>
+            <option value="1">음소거 (Mute)</option>
+          </select>
+        </div>
+
+        <!-- 6. 시각 편의성 & 그래픽 옵션 -->
+        <div class="p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div>
+            <label class="block font-bold text-slate-200 text-[11px] mb-1">📍 오브젝트 심볼 배지</label>
+            <select id="opt-world-badges" class="w-full px-2 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-[11px] font-bold text-sky-300">
+              <option value="1" selected>표시 켜짐</option>
+              <option value="0">숨기기</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-200 text-[11px] mb-1">🩸 피격 붉은 화면 점멸</label>
+            <select id="opt-dmg-vignette" class="w-full px-2 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-[11px] font-bold text-rose-300">
+              <option value="1" selected>켜짐</option>
+              <option value="0">꺼짐 (눈피로 감소)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-200 text-[11px] mb-1">✨ 그림자 & 파편 품질</label>
+            <select id="opt-gfx-quality" class="w-full px-2 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-[11px] font-bold text-emerald-300">
+              <option value="high" selected>고화질 (그림자 ON)</option>
+              <option value="fast">성능 우선 (60FPS)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-slate-800 flex justify-end">
+        <button id="btn-save-settings" type="button" class="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs transition shadow-lg">
+          ✔ 설정 적용 및 닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== HAMACHI GUIDE MODAL ==================== -->
+  <div id="hamachi-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div class="hud-glass rounded-3xl max-w-xl w-full p-5 border border-slate-700 shadow-2xl text-left">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
+        <h3 class="text-base font-black text-white">🖧 하마치(Hamachi) + `npm start` 멀티플레이 연결</h3>
+        <button id="btn-close-hamachi-guide" type="button" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300">닫기 ✕</button>
+      </div>
+      <div class="space-y-2.5 text-xs text-slate-300">
+        <p>제공된 <code class="text-amber-300 font-mono-code">boxhead_the_core_multiplayer.zip</code> 압축 해제 후 터미널에서 실행하세요:</p>
+        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono-code text-emerald-300">
+          <div>npm install</div>
+          <div>npm start</div>
+        </div>
+        <p>• 방장: <code class="text-amber-300">http://localhost:3000</code> 접속 | 친구(2~4P): <code class="text-amber-300">http://[방장_하마치IP]:3000</code> 접속</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MAIN GAME ENGINE SCRIPT (v2.0) ==================== -->
+  <!-- ==================== MODULAR GAME ENGINE SCRIPTS (v3.1) ==================== -->
+  <script src="js/01_audio_and_weapons.js"></script>
+  <script src="js/02_lobby_and_scene.js"></script>
+  <script src="js/03_dungeon_and_world.js"></script>
+  <script src="js/04_entities_and_boss.js"></script>
+  <script src="js/05_combat_and_upgrades.js"></script>
+  <script src="js/06_simulation_and_ai.js"></script>
+  <script src="js/07_hud_and_minimap.js"></script>
+  <script src="js/08_network_and_main.js"></script>
+</body>
+</html>

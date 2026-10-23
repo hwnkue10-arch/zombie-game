@@ -1,0 +1,33 @@
+{
+  "name": "boxhead-the-core",
+  "version": "3.1.0",
+  "description": "BOXHEAD: THE CORE v3.1 — 4-Player Co-op Tactical Survival Game (Modular Engine + Node.js HTTP/WebSocket Server)",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node backend/server.js",
+    "server": "node backend/server.js"
+  },
+  "keywords": [
+    "boxhead",
+    "game",
+    "survival",
+    "coop",
+    "multiplayer",
+    "threejs",
+    "websocket",
+    "hamachi",
+    "tactical",
+    "zombie"
+  ],
+  "author": "BOXHEAD: THE CORE Team",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "ws": "^8.17.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
