@@ -473,7 +473,7 @@
             const collapseBanner = document.getElementById("hud-collapse-banner");
             if (collapseBanner) {
               document.getElementById("hud-collapse-msg").textContent =
-                "☣️ 독가스 살포 & 🔥호드 광폭화 (탈출 통로로 전진!)";
+                "☣️ 신경 독가스 살포 & 🔥호드 광폭화! 열린 탈출로로 즉시 전진하세요!";
               collapseBanner.classList.remove("hidden");
             }
           }
@@ -481,8 +481,7 @@
           hideArmoriesDuringSurge();
           const collapseTimerEl = document.getElementById("hud-collapse-timer");
           if (collapseTimerEl && !game.collapseState.active) {
-            const gasPct = Math.min(100, Math.round((curRoom.gasWaveProgress || 0) * 100));
-            collapseTimerEl.textContent = `GAS ${gasPct}%`;
+            collapseTimerEl.textContent = "";
           }
         }
 
@@ -902,6 +901,17 @@
         }
       }
 
+      // [v3.1 소생 진행도 거리 무관 자동 감쇄]
+      // 다른 생존 플레이어가 현재 [F]를 누르고 있지 않은 모든 빈사 플레이어의 소생 게이지는 거리에 관계없이 지속 감쇄 (0%까지)
+      game.players.forEach(pl => {
+        if (pl.downed && (pl.reviveProgress || 0) > 0) {
+          const isBeingRevived = game.players.some(reviver => !reviver.downed && reviver.revivingTargetId === pl.id);
+          if (!isBeingRevived) {
+            pl.reviveProgress = Math.max(0, pl.reviveProgress - dt * 1.5);
+          }
+        }
+      });
+
       let showPrompt = false;
       const curRoom = game.rooms[game.currentRoomIndex];
       const unlockStg = curRoom ? (curRoom.unlockStage || 0) : 0;
@@ -950,6 +960,7 @@
             ds.charges > 0 && Math.hypot(ds.x - p.x, ds.z - p.z) < 3.4
           ) : null;
 
+          p.revivingTargetId = null;
           if (reviveTarget) {
             showPrompt = true;
             interactTitle.textContent = `🚑 [F] ${reviveTarget.name} 구출`;
@@ -966,8 +977,6 @@
                 }
               }
             } else {
-              reviveTarget.reviveProgress = Math.max(0, reviveTarget.reviveProgress - dt * 1.5);
-              p.revivingTargetId = null;
               interactBar.style.width = ((reviveTarget.reviveProgress / game.reviveDuration) * 100) + "%";
             }
           } else if (healAllyTarget) {
@@ -2069,23 +2078,7 @@
         if (pod.hp <= 0) {
           entitiesGroup.remove(pod.mesh);
           spawnBloodParticles(pod.x, 1.0, pod.z, 0xa3e635, 4);
-          if (pod.isBioCapsule) {
-            // [v3.1] 배양 캡슐 파괴 시 반경 5.8m 냉각 충격파가 터지며 주변 감염체 4초간 급속 빙결/기절!
-            SoundFX.play("explosion");
-            const cryoRing = new THREE.Mesh(
-              new THREE.RingGeometry(0.6, 5.8, 28),
-              new THREE.MeshBasicMaterial({ color: 0x22d3ee, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
-            );
-            cryoRing.rotation.x = -Math.PI / 2;
-            cryoRing.position.set(pod.x, 0.2, pod.z);
-            effectsGroup.add(cryoRing);
-            game.particles.push({ mesh: cryoRing, life: 0.45, maxLife: 0.45, expand: 1.2 });
-            game.zombies.forEach((z, zi) => {
-              if (Math.hypot(z.x - pod.x, z.z - pod.z) <= 5.8) {
-                damageZombie(zi, 145, 0, 0, 4.0, 7);
-              }
-            });
-          } else if (pod.isMissionHive) {
+          if (pod.isMissionHive) {
             const r = game.rooms[pod.roomIndex];
             if (r && (r.condType === "HIVE_NODES" || r.condType === "EXTERMINATE")) {
               r.progress++;

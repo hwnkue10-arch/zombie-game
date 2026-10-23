@@ -274,9 +274,16 @@
       }
     }
 
-    // [Space / 우클릭] 전술 대쉬 겸 점프 (0.34초간 체공 무적 회피 + 낮은 장애물 월담 + 보스/중간보스 바닥 충격파·회전 레이저 점프 회피!)
+    // [Space / 우클릭] 전술 대쉬 겸 점프 (0.34초간 체공 무적 회피 + 낮은 장애물 월담 + 바닥 충격파·회전 레이저 점프 회피! - 스태미너 소모형)
     function triggerTacticalDash(player, fromNetwork) {
       if (player.downed || (!fromNetwork && (player.dashCooldown > 0 || player.revivingTargetId !== null))) return;
+      const jumpCost = getPlayerJumpStaminaCost(player);
+      if (!fromNetwork && (player.stimBuffTimer || 0) <= 0) {
+        if ((player.stamina || 0) < jumpCost) {
+          return;
+        }
+        player.stamina = Math.max(0, player.stamina - jumpCost);
+      }
       player.dashCooldown = getPlayerDashCooldownMax(player);
       if (!fromNetwork && player.id === mySlotIndex && wsClient && wsClient.readyState === WebSocket.OPEN) {
         try { wsClient.send(JSON.stringify({ type: "REMOTE_SKILL", slotId: player.id, skill: "DASH", rotY: player.rotY })); } catch (e) {}
@@ -755,7 +762,7 @@
           else if (sKey === "stimCap") statNowText = `최대 ${getPlayerMaxStims(me)}개 소지`;
           else if (sKey === "maxStamina") statNowText = `최대 ${getPlayerMaxStamina(me)} ST`;
           else if (sKey === "staminaRegen") statNowText = `초당 +${getPlayerStaminaRegen(me)}/s`;
-          else if (sKey === "dashCd") statNowText = `쿨타임 ${getPlayerDashCooldownMax(me).toFixed(2)}s`;
+          else if (sKey === "dashCd") statNowText = `점프 소모 ${getPlayerJumpStaminaCost(me)} ST`;
           else if (sKey === "bashCd") statNowText = `쿨 ${getPlayerBashCooldownMax(me).toFixed(2)}s · 반경 ${getPlayerBashRadius(me).toFixed(1)}m`;
           else if (sKey === "syringe") statNowText = curLv > 0 ? "자가0.6s(무감속)·아군0.4s" : "기본: 자가2.8s·아군1.8s";
 

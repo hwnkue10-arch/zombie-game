@@ -182,7 +182,7 @@
       const offsets = [[0, 0], [-3.5, -3.0], [3.5, -3.0], [0, -5.0]];
 
       lobbySlots.forEach((slot, idx) => {
-        if (slot.role === "EMPTY") return;
+        if (slot.role === "EMPTY" || slot.role === "AI") return;
         const visual = createBoxheadCharacterMesh(slot.color);
         const sx = startRoom.wx + offsets[idx][0];
         const sz = startRoom.wz + offsets[idx][1];
@@ -247,8 +247,8 @@
           acidTimer: 0,
           medkits: 1,
           stims: 1,
-          stamina: 100,
-          maxStamina: 100,
+          stamina: 50,
+          maxStamina: 50,
           staminaExhaustTimer: 0,
           isSprinting: false,
           suitUpgrades: {

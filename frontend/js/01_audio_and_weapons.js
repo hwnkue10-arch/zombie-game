@@ -339,7 +339,7 @@
         key: "maxStamina",
         icon: "🫁",
         name: "인공 심폐기 (최대 스태미너)",
-        desc: "전술 질주[Shift] 최대 스태미너 +25 증가 (기본 100 ➔ 최대 200 · 질주 지속시간 2배)",
+        desc: "전술 질주·점프 최대 스태미너 +25 증가 (기본 50 ➔ 최대 150 · 스태미너 용량 3배)",
         maxLv: 4,
         reqRooms: [0, 2, 4, 6], // S1, S3, S5, S7 해금
         costs: [900, 3800, 13500, 38000]
@@ -348,7 +348,7 @@
         key: "staminaRegen",
         icon: "🔋",
         name: "생체 대사 가속기 (스태미너 회복)",
-        desc: "비질주 시 초당 스태미너 회복량 +5/s 증가 (기본 22/s ➔ 최대 42/s) 및 탈진 딜레이 단축",
+        desc: "비질주 시 초당 스태미너 회복량 +6.5/s 증가 (기본 10/s ➔ 최대 36/s · 충전속도 3.6배)",
         maxLv: 4,
         reqRooms: [0, 2, 4, 6], // S1, S3, S5, S7 해금
         costs: [900, 3800, 13500, 38000]
@@ -356,8 +356,8 @@
       {
         key: "dashCd",
         icon: "🚀",
-        name: "부스터 추진기 (점프·회피 쿨감)",
-        desc: "전술 회피·점프 월담[Space] 재사용 대기시간 -0.35초 단축 (기본 3.2초 ➔ 최단 1.8초)",
+        name: "부스터 고효율화 (점프 스태미너 절감)",
+        desc: "전술 점프·회피[Space] 스태미너 소모량 -5 ST 절감 (기본 35 ST ➔ 최저 15 ST 소모)",
         maxLv: 4,
         reqRooms: [0, 2, 5, 7], // S1, S3, S6, S8 해금
         costs: [1200, 4800, 18000, 48000]
@@ -395,17 +395,21 @@
 
     function getPlayerMaxStamina(player) {
       const lv = (player && player.suitUpgrades && player.suitUpgrades.maxStamina) || 0;
-      return 100 + lv * 25;
+      return 50 + lv * 25;
     }
 
     function getPlayerStaminaRegen(player) {
       const lv = (player && player.suitUpgrades && player.suitUpgrades.staminaRegen) || 0;
-      return 22 + lv * 5;
+      return 10 + lv * 6.5;
+    }
+
+    function getPlayerJumpStaminaCost(player) {
+      const lv = (player && player.suitUpgrades && player.suitUpgrades.dashCd) || 0;
+      return Math.max(15, 35 - lv * 5);
     }
 
     function getPlayerDashCooldownMax(player) {
-      const lv = (player && player.suitUpgrades && player.suitUpgrades.dashCd) || 0;
-      return Math.max(1.6, 3.2 - lv * 0.35);
+      return 0.35; // 점프 모션 버퍼용 최소 쿨다운 (스태미너 소모 방식으로 개편)
     }
 
     function getPlayerBashCooldownMax(player) {

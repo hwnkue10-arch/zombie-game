@@ -114,8 +114,20 @@
       const stimMaxEl = document.getElementById("hud-stim-max");
       if (stimMaxEl) stimMaxEl.textContent = getPlayerMaxStims(me);
 
-      document.getElementById("hud-dash-status").textContent =
-        me.dashCooldown > 0 ? me.dashCooldown.toFixed(1) + "s" : "READY";
+      const jumpCost = getPlayerJumpStaminaCost(me);
+      const dashEl = document.getElementById("hud-dash-status");
+      if (dashEl) {
+        if (me.dashCooldown > 0) {
+          dashEl.textContent = "JUMP";
+          dashEl.className = "text-sky-300 font-extrabold";
+        } else if ((me.stamina || 0) >= jumpCost || (me.stimBuffTimer || 0) > 0) {
+          dashEl.textContent = `${Math.round(jumpCost)} ST`;
+          dashEl.className = "text-emerald-400 font-extrabold";
+        } else {
+          dashEl.textContent = `부족 (${Math.round(jumpCost)})`;
+          dashEl.className = "text-rose-400 font-extrabold";
+        }
+      }
       const bashEl = document.getElementById("hud-bash-status");
       if (bashEl) bashEl.textContent = me.bashCooldown > 0 ? me.bashCooldown.toFixed(1) + "s" : "READY";
 
@@ -177,7 +189,47 @@
         ? ` (${curRoom.waveZombiesSpawned || 0}/${curRoom.waveZombieQuota || 0})`
         : "";
       document.getElementById("hud-zombie-count").textContent = `${wBadge} · 💀${game.zombies.length}${hordeTag}`;
-      document.getElementById("hud-combo-text").textContent = game.comboCount >= 5 ? `${game.comboCount}콤보` : "-";
+
+      // [v3.1] 화면 중앙 상단 섹터 제한시간 실시간 갱신 (명확한 대형 폰트 및 단계별 경고)
+      const secTimerCont = document.getElementById("hud-sector-timer-container");
+      const secTimerVal = document.getElementById("hud-sector-timer-val");
+      const secTimerDot = document.getElementById("hud-sector-timer-dot");
+      const secTimerTitle = document.getElementById("hud-sector-timer-title");
+      if (secTimerCont && secTimerVal && curRoom) {
+        if (curRoom.isBossRoom) {
+          secTimerVal.textContent = "FINAL BOSS";
+          secTimerVal.className = "font-mono-code font-black text-lg text-rose-400 tracking-wider";
+          if (secTimerTitle) secTimerTitle.textContent = "⚔️ 코어 결전";
+          if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse";
+        } else {
+          const remSec = Math.max(0, Math.ceil(curRoom.sectorTimer || 0));
+          const tMins = String(Math.floor(remSec / 60)).padStart(2, "0");
+          const tSecs = String(remSec % 60).padStart(2, "0");
+          secTimerVal.textContent = `${tMins}:${tSecs}`;
+
+          if (curRoom.berserkActive || remSec <= 0) {
+            secTimerVal.className = "font-mono-code font-black text-xl text-rose-500 tracking-wider animate-pulse";
+            if (secTimerTitle) secTimerTitle.textContent = "☣️ 제한시간 초과 (광폭화)";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-red-600 animate-ping";
+            secTimerCont.className = "hud-glass-red rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-red-500 shadow-2xl backdrop-blur-md pointer-events-auto";
+          } else if (remSec <= 30) {
+            secTimerVal.className = "font-mono-code font-black text-xl text-rose-400 tracking-wider animate-pulse";
+            if (secTimerTitle) secTimerTitle.textContent = "⚠️ 시간 임박";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse";
+            secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-rose-500/80 shadow-2xl backdrop-blur-md pointer-events-auto";
+          } else if (remSec <= 60) {
+            secTimerVal.className = "font-mono-code font-black text-xl text-amber-400 tracking-wider";
+            if (secTimerTitle) secTimerTitle.textContent = "⏱️ 시간 경고";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
+            secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-amber-500/60 shadow-2xl backdrop-blur-md pointer-events-auto";
+          } else {
+            secTimerVal.className = "font-mono-code font-black text-xl text-emerald-400 tracking-wider";
+            if (secTimerTitle) secTimerTitle.textContent = "⏱️ 섹터 제한시간";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse";
+            secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-slate-700/80 shadow-2xl backdrop-blur-md pointer-events-auto";
+          }
+        }
+      }
 
       if (curRoom) {
         document.getElementById("hud-room-title").textContent =

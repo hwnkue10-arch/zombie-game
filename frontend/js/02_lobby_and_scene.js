@@ -12,9 +12,9 @@
     const SQUAD_COLORS = [0x3b82f6, 0x10b981, 0xf59e0b, 0xec4899];
     const lobbySlots = [
       { id: 0, name: "HOST_P1", role: "LOCAL", ready: true, color: SQUAD_COLORS[0] },
-      { id: 1, name: "ALPHA_AI", role: "AI", ready: true, color: SQUAD_COLORS[1] },
-      { id: 2, name: "BRAVO_AI", role: "AI", ready: true, color: SQUAD_COLORS[2] },
-      { id: 3, name: "CHARLIE_AI", role: "AI", ready: true, color: SQUAD_COLORS[3] }
+      { id: 1, name: "EMPTY_2", role: "EMPTY", ready: false, color: SQUAD_COLORS[1] },
+      { id: 2, name: "EMPTY_3", role: "EMPTY", ready: false, color: SQUAD_COLORS[2] },
+      { id: 3, name: "EMPTY_4", role: "EMPTY", ready: false, color: SQUAD_COLORS[3] }
     ];
 
     let wsClient = null;
@@ -60,26 +60,19 @@
             </div>
           `;
         } else {
-          const kickBtn = (slot.role !== "EMPTY" && !isRemoteClient && mySlotIndex === 0)
+          const kickBtn = (slot.role === "REMOTE" && !isRemoteClient && mySlotIndex === 0)
             ? `<button type="button" data-kick-slot="${idx}" title="방장 권한 추방" class="w-7 h-7 rounded-lg bg-red-950/80 hover:bg-red-800 border border-red-500/40 text-[11px] font-black text-red-200 flex items-center justify-center transition shrink-0">🚫</button>`
             : `<div class="w-7 h-7 shrink-0"></div>`;
 
-          const canToggle = !isRemoteClient && mySlotIndex === 0 && slot.role !== "REMOTE";
-          const toggleAttr = canToggle ? `data-toggle-slot="${idx}"` : "";
-          const cursorClass = canToggle ? "cursor-pointer hover:opacity-90" : "cursor-default";
-
           roleBadge = `
             <div class="flex items-center gap-1.5 shrink-0">
-              <button type="button" ${toggleAttr}
-                      class="h-7 w-[76px] rounded-lg text-[10px] font-bold transition flex items-center justify-center whitespace-nowrap ${cursorClass} ${
-                        slot.role === "AI"
-                          ? "bg-emerald-600/25 text-emerald-300 border border-emerald-500/40"
-                          : slot.role === "REMOTE"
-                          ? "bg-sky-600/25 text-sky-300 border border-sky-500/40"
-                          : "bg-slate-800/80 text-slate-400 border border-slate-700/60"
-                      }">
-                ${slot.role === "AI" ? "🤖 AI 봇" : slot.role === "REMOTE" ? "🌐 원격참가" : "➕ 비어있음"}
-              </button>
+              <span class="h-7 w-[76px] rounded-lg text-[10px] font-bold flex items-center justify-center whitespace-nowrap ${
+                slot.role === "REMOTE"
+                  ? "bg-sky-600/25 text-sky-300 border border-sky-500/40 shadow-xs"
+                  : "bg-slate-800/80 text-slate-400 border border-slate-700/60"
+              }">
+                ${slot.role === "REMOTE" ? "🌐 참가중" : "대기 중..."}
+              </span>
               ${kickBtn}
             </div>
           `;
@@ -87,11 +80,9 @@
 
         const roleDesc = slot.role === "LOCAL"
           ? "직접 조작 (호스트)"
-          : slot.role === "AI"
-          ? "AI 분대원 (지원)"
           : slot.role === "REMOTE"
           ? "원격 참가자"
-          : "슬롯 비어있음";
+          : "접속 대기 중";
 
         card.innerHTML = `
           <div class="flex items-center gap-2 min-w-0 flex-1">
@@ -105,25 +96,6 @@
           ${roleBadge}
         `;
         container.appendChild(card);
-      });
-
-      container.querySelectorAll("[data-toggle-slot]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          if (isRemoteClient) return;
-          const idx = parseInt(btn.getAttribute("data-toggle-slot"), 10);
-          if (lobbySlots[idx].role === "REMOTE") return;
-          lobbySlots[idx].role = lobbySlots[idx].role === "AI" ? "EMPTY" : "AI";
-          if (lobbySlots[idx].role === "AI") {
-            const aiNames = ["HOST_P1", "ALPHA_AI", "BRAVO_AI", "CHARLIE_AI"];
-            lobbySlots[idx].name = aiNames[idx];
-          } else {
-            lobbySlots[idx].name = "EMPTY_" + (idx + 1);
-          }
-          if (wsClient && wsClient.readyState === WebSocket.OPEN) {
-            try { wsClient.send(JSON.stringify({ type: "TOGGLE_SLOT_ROLE", slotId: idx })); } catch (e) {}
-          }
-          renderLobbySlots();
-        });
       });
 
       container.querySelectorAll("[data-kick-slot]").forEach(btn => {

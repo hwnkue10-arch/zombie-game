@@ -37,9 +37,9 @@ const DEFAULT_AI_NAMES = ["HOST_P1", "ALPHA_AI", "BRAVO_AI", "CHARLIE_AI"];
 function createDefaultSlots() {
   return [
     { id: 0, name: "HOST_P1", role: "LOCAL", ready: true, color: SQUAD_COLORS[0] },
-    { id: 1, name: "ALPHA_AI", role: "AI", ready: true, color: SQUAD_COLORS[1] },
-    { id: 2, name: "BRAVO_AI", role: "AI", ready: true, color: SQUAD_COLORS[2] },
-    { id: 3, name: "CHARLIE_AI", role: "AI", ready: true, color: SQUAD_COLORS[3] }
+    { id: 1, name: "EMPTY_2", role: "EMPTY", ready: false, color: SQUAD_COLORS[1] },
+    { id: 2, name: "EMPTY_3", role: "EMPTY", ready: false, color: SQUAD_COLORS[2] },
+    { id: 3, name: "EMPTY_4", role: "EMPTY", ready: false, color: SQUAD_COLORS[3] }
   ];
 }
 

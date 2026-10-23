@@ -784,13 +784,13 @@
         });
       }
 
-      // 2. 다채로운 전술 환경 오브젝트 (서버 랙, 스틸 화물 컨테이너, 지게차, 파괴 가능한 바이오 배양 캡슐)
+      // 2. 다채로운 전술 환경 오브젝트 (서버 랙, 스틸 화물 컨테이너, 지게차)
       const propSpots = [
         { dx: -19, dz: -8, kind: "CONTAINER" },
         { dx: 19, dz: 8, kind: "SERVER_RACK" },
         { dx: -14, dz: 19, kind: "FORKLIFT" },
-        { dx: 14, dz: -19, kind: "BIO_CAPSULE" },
-        { dx: -24, dz: 4, kind: "BIO_CAPSULE" },
+        { dx: 14, dz: -19, kind: "CONTAINER" },
+        { dx: -24, dz: 4, kind: "FORKLIFT" },
         { dx: 24, dz: -4, kind: "SERVER_RACK" }
       ];
 
@@ -856,40 +856,6 @@
           fkGroup.position.set(px, 0, pz);
           group.add(fkGroup);
           addWallCollider(px, pz, 2.8, 2.0);
-        } else if (sp.kind === "BIO_CAPSULE") {
-          // 사격으로 파괴 시 반경 5.5m 냉각·전류 충격파를 터뜨려 주변 좀비를 4초간 기절시키는 전술 지형물!
-          const capGroup = new THREE.Group();
-          const base = new THREE.Mesh(
-            new THREE.CylinderGeometry(1.15, 1.25, 0.5, 12),
-            new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7 })
-          );
-          base.position.y = 0.25;
-          capGroup.add(base);
-          const glass = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.95, 0.95, 2.5, 14),
-            new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0891b2, emissiveIntensity: 0.85, transparent: true, opacity: 0.82 })
-          );
-          glass.position.y = 1.65;
-          capGroup.add(glass);
-          capGroup.position.set(px, 0, pz);
-          entitiesGroup.add(capGroup);
-          const bioPod = {
-            x: px, z: pz,
-            hp: 150 + room.index * 20,
-            maxHp: 150 + room.index * 20,
-            isMissionHive: false,
-            isBioCapsule: true,
-            roomIndex: room.index,
-            timer: 99999,
-            mesh: capGroup
-          };
-          game.cystPods.push(bioPod);
-          registerWorldSymbol(
-            px, 3.2, pz,
-            "🧪배양캡슐(사격시광역빙결)",
-            "bg-cyan-950/85 border-cyan-400/60 text-cyan-200",
-            bioPod, room.index
-          );
         }
       });
     }
