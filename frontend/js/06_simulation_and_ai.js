@@ -818,44 +818,6 @@
           }
         }
       }
-              // 2섹터(index 1): 러너 합류 | 3섹터(index 2): 스핏터·부머 합류 | 4~5섹터: 골리앗 합류 | 6섹터+: 블러드 데빌 합류
-              const roll = Math.random();
-              const sIdx = game.currentRoomIndex;
-              let zType = "WALKER";
-              if (sIdx === 0) {
-                zType = "WALKER";
-              } else if (sIdx === 1) {
-                if (roll < 0.28) zType = "RUNNER";
-              } else if (sIdx === 2) {
-                if (roll < 0.22) zType = "RUNNER";
-                else if (roll < 0.38) zType = "SPITTER";
-                else if (roll < 0.50) zType = "BOOMER";
-              } else if (sIdx <= 4) {
-                if (roll < 0.22) zType = "RUNNER";
-                else if (roll < 0.38) zType = "SPITTER";
-                else if (roll < 0.52) zType = "BOOMER";
-                else if (roll < 0.66) zType = "GOLIATH";
-              } else {
-                if (roll < 0.22) zType = "RUNNER";
-                else if (roll < 0.38) zType = "SPITTER";
-                else if (roll < 0.52) zType = "BOOMER";
-                else if (roll < 0.68) zType = "GOLIATH";
-                else if (roll < 0.82) zType = "DEVIL";
-              }
-
-              const zSpawned = spawnZombie(zType, zx, zz, curRoom.index);
-              if (curRoom.berserkActive && zSpawned) {
-                zSpawned.berserkEnraged = true;
-                zSpawned.speed *= 1.35;
-                if (zSpawned.skinMat) {
-                  zSpawned.skinMat.emissive.setHex(0xef4444);
-                  zSpawned.skinMat.emissiveIntensity = 0.85;
-                }
-              }
-            }
-          }
-        }
-      }
 
       updatePlayersAndInteractions(dt);
       updateZombiesAndTurrets(dt);
