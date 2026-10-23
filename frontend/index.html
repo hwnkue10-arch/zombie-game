@@ -432,53 +432,56 @@
         <!-- Right: Session Settings & Start Button (5 cols) -->
         <div class="lg:col-span-5 flex flex-col gap-3 justify-between">
           <div class="bg-slate-900/90 rounded-2xl p-3.5 border border-slate-800 flex flex-col gap-2.5">
-            <span class="text-xs font-bold text-slate-300">원정 작전 설정</span>
-
-            <div>
-              <label class="block text-[11px] font-semibold text-slate-400 mb-1">캠페인 모드 (플레이 타임 호흡)</label>
-              <select id="select-pacing" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-amber-300">
-                <option value="marathon" selected>대규모 정규 원정 (1시간~1시간 20분 호흡 · 대량 호드)</option>
-                <option value="standard">전술 압축 원정 (25~35분 호흡 · 빠른 교전)</option>
-                <option value="blitz">고속 돌파 테스트 (빠른 기믹/보스전 검증)</option>
-              </select>
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300">원정 작전 설정</span>
+              <span class="text-[10px] text-slate-400">표준 원정 모드</span>
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1">총 섹터(방) 수</label>
-                <select id="select-room-count" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-slate-200">
-                  <option value="10" selected>10개 대형 섹터 (1시간+ 표준)</option>
-                  <option value="7">7개 대형 섹터 (중장기)</option>
-                  <option value="5">5개 대형 섹터 (단기)</option>
-                </select>
+            <!-- Fixed Expedition Specifications (고정 원정 사양) -->
+            <div class="bg-slate-950/80 rounded-xl p-2.5 border border-slate-800 flex flex-col gap-2">
+              <div class="flex items-center justify-between text-[11px] text-slate-400">
+                <span class="font-bold text-slate-300">🧭 기본 원정 사양 (고정)</span>
+                <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono-code">표준 규격</span>
               </div>
-              <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1">특수 환경 & 미로 탈출 기믹</label>
-                <div class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-amber-500/40 text-[11px] font-bold text-amber-300">
-                  자동 활성 (암전·독안개·미로붕괴)
+              <div class="grid grid-cols-3 gap-1.5 text-center">
+                <div class="bg-slate-900/90 rounded-lg p-2 border border-slate-800">
+                  <div class="text-[10px] text-slate-400">캠페인 모드</div>
+                  <div class="text-xs font-black text-amber-400 mt-0.5">정규 원정</div>
                 </div>
-                <select id="select-collapse-chance" class="hidden">
-                  <option value="0.7" selected>자동 탈출 기믹</option>
-                </select>
+                <div class="bg-slate-900/90 rounded-lg p-2 border border-slate-800">
+                  <div class="text-[10px] text-slate-400">총 섹터 수</div>
+                  <div class="text-xs font-black text-cyan-400 mt-0.5">10개 섹터</div>
+                </div>
+                <div class="bg-slate-900/90 rounded-lg p-2 border border-slate-800">
+                  <div class="text-[10px] text-slate-400">빈사 구출</div>
+                  <div class="text-xs font-black text-sky-400 mt-0.5">8초 [F]</div>
+                </div>
+              </div>
+              <div class="text-[10px] text-amber-400/90 flex items-center justify-between px-1">
+                <span>☣️ 지향성 독가스 & 호드 광폭화</span>
+                <span class="font-bold">자동 가동</span>
               </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1">아군 오사 (팀킬)</label>
-                <select id="select-friendly-fire" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-red-300">
-                  <option value="1" selected>팀킬 ON</option>
-                  <option value="0">팀킬 OFF</option>
-                </select>
+            <!-- Hidden Inputs to maintain 100% JS backward compatibility -->
+            <input type="hidden" id="select-pacing" value="marathon">
+            <input type="hidden" id="select-room-count" value="10">
+            <input type="hidden" id="select-collapse-chance" value="0.7">
+            <input type="hidden" id="select-revive-time" value="8">
+
+            <!-- The ONLY Configurable Setting: Friendly Fire (팀킬) -->
+            <div class="bg-slate-950/90 rounded-xl p-2.5 border border-slate-800 flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <label for="select-friendly-fire" class="text-xs font-extrabold text-white flex items-center gap-1.5">
+                  <span>⚔️ 아군 오사 (팀킬)</span>
+                  <span class="px-1.5 py-0.5 rounded bg-red-950/80 border border-red-500/50 text-[9px] font-black text-red-300">설정 가능</span>
+                </label>
+                <span class="text-[10px] text-slate-400">아군 탄환 피격 여부</span>
               </div>
-              <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1">빈사 구출 시간</label>
-                <select id="select-revive-time" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-sky-300">
-                  <option value="8" selected>8초간 [F] 유지</option>
-                  <option value="10">10초간 [F] 유지</option>
-                  <option value="5">5초간 [F] 유지</option>
-                </select>
-              </div>
+              <select id="select-friendly-fire" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-extrabold text-red-300 focus:outline-none focus:border-red-500 transition">
+                <option value="1" selected>⚠️ 팀킬 ON (현실적 전술 사격 주의 · 아군 피격 피해)</option>
+                <option value="0">🛡️ 팀킬 OFF (아군 면역 · 탄환이 아군을 관통/무피해)</option>
+              </select>
             </div>
 
             <!-- Compact Controls Cheat-Sheet (마우스 360° & 키보드 획일화) -->

@@ -41,45 +41,57 @@
 
       lobbySlots.forEach((slot, idx) => {
         const card = document.createElement("div");
-        card.className = "rounded-xl p-2.5 bg-slate-950 border border-slate-800 flex items-center justify-between gap-2";
+        card.className = "rounded-xl px-3 py-2 bg-slate-950 border border-slate-800 flex items-center justify-between gap-2 h-[60px] overflow-hidden";
         const hexColor = "#" + slot.color.toString(16).padStart(6, "0");
 
         let roleBadge = "";
         if (idx === 0) {
-          roleBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-slate-950">👑 방장 (나)</span>`;
-        } else {
-          const kickBtn = slot.role !== "EMPTY"
-            ? `<button type="button" data-kick-slot="${idx}" title="방장 권한 강퇴" class="px-1.5 py-1 rounded bg-red-950 hover:bg-red-700 border border-red-500/40 text-[10px] font-black text-red-200 transition">🚫강퇴</button>`
-            : "";
           roleBadge = `
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="h-7 px-2.5 rounded-lg text-[10px] font-black bg-amber-500 text-slate-950 flex items-center justify-center whitespace-nowrap shadow-sm">👑 방장</span>
+              <div class="w-7 h-7 shrink-0"></div>
+            </div>
+          `;
+        } else {
+          const kickBtn = (slot.role !== "EMPTY" && !isRemoteClient)
+            ? `<button type="button" data-kick-slot="${idx}" title="방장 권한 추방" class="w-7 h-7 rounded-lg bg-red-950/80 hover:bg-red-800 border border-red-500/40 text-[11px] font-black text-red-200 flex items-center justify-center transition shrink-0">🚫</button>`
+            : `<div class="w-7 h-7 shrink-0"></div>`;
+
+          roleBadge = `
+            <div class="flex items-center gap-1.5 shrink-0">
               <button type="button" data-toggle-slot="${idx}"
-                      class="px-2 py-1 rounded text-[10px] font-bold transition ${
+                      class="h-7 w-[76px] rounded-lg text-[10px] font-bold transition flex items-center justify-center whitespace-nowrap ${
                         slot.role === "AI"
-                          ? "bg-emerald-600/30 text-emerald-300 border border-emerald-500/40"
+                          ? "bg-emerald-600/25 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/40"
                           : slot.role === "REMOTE"
-                          ? "bg-sky-600/30 text-sky-300 border border-sky-500/40"
-                          : "bg-slate-800 text-slate-400"
+                          ? "bg-sky-600/25 text-sky-300 border border-sky-500/40"
+                          : "bg-slate-800/80 text-slate-400 border border-slate-700/60 hover:text-slate-200"
                       }">
-                ${slot.role === "AI" ? "🤖 AI 참가중" : slot.role === "REMOTE" ? "🌐 원격 참가자" : "➕ 빈 슬롯"}
+                ${slot.role === "AI" ? "🤖 AI 봇" : slot.role === "REMOTE" ? "🌐 원격참가" : "➕ 비어있음"}
               </button>
               ${kickBtn}
             </div>
           `;
         }
 
+        const roleDesc = slot.role === "LOCAL"
+          ? "직접 조작 (호스트)"
+          : slot.role === "AI"
+          ? "AI 분대원 (지원)"
+          : slot.role === "REMOTE"
+          ? "원격 참가자"
+          : "슬롯 비어있음";
+
         card.innerHTML = `
-          <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs text-white"
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs text-white shrink-0 shadow"
                  style="background:${hexColor}">P${idx + 1}</div>
-            <div>
-              <div class="text-xs font-extrabold text-white">${slot.name}</div>
-              <div class="text-[10px] text-slate-400">${
-                slot.role === "LOCAL" ? "직접 조작" : slot.role === "AI" ? "자동 분대 전투/구출" : slot.role === "REMOTE" ? "하마치 참가자" : "비어 있음"
-              }</div>
+            <div class="min-w-0 flex-1 overflow-hidden">
+              <div class="text-xs font-black text-white truncate leading-tight">${slot.name}</div>
+              <div class="text-[10px] text-slate-400 truncate leading-tight mt-0.5">${roleDesc}</div>
             </div>
           </div>
-          <div>${roleBadge}</div>
+          ${roleBadge}
         `;
         container.appendChild(card);
       });
