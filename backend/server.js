@@ -187,6 +187,11 @@ try {
       }
     });
 
+    socket.on("end", () => {
+      clientWrapper.readyState = 3;
+      roomManager.handleDisconnect(clientWrapper);
+      try { socket.end(); } catch (e) {}
+    });
     socket.on("close", () => {
       clientWrapper.readyState = 3;
       roomManager.handleDisconnect(clientWrapper);

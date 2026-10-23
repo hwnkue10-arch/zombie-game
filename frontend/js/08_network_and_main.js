@@ -9,7 +9,85 @@
     // =========================================================================
     // 19. SESSION START, END & HAMACHI WEBSOCKET CLIENT
     // =========================================================================
-    function startNewGameSession(customSeed, fromRemotePacket) {
+    function getOrCreateClientId() {
+      let cid = null;
+      try { cid = localStorage.getItem("boxhead_client_id"); } catch (e) {}
+      if (!cid) {
+        cid = "cid_" + Math.random().toString(36).slice(2, 10) + "_" + Date.now().toString(36);
+        try { localStorage.setItem("boxhead_client_id", cid); } catch (e) {}
+      }
+      return cid;
+    }
+
+    function saveGameSessionSnapshot() {
+      if (!game.running) return;
+      const me = game.players[mySlotIndex];
+      if (!me) return;
+      const snap = {
+        timestamp: Date.now(),
+        seed: game.seed,
+        currentRoomIndex: game.currentRoomIndex,
+        totalRooms: game.totalRooms,
+        bioPoints: game.bioPoints,
+        weaponParts: game.weaponParts,
+        partsCrafted: game.partsCrafted,
+        coreSamples: game.coreSamples,
+        shopCoresBought: game.shopCoresBought,
+        coresSoldCount: game.coresSoldCount,
+        totalKills: game.totalKills,
+        totalRevives: game.totalRevives,
+        friendlyFire: game.friendlyFire,
+        currentWeapon: me.currentWeapon,
+        medkits: me.medkits,
+        stimpacks: me.stimpacks,
+        hp: Math.max(30, me.hp),
+        suitUpgrades: me.suitUpgrades ? { ...me.suitUpgrades } : {},
+        inventory: me.inventory.map(inv => ({
+          unlocked: inv.unlocked,
+          stats: { ...inv.stats },
+          totalLv: inv.totalLv,
+          tier1Special: inv.tier1Special,
+          awakened: inv.awakened,
+          transcended: inv.transcended,
+          ammo: inv.ammo
+        }))
+      };
+      try {
+        localStorage.setItem("boxhead_active_session", JSON.stringify(snap));
+      } catch (e) {}
+    }
+
+    function clearSavedGameSession() {
+      try {
+        localStorage.removeItem("boxhead_active_session");
+      } catch (e) {}
+      const banner = document.getElementById("resume-banner");
+      if (banner) banner.classList.add("hidden");
+    }
+
+    function checkAndPromptResumeSession() {
+      try {
+        const raw = localStorage.getItem("boxhead_active_session");
+        if (!raw) return;
+        const snap = JSON.parse(raw);
+        if (!snap || !snap.seed) return;
+        // Check if within 24 hours
+        if (Date.now() - snap.timestamp > 24 * 60 * 60 * 1000) {
+          clearSavedGameSession();
+          return;
+        }
+        const banner = document.getElementById("resume-banner");
+        const titleEl = document.getElementById("resume-banner-title");
+        const descEl = document.getElementById("resume-banner-desc");
+        if (banner && titleEl && descEl) {
+          titleEl.textContent = `이전 작전 세션이 감지되었습니다 (Sector ${snap.currentRoomIndex + 1} / ${snap.totalRooms || 10})`;
+          descEl.textContent = `보유 BP: ${(snap.bioPoints || 0).toLocaleString()} BP · 처치: ${snap.totalKills || 0}마리 · 무기 강화 및 슈트 업그레이드 보존됨`;
+          banner.classList.remove("hidden");
+        }
+      } catch (e) {}
+    }
+
+    function startNewGameSession(customSeed, fromRemotePacket, restoredData) {
       SoundFX.init();
       const nickInput = document.getElementById("input-player-name");
       const optNickInput = document.getElementById("opt-nickname-input");
@@ -23,23 +101,22 @@
       game.friendlyFire = document.getElementById("select-friendly-fire").value === "1";
       game.reviveDuration = parseFloat(document.getElementById("select-revive-time").value) || 8.0;
 
-      game.seed = customSeed || Math.floor(1000 + Math.random() * 9000);
+      game.seed = customSeed || (restoredData && restoredData.seed) || Math.floor(1000 + Math.random() * 9000);
       game.elapsedTime = 0;
-      game.currentRoomIndex = 0;
-      game.bioPoints = 110;
-      game.weaponParts = 0;
-      game.partsCrafted = 0;
-      game.coreSamples = 0;
-      game.shopCoresBought = 0;
-      game.coresSoldCount = 0;
+      game.currentRoomIndex = (restoredData && restoredData.currentRoomIndex) || 0;
+      game.bioPoints = (restoredData && restoredData.bioPoints !== undefined) ? restoredData.bioPoints : 110;
+      game.weaponParts = (restoredData && restoredData.weaponParts) || 0;
+      game.partsCrafted = (restoredData && restoredData.partsCrafted) || 0;
+      game.coreSamples = (restoredData && restoredData.coreSamples) || 0;
+      game.shopCoresBought = (restoredData && restoredData.shopCoresBought) || 0;
+      game.coresSoldCount = (restoredData && restoredData.coresSoldCount) || 0;
       game.thermiteParts = 0;
-      game.totalKills = 0;
-      // 첫 진입 후 14초 정비 뒤 곧바로 1차 웨이브(SURGE)가 시작되어 이를 막으면 1단계 목표가 해금됨!
+      game.totalKills = (restoredData && restoredData.totalKills) || 0;
       game.wavePhase = 'CALM';
-      game.waveTimer = 14.0;
+      game.waveTimer = (restoredData && restoredData.currentRoomIndex > 0) ? 8.0 : 14.0;
       game.waveNumber = 1;
       game.comboCount = 0;
-      game.totalRevives = 0;
+      game.totalRevives = (restoredData && restoredData.totalRevives) || 0;
       game.totalFriendlyFireDmg = 0;
       camInitialized = false;
 
@@ -48,7 +125,45 @@
 
       generateProceduralDungeon(game.seed);
       spawnSquadPlayers();
-      if (game.rooms[0]) relocateArmoryForCalmPhase(game.rooms[0]);
+
+      if (restoredData) {
+        const p = game.players[mySlotIndex];
+        if (p) {
+          if (restoredData.suitUpgrades) p.suitUpgrades = { ...restoredData.suitUpgrades };
+          if (restoredData.inventory && Array.isArray(restoredData.inventory)) {
+            restoredData.inventory.forEach((invData, i) => {
+              if (p.inventory[i]) {
+                p.inventory[i].unlocked = !!invData.unlocked;
+                if (invData.stats) p.inventory[i].stats = { ...invData.stats };
+                p.inventory[i].totalLv = invData.totalLv || 0;
+                p.inventory[i].tier1Special = !!invData.tier1Special;
+                p.inventory[i].awakened = !!invData.awakened;
+                p.inventory[i].transcended = !!invData.transcended;
+                p.inventory[i].ammo = invData.ammo !== undefined ? invData.ammo : p.inventory[i].ammo;
+              }
+            });
+          }
+          if (restoredData.currentWeapon !== undefined) p.currentWeapon = restoredData.currentWeapon;
+          if (restoredData.medkits !== undefined) p.medkits = restoredData.medkits;
+          if (restoredData.stimpacks !== undefined) p.stimpacks = restoredData.stimpacks;
+          if (restoredData.hp !== undefined) p.hp = restoredData.hp;
+        }
+
+        const targetRoom = game.rooms[game.currentRoomIndex] || game.rooms[0];
+        if (targetRoom) {
+          game.players.forEach(pl => {
+            pl.x = targetRoom.wx;
+            pl.z = targetRoom.wz;
+            if (pl.mesh) pl.mesh.position.set(targetRoom.wx, 0, targetRoom.wz);
+          });
+          camera.position.set(targetRoom.wx, 44, targetRoom.wz + 34);
+          camera.lookAt(targetRoom.wx, 0, targetRoom.wz);
+          relocateArmoryForCalmPhase(targetRoom);
+        }
+      } else {
+        if (game.rooms[0]) relocateArmoryForCalmPhase(game.rooms[0]);
+      }
+
       updateRoomVisibility();
       updateWeaponSlotsHUD();
 
@@ -58,7 +173,11 @@
       document.getElementById("ingame-hud").classList.remove("hidden");
       document.getElementById("damage-vignette").style.opacity = "0";
 
+      const resumeBanner = document.getElementById("resume-banner");
+      if (resumeBanner) resumeBanner.classList.add("hidden");
+
       game.running = true;
+      saveGameSessionSnapshot();
 
       if (!fromRemotePacket && !isRemoteClient && wsClient && wsClient.readyState === WebSocket.OPEN) {
         wsClient.send(JSON.stringify({
@@ -117,39 +236,85 @@
       renderLobbySlots();
     }
 
+    let reconnectTimer = null;
+
     function connectHamachiServer() {
-      const url = document.getElementById("input-server-url").value.trim();
+      const urlInput = document.getElementById("input-server-url");
+      let url = urlInput ? urlInput.value.trim() : "";
+      if (!url && window.location && window.location.host && window.location.protocol.startsWith("http")) {
+        const wsProto = window.location.protocol === "https:" ? "wss://" : "ws://";
+        url = wsProto + window.location.host;
+        if (urlInput) urlInput.value = url;
+      }
       const statusEl = document.getElementById("lobby-conn-status");
       if (!url) return;
-      statusEl.textContent = "⏳ 서버 연결 시도 중...";
+      if (statusEl) statusEl.textContent = "⏳ 서버 연결 시도 중...";
       try {
-        if (wsClient) wsClient.close();
+        if (wsClient) {
+          try { wsClient.close(); } catch (e) {}
+        }
         wsClient = new WebSocket(url);
         wsClient.onopen = () => {
-          statusEl.textContent = "🟢 하마치 WebSocket 서버 연결됨!";
-          document.getElementById("hud-net-mode").textContent = "HAMACHI WS";
+          if (statusEl) {
+            statusEl.textContent = "🟢 하마치 WebSocket 서버 연결됨!";
+            statusEl.className = "text-[11px] font-mono-code font-bold text-emerald-400";
+          }
+          const netBadge = document.getElementById("hud-net-mode");
+          if (netBadge) netBadge.textContent = "HAMACHI WS";
+          const isHostCand = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+          const nickInput = document.getElementById("input-player-name");
+          const nick = (nickInput && nickInput.value.trim()) || (isHostCand ? "HOST_P1" : "PLAYER");
           wsClient.send(JSON.stringify({
             type: "JOIN_LOBBY",
-            name: document.getElementById("input-player-name").value.trim() || "PLAYER"
+            name: nick,
+            clientId: getOrCreateClientId(),
+            isHostCandidate: isHostCand
           }));
         };
+
+        wsClient.onclose = () => {
+          if (!game.running) {
+            if (statusEl) {
+              statusEl.textContent = "🟡 서버 연결 대기 중 (재연결 시도 중...)";
+              statusEl.className = "text-[11px] font-mono-code font-bold text-amber-400";
+            }
+            if (!reconnectTimer) {
+              reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;
+                connectHamachiServer();
+              }, 2000);
+            }
+          }
+        };
+
+        wsClient.onerror = () => {
+          // Handled by onclose
+        };
+
         wsClient.onmessage = (ev) => {
           try {
             const msg = JSON.parse(ev.data);
             if (msg.type === "ROOM_FULL") {
-              statusEl.textContent = "⛔ 방 정원 초과 (4/4 MAN FULL) — 대기실이 가득 차 입장할 수 없습니다!";
-              statusEl.className = "text-[11px] font-mono-code font-bold text-red-400";
+              if (statusEl) {
+                statusEl.textContent = "⛔ 방 정원 초과 (4/4 MAN FULL) — 대기실이 가득 차 입장할 수 없습니다!";
+                statusEl.className = "text-[11px] font-mono-code font-bold text-red-400";
+              }
               wsClient.close();
               return;
             } else if (msg.type === "KICKED") {
-              statusEl.textContent = "🚫 방장에 의해 대기실에서 강퇴되었습니다.";
-              statusEl.className = "text-[11px] font-mono-code font-bold text-red-400";
+              if (statusEl) {
+                statusEl.textContent = "🚫 방장에 의해 대기실에서 강퇴되었습니다.";
+                statusEl.className = "text-[11px] font-mono-code font-bold text-red-400";
+              }
               if (game.running) returnToWaitingRoomLobby();
               wsClient.close();
               return;
             } else if (msg.type === "LOBBY_STATE" && Array.isArray(msg.slots)) {
               msg.slots.forEach((s, i) => {
-                if (lobbySlots[i]) { lobbySlots[i].name = s.name; lobbySlots[i].role = s.role; }
+                if (lobbySlots[i]) {
+                  lobbySlots[i].name = s.name;
+                  lobbySlots[i].role = s.role;
+                }
               });
               renderLobbySlots();
             } else if (msg.type === "START_GAME") {
@@ -158,10 +323,10 @@
                   if (lobbySlots[i]) { lobbySlots[i].name = s.name; lobbySlots[i].role = s.role; }
                 });
               }
-              if (msg.pacing) document.getElementById("select-pacing").value = msg.pacing;
-              if (msg.totalRooms) document.getElementById("select-room-count").value = String(msg.totalRooms);
-              if (msg.friendlyFire !== undefined) document.getElementById("select-friendly-fire").value = msg.friendlyFire ? "1" : "0";
-              if (msg.reviveDuration) document.getElementById("select-revive-time").value = String(msg.reviveDuration);
+              if (msg.pacing && document.getElementById("select-pacing")) document.getElementById("select-pacing").value = msg.pacing;
+              if (msg.totalRooms && document.getElementById("select-room-count")) document.getElementById("select-room-count").value = String(msg.totalRooms);
+              if (msg.friendlyFire !== undefined && document.getElementById("select-friendly-fire")) document.getElementById("select-friendly-fire").value = msg.friendlyFire ? "1" : "0";
+              if (msg.reviveDuration && document.getElementById("select-revive-time")) document.getElementById("select-revive-time").value = String(msg.reviveDuration);
               startNewGameSession(msg.seed, true);
             } else if (msg.type === "REVIVE_SYNC" && game.running) {
               const targetP = game.players.find(pl => pl.id === msg.targetId);
@@ -171,6 +336,13 @@
               isRemoteClient = (msg.slotId !== 0);
               const netBadge = document.getElementById("hud-net-mode");
               if (netBadge) netBadge.textContent = isRemoteClient ? `CLIENT P${msg.slotId + 1}` : "HOST P1";
+              if (statusEl) {
+                statusEl.textContent = isRemoteClient
+                  ? `🟢 서버 연결됨: P${msg.slotId + 1} 슬롯 참가`
+                  : `🟢 로컬 리슨 호스트 연결됨 (P1 방장)`;
+                statusEl.className = "text-[11px] font-mono-code font-bold text-emerald-400";
+              }
+              renderLobbySlots();
             } else if (msg.type === "PLAYER_STATE" && game.running) {
               const p = game.players.find(pl => pl.id === msg.slotId);
               if (p && p.id !== mySlotIndex) {
@@ -395,13 +567,75 @@
     });
     document.getElementById("opt-nickname-input").addEventListener("input", applyUserSettingsFromModal);
     document.getElementById("input-player-name").addEventListener("input", (e) => {
-      const v = (e.target.value || "HOST_P1").trim();
+      const v = (e.target.value || "HOST_P1").trim().slice(0, 12);
+      try { localStorage.setItem("boxhead_player_name", v); } catch (err) {}
       if (lobbySlots[mySlotIndex]) lobbySlots[mySlotIndex].name = v;
       const optNick = document.getElementById("opt-nickname-input");
       if (optNick) optNick.value = v;
       if (game.players[mySlotIndex]) game.players[mySlotIndex].name = v;
+      if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+        try { wsClient.send(JSON.stringify({ type: "UPDATE_NAME", name: v })); } catch (err) {}
+      }
       renderLobbySlots();
     });
+
+    const ffSelectEl = document.getElementById("select-friendly-fire");
+    if (ffSelectEl) {
+      ffSelectEl.addEventListener("change", (e) => {
+        try { localStorage.setItem("boxhead_friendly_fire", e.target.value); } catch (err) {}
+      });
+    }
+
+    const resumeBtn = document.getElementById("btn-resume-session");
+    if (resumeBtn) {
+      resumeBtn.addEventListener("click", () => {
+        try {
+          const raw = localStorage.getItem("boxhead_active_session");
+          if (raw) {
+            const snap = JSON.parse(raw);
+            startNewGameSession(snap.seed, false, snap);
+          }
+        } catch (e) {}
+      });
+    }
+
+    const discardBtn = document.getElementById("btn-discard-session");
+    if (discardBtn) {
+      discardBtn.addEventListener("click", () => {
+        clearSavedGameSession();
+      });
+    }
+
+    setInterval(() => {
+      if (game.running) saveGameSessionSnapshot();
+    }, 3000);
+
+    window.addEventListener("beforeunload", () => {
+      if (game.running) saveGameSessionSnapshot();
+    });
+
+    function pollLobbyStatus() {
+      if (game.running) return;
+      fetch("/api/status")
+        .then(r => r.json())
+        .then(data => {
+          if (data && Array.isArray(data.slots)) {
+            let changed = false;
+            data.slots.forEach((s, i) => {
+              if (lobbySlots[i]) {
+                if (lobbySlots[i].name !== s.name || lobbySlots[i].role !== s.role) {
+                  lobbySlots[i].name = s.name;
+                  lobbySlots[i].role = s.role;
+                  changed = true;
+                }
+              }
+            });
+            if (changed) renderLobbySlots();
+          }
+        })
+        .catch(() => {});
+    }
+    setInterval(pollLobbyStatus, 2000);
 
     // Armory-Only Supply & Per-Weapon Ammo Buttons (Fixed Non-Inflating Prices!)
     document.getElementById("btn-buy-light").addEventListener("click", () => {
@@ -593,7 +827,47 @@
       renderer.render(scene, camera);
     }
 
+    let initializedAutoConnect = false;
+    function initProfileAndAutoConnect() {
+      if (initializedAutoConnect) return;
+      initializedAutoConnect = true;
+
+      // 1. Nickname restore
+      let savedNick = null;
+      try { savedNick = localStorage.getItem("boxhead_player_name"); } catch (e) {}
+      const isHost = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      const defaultNick = isHost ? "HOST_P1" : ("PLAYER_" + Math.floor(100 + Math.random() * 900));
+      const nick = savedNick || defaultNick;
+      const nickInput = document.getElementById("input-player-name");
+      if (nickInput) nickInput.value = nick;
+      const optNick = document.getElementById("opt-nickname-input");
+      if (optNick) optNick.value = nick;
+      if (lobbySlots[mySlotIndex]) lobbySlots[mySlotIndex].name = nick;
+
+      // 2. Friendly Fire restore
+      let savedFF = null;
+      try { savedFF = localStorage.getItem("boxhead_friendly_fire"); } catch (e) {}
+      const ffSelect = document.getElementById("select-friendly-fire");
+      if (savedFF !== null && ffSelect) {
+        ffSelect.value = savedFF;
+      }
+
+      // 3. Server URL auto-configure & Auto-Connect
+      const wsInput = document.getElementById("input-server-url");
+      if (wsInput && window.location && window.location.host && window.location.protocol.startsWith("http")) {
+        const wsProto = window.location.protocol === "https:" ? "wss://" : "ws://";
+        wsInput.value = wsProto + window.location.host;
+      }
+
+      // 4. Check for active session recovery
+      checkAndPromptResumeSession();
+
+      // 5. Connect WebSocket automatically immediately
+      connectHamachiServer();
+    }
+
     window.onload = () => {
+      initProfileAndAutoConnect();
       renderLobbySlots();
       generateProceduralDungeon(2026);
       camera.position.set(0, 44, 34);
@@ -602,12 +876,6 @@
       requestAnimationFrame(animate);
     };
 
-
-    // 로컬 서버(http://[방장_하마치IP]:3000)로 접속 시 자동으로 WebSocket 주소를 해당 호스트 IP로 설정
     window.addEventListener("DOMContentLoaded", () => {
-      const wsInput = document.getElementById("input-server-url");
-      if (wsInput && window.location && window.location.host && window.location.protocol.startsWith("http")) {
-        const wsProto = window.location.protocol === "https:" ? "wss://" : "ws://";
-        wsInput.value = wsProto + window.location.host;
-      }
+      initProfileAndAutoConnect();
     });

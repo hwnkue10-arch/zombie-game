@@ -48,24 +48,35 @@
         if (idx === 0) {
           roleBadge = `
             <div class="flex items-center gap-1.5 shrink-0">
-              <span class="h-7 px-2.5 rounded-lg text-[10px] font-black bg-amber-500 text-slate-950 flex items-center justify-center whitespace-nowrap shadow-sm">👑 방장</span>
+              <span class="h-7 px-2.5 rounded-lg text-[10px] font-black bg-amber-500 text-slate-950 flex items-center justify-center whitespace-nowrap shadow-sm">👑 방장${mySlotIndex === 0 ? " (나)" : ""}</span>
+              <div class="w-7 h-7 shrink-0"></div>
+            </div>
+          `;
+        } else if (idx === mySlotIndex) {
+          roleBadge = `
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="h-7 px-2.5 rounded-lg text-[10px] font-black bg-sky-500 text-slate-950 flex items-center justify-center whitespace-nowrap shadow-sm">👤 나 (P${idx + 1})</span>
               <div class="w-7 h-7 shrink-0"></div>
             </div>
           `;
         } else {
-          const kickBtn = (slot.role !== "EMPTY" && !isRemoteClient)
+          const kickBtn = (slot.role !== "EMPTY" && !isRemoteClient && mySlotIndex === 0)
             ? `<button type="button" data-kick-slot="${idx}" title="방장 권한 추방" class="w-7 h-7 rounded-lg bg-red-950/80 hover:bg-red-800 border border-red-500/40 text-[11px] font-black text-red-200 flex items-center justify-center transition shrink-0">🚫</button>`
             : `<div class="w-7 h-7 shrink-0"></div>`;
 
+          const canToggle = !isRemoteClient && mySlotIndex === 0 && slot.role !== "REMOTE";
+          const toggleAttr = canToggle ? `data-toggle-slot="${idx}"` : "";
+          const cursorClass = canToggle ? "cursor-pointer hover:opacity-90" : "cursor-default";
+
           roleBadge = `
             <div class="flex items-center gap-1.5 shrink-0">
-              <button type="button" data-toggle-slot="${idx}"
-                      class="h-7 w-[76px] rounded-lg text-[10px] font-bold transition flex items-center justify-center whitespace-nowrap ${
+              <button type="button" ${toggleAttr}
+                      class="h-7 w-[76px] rounded-lg text-[10px] font-bold transition flex items-center justify-center whitespace-nowrap ${cursorClass} ${
                         slot.role === "AI"
-                          ? "bg-emerald-600/25 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/40"
+                          ? "bg-emerald-600/25 text-emerald-300 border border-emerald-500/40"
                           : slot.role === "REMOTE"
                           ? "bg-sky-600/25 text-sky-300 border border-sky-500/40"
-                          : "bg-slate-800/80 text-slate-400 border border-slate-700/60 hover:text-slate-200"
+                          : "bg-slate-800/80 text-slate-400 border border-slate-700/60"
                       }">
                 ${slot.role === "AI" ? "🤖 AI 봇" : slot.role === "REMOTE" ? "🌐 원격참가" : "➕ 비어있음"}
               </button>
@@ -121,6 +132,19 @@
           kickLobbySlot(idx);
         });
       });
+
+      const startBtn = document.getElementById("btn-start-game");
+      if (startBtn) {
+        if (isRemoteClient) {
+          startBtn.disabled = true;
+          startBtn.className = "w-full py-3.5 rounded-2xl bg-slate-800 text-slate-400 font-bold text-sm tracking-wide shadow transition cursor-not-allowed border border-slate-700";
+          startBtn.innerHTML = "⏳ 방장이 작전을 시작하기를 대기하는 중...";
+        } else {
+          startBtn.disabled = false;
+          startBtn.className = "w-full py-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-amber-500 to-red-600 hover:from-red-500 hover:to-amber-400 text-white font-black text-base tracking-wide shadow-xl transition cursor-pointer";
+          startBtn.innerHTML = "🚀 작전 시작 (START EXPEDITION)";
+        }
+      }
     }
     // =========================================================================
     // 4. THREE.JS SCENE, CAMERA & SHARED GEOMETRY POOL

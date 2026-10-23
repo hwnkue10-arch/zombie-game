@@ -391,6 +391,25 @@
         </div>
       </div>
 
+      <!-- Session Recovery Banner (새로고침 시 진행 중이던 세션 복구) -->
+      <div id="resume-banner" class="hidden mb-4 rounded-2xl p-3 bg-amber-500/15 border border-amber-500/40 flex flex-wrap items-center justify-between gap-3 text-amber-200 text-xs shadow-lg">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xl">💾</span>
+          <div>
+            <div id="resume-banner-title" class="font-black text-amber-300 text-xs sm:text-sm">이전 작전 세션이 감지되었습니다 (Sector 1)</div>
+            <div id="resume-banner-desc" class="text-[11px] text-amber-200/80">보유 BP: 0 BP · 처치: 0마리 · 무기 강화 및 슈트 상태 보존됨</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="btn-resume-session" type="button" class="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md transition">
+            ▶ 작전 이어서 계속하기
+          </button>
+          <button id="btn-discard-session" type="button" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition">
+            새로 시작
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
         <!-- Left: Network & 4-Player Squad Slots (7 cols) -->

@@ -73,8 +73,38 @@ class RoomManager {
   }
 
   handleJoinLobby(client, msg) {
-    const existing = this.clients.get(client);
-    const slotId = existing ? existing.slotId : this.findAvailableSlot();
+    const cleanName = String(msg.name || "").trim().slice(0, 12);
+    const clientId = msg.clientId || null;
+    let slotId = -1;
+
+    // 1. If this clientId was previously connected to a slot, reclaim that slot (reconnect on refresh)
+    if (clientId) {
+      for (const [peer, info] of this.clients.entries()) {
+        if (info.clientId === clientId && peer !== client) {
+          slotId = info.slotId;
+          try { peer.close(); } catch (e) {}
+          this.clients.delete(peer);
+          break;
+        }
+      }
+    }
+
+    // 2. If no slot reclaimed and this is the host candidate (localhost/P1), claim Slot 0 if open
+    if (slotId === -1 && msg.isHostCandidate) {
+      let slot0Occupied = false;
+      for (const info of this.clients.values()) {
+        if (info.slotId === 0) { slot0Occupied = true; break; }
+      }
+      if (!slot0Occupied) {
+        slotId = 0;
+      }
+    }
+
+    // 3. Otherwise find first available slot
+    if (slotId === -1) {
+      const existing = this.clients.get(client);
+      slotId = existing ? existing.slotId : this.findAvailableSlot();
+    }
 
     if (slotId === -1) {
       this.sendTo(client, {
@@ -84,10 +114,10 @@ class RoomManager {
       return;
     }
 
-    const cleanName = String(msg.name || `PLAYER_${slotId + 1}`).trim().slice(0, 12) || `PLAYER_${slotId + 1}`;
-    this.clients.set(client, { slotId, name: cleanName, joinedAt: Date.now() });
+    const finalName = cleanName || (slotId === 0 ? "HOST_P1" : `PLAYER_${slotId + 1}`);
+    this.clients.set(client, { slotId, name: finalName, clientId, joinedAt: Date.now() });
 
-    this.slots[slotId].name = cleanName;
+    this.slots[slotId].name = finalName;
     this.slots[slotId].role = slotId === 0 ? "LOCAL" : "REMOTE";
     this.slots[slotId].ready = true;
 
@@ -97,7 +127,18 @@ class RoomManager {
       isHost: slotId === 0
     });
 
-    console.log(`[RoomManager] Player '${cleanName}' joined Slot P${slotId + 1} (Connected: ${this.clients.size}/4)`);
+    console.log(`[RoomManager] Player '${finalName}' joined Slot P${slotId + 1} (Connected: ${this.clients.size}/4)`);
+    this.broadcastLobbyState();
+  }
+
+  handleUpdateName(client, msg) {
+    const info = this.clients.get(client);
+    if (!info) return;
+    const cleanName = String(msg.name || "").trim().slice(0, 12);
+    if (!cleanName) return;
+    info.name = cleanName;
+    this.slots[info.slotId].name = cleanName;
+    console.log(`[RoomManager] Slot P${info.slotId + 1} changed nickname to '${cleanName}'`);
     this.broadcastLobbyState();
   }
 
@@ -166,6 +207,9 @@ class RoomManager {
     switch (msg.type) {
       case PACKET_TYPES.JOIN_LOBBY:
         this.handleJoinLobby(client, msg);
+        break;
+      case PACKET_TYPES.UPDATE_NAME:
+        this.handleUpdateName(client, msg);
         break;
       case PACKET_TYPES.KICK_PLAYER:
         this.handleKickPlayer(client, msg);
