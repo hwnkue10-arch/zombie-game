@@ -173,7 +173,10 @@
       const wBadge = game.wavePhase === "SURGE"
         ? `🌊웨이브 ${String(Math.ceil(game.waveTimer)).padStart(2, "0")}s`
         : `🛡️정비 ${String(Math.ceil(game.waveTimer)).padStart(2, "0")}s`;
-      document.getElementById("hud-zombie-count").textContent = `${wBadge} · 💀${game.zombies.length}`;
+      const hordeTag = (curRoom && curRoom.waitingForWaveDefense)
+        ? ` (${curRoom.waveZombiesSpawned || 0}/${curRoom.waveZombieQuota || 0})`
+        : "";
+      document.getElementById("hud-zombie-count").textContent = `${wBadge} · 💀${game.zombies.length}${hordeTag}`;
       document.getElementById("hud-combo-text").textContent = game.comboCount >= 5 ? `${game.comboCount}콤보` : "-";
 
       if (curRoom) {
@@ -205,10 +208,12 @@
             return `✅ 모든 목표 달성! 열린 통로로 전진 · ${timerTag}`;
           }
           if (curRoom.waitingForWaveDefense) {
-            if (game.waveTimer > 0) {
-              return `🌊 [웨이브 방어] 버티기: ${Math.ceil(game.waveTimer)}s (종료 후 잔당 5마리 이하 소탕) · ${timerTag}`;
+            const quota = curRoom.waveZombieQuota || 30;
+            const spawned = curRoom.waveZombiesSpawned || 0;
+            if (spawned < quota) {
+              return `🌊 [웨이브 호드] 출현: ${spawned}/${quota}마리 | 생존: ${game.zombies.length}마리 · ${timerTag}`;
             } else {
-              return `⚔️ [잔당 소탕] 남은 좀비: ${game.zombies.length}마리 (5마리 이하 처치 시 완료) · ${timerTag}`;
+              return `⚔️ [호드 소탕전] 출현 완료! 남은 좀비: ${game.zombies.length}마리 (5마리 이하 처치 시 완료) · ${timerTag}`;
             }
           }
           const hint = curRoom.activeMissionTargetPos
@@ -218,12 +223,15 @@
         };
 
         if (curRoom.waitingForWaveDefense) {
-          if (game.waveTimer > 0) {
-            objText.textContent = `🌊 호드 웨이브 방어 중! 버티기: ${Math.ceil(game.waveTimer)}초 (잔당 5마리 이하 소탕 필요)`;
-            objBar.style.width = Math.min(100, Math.max(0, (1 - game.waveTimer / 18.0) * 100)) + "%";
+          const quota = curRoom.waveZombieQuota || 30;
+          const spawned = curRoom.waveZombiesSpawned || 0;
+          if (spawned < quota) {
+            objText.textContent = `🌊 호드 침공 진행 중! 출현: ${spawned}/${quota}마리 (생존: ${game.zombies.length}마리 · 5마리 이하 소탕)`;
+            objBar.style.width = Math.min(100, Math.max(0, (spawned / quota) * 100)) + "%";
           } else {
-            objText.textContent = `⚔️ 잔당 소탕 단계! 남은 좀비: ${game.zombies.length}마리 (5마리 이하 처치 시 다음 목표 해금)`;
-            objBar.style.width = Math.min(100, Math.max(0, (1 - Math.max(0, game.zombies.length - 5) / 25) * 100)) + "%";
+            objText.textContent = `⚔️ 호드 출현 완료! 잔당 소탕 중: ${game.zombies.length}마리 (5마리 이하 처치 시 목표 해금)`;
+            const clearProg = Math.max(0, 1 - Math.max(0, game.zombies.length - 5) / Math.max(1, quota * 0.4));
+            objBar.style.width = Math.min(100, Math.max(0, clearProg * 100)) + "%";
           }
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.condType === "THERMITE" ? 3 : (curRoom.reqWaves || curRoom.targetVal || 3));
         } else if (curRoom.isBossRoom && game.boss) {

@@ -9,6 +9,22 @@
     // =========================================================================
     // 6. PROCEDURAL MEGA-SECTOR DUNGEON (96x96), SPAWN HOLES & ICONIC 3D OBJECTS
     // =========================================================================
+    function calculateWaveQuota(sectorIndex, roomWaveCount) {
+      const sIdx = sectorIndex !== undefined ? sectorIndex : (game.currentRoomIndex || 0);
+      const wCount = roomWaveCount || 1;
+      const numPlayers = (game.players && game.players.filter(p => !p.downed || p.connected).length) || 1;
+      const squadScale = 1 + Math.max(0, numPlayers - 1) * 0.35;
+      // 섹터별 고정 출현 정원(Quota) 스케일링:
+      // 1섹터: 28마리 (솔로 기준)
+      // 2섹터: 42마리
+      // 3섹터: 56마리
+      // 4섹터: 70마리
+      // 5섹터: 84마리
+      // 웨이브 회차당 + 8마리
+      const baseCount = 28 + sIdx * 14 + (wCount - 1) * 8;
+      return Math.round(baseCount * squadScale);
+    }
+
     function registerWorldSymbol(x, y, z, text, badgeClass, refObj, roomIndex) {
       const cleanBadgeClass = (badgeClass || "").replace(/animate-bounce|animate-pulse/g, "");
       const el = document.createElement("div");
@@ -293,6 +309,8 @@
           unlockStage: 0,
           completedStage: 0,
           waitingForWaveDefense: true,
+          waveZombieQuota: calculateWaveQuota(i, 1),
+          waveZombiesSpawned: 0,
           activeMissionTargetPos: null,
           bpEarned: 0,
           bpCap,

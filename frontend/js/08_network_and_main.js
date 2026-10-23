@@ -404,6 +404,8 @@
                 cr.unlockStage = msg.roomState.unlockStage;
                 cr.completedStage = msg.roomState.completedStage;
                 cr.waitingForWaveDefense = msg.roomState.waitingForWaveDefense;
+                if (msg.roomState.waveZombieQuota !== undefined) cr.waveZombieQuota = msg.roomState.waveZombieQuota;
+                if (msg.roomState.waveZombiesSpawned !== undefined) cr.waveZombiesSpawned = msg.roomState.waveZombiesSpawned;
                 cr.sectorTimer = msg.roomState.sectorTimer;
                 cr.berserkActive = msg.roomState.berserkActive;
                 cr.gasWaveActive = msg.roomState.gasWaveActive;
@@ -484,6 +486,8 @@
             unlockStage: cr.unlockStage,
             completedStage: cr.completedStage,
             waitingForWaveDefense: cr.waitingForWaveDefense,
+            waveZombieQuota: cr.waveZombieQuota,
+            waveZombiesSpawned: cr.waveZombiesSpawned,
             sectorTimer: Math.round(cr.sectorTimer),
             berserkActive: cr.berserkActive,
             gasWaveActive: cr.gasWaveActive,
@@ -679,7 +683,7 @@
         me.inventory[6].ammo = Math.min(getWeaponMaxAmmo(me, 6), me.inventory[6].ammo + 5);
         me.inventory[7].ammo = Math.min(getWeaponMaxAmmo(me, 7), me.inventory[7].ammo + 4);
         SoundFX.play("pickup");
-        if (toastEl) toastEl.textContent = `🧱 전술 바리케이드(+5) & 적색 폭약통(+4) 보충 완료! (-${cost.toLocaleString()} BP)`;
+        if (toastEl) toastEl.textContent = `🧱 전술 바리케이드(+5) & ❄️빙결 배럴(+4) 보충 완료! (-${cost.toLocaleString()} BP)`;
         renderUpgradeModal();
         updateWeaponSlotsHUD();
       }

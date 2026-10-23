@@ -1317,6 +1317,164 @@
     // =========================================================================
     // 13. EXPLOSIONS, STUN/KNOCKBACK, PISTOL SCAVENGE & BOSS INVULN MECHANICS
     // =========================================================================
+    function spawnIceShatterFX(x, z, count) {
+      SoundFX.play("ice");
+      const c = count || 6;
+      for (let i = 0; i < c; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 2.5 + Math.random() * 4.5;
+        const pGeo = new THREE.BoxGeometry(0.20, 0.20, 0.20);
+        const pMat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x38bdf8 : 0xe0f2fe });
+        const pMesh = new THREE.Mesh(pGeo, pMat);
+        pMesh.position.set(x, 0.9, z);
+        effectsGroup.add(pMesh);
+        game.particles.push({
+          mesh: pMesh,
+          life: 0.45,
+          maxLife: 0.45,
+          vx: Math.cos(ang) * spd,
+          vy: 2.2 + Math.random() * 2.8,
+          vz: Math.sin(ang) * spd
+        });
+      }
+    }
+
+    function detonateCryoBarrel(barrel, attackerId) {
+      const idx = game.barrels.indexOf(barrel);
+      if (idx !== -1) {
+        entitiesGroup.remove(barrel.group);
+        game.barrels.splice(idx, 1);
+      } else {
+        return;
+      }
+
+      // 1. 위력 및 반경 계산 (기본 680 + 섹터별 스케일링 + 개별 강화 배율)
+      const secScale = 1 + (game.currentRoomIndex || 0) * 0.35;
+      const baseDmg = (barrel.baseDmg || 680) * secScale;
+      const finalDmg = Math.round(baseDmg * (barrel.dmgMult || 1));
+      const expRadius = (barrel.awakened ? 10.5 : (barrel.tier1Special ? 8.8 : 7.6)) + (barrel.areaLv || 0) * 1.1;
+      const freezeSec = (barrel.awakened ? 7.5 : (barrel.tier1Special ? 6.0 : 5.0)) + (barrel.stunBonus || 0);
+
+      SoundFX.play("explosion");
+      SoundFX.play("ice");
+
+      // 2. 극저온 동결 폭발 구체 (Cyan Ice Blast VFX)
+      const expMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(expRadius * 0.88, 18, 18),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.88 })
+      );
+      expMesh.position.set(barrel.x, 0.9, barrel.z);
+      effectsGroup.add(expMesh);
+      game.particles.push({ mesh: expMesh, life: 0.38, maxLife: 0.38, expand: 1.55 });
+
+      // 얼음 충격파 링 (Ground Shockwave)
+      const ringGeo = new THREE.RingGeometry(0.5, expRadius, 32);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.rotation.x = -Math.PI / 2;
+      ringMesh.position.set(barrel.x, 0.08, barrel.z);
+      effectsGroup.add(ringMesh);
+      game.particles.push({ mesh: ringMesh, life: 0.45, maxLife: 0.45, expand: 1.4 });
+
+      // 얼음 파편 파티클 16개 방사
+      for (let p = 0; p < 16; p++) {
+        const ang = (p / 16) * Math.PI * 2 + Math.random() * 0.3;
+        const spd = 6.0 + Math.random() * 8.0;
+        const pGeo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
+        const pMat = new THREE.MeshBasicMaterial({ color: p % 2 === 0 ? 0x38bdf8 : 0xe0f2fe });
+        const pMesh = new THREE.Mesh(pGeo, pMat);
+        pMesh.position.set(barrel.x, 0.6, barrel.z);
+        effectsGroup.add(pMesh);
+        game.particles.push({
+          mesh: pMesh,
+          life: 0.65,
+          maxLife: 0.65,
+          vx: Math.cos(ang) * spd,
+          vy: 3.5 + Math.random() * 4.0,
+          vz: Math.sin(ang) * spd
+        });
+      }
+
+      // 3. 반경 내 감염체 대미지 및 100% 완전 동결 (Freeze)
+      for (let i = game.zombies.length - 1; i >= 0; i--) {
+        const zmb = game.zombies[i];
+        const dist = Math.hypot(zmb.x - barrel.x, zmb.z - barrel.z);
+        if (dist <= expRadius) {
+          const falloff = 1 - (dist / expRadius) * 0.35;
+          const hitDmg = Math.round(finalDmg * falloff);
+          damageZombie(i, hitDmg, (zmb.x - barrel.x) * 2.2, (zmb.z - barrel.z) * 2.2, 1.0, 7);
+
+          // 살아남은 좀비에 대해 완전 동결 적용!
+          if (game.zombies[i] && game.zombies[i].hp > 0) {
+            const zTarget = game.zombies[i];
+            const actualDur = zTarget.spec.isMidBoss ? Math.max(2.5, freezeSec * 0.5) : freezeSec;
+            zTarget.freezeTimer = Math.max(zTarget.freezeTimer || 0, actualDur);
+            zTarget.stunTimer = Math.max(zTarget.stunTimer || 0, actualDur);
+            if (zTarget.iceBlock) zTarget.iceBlock.visible = true;
+          }
+        }
+      }
+
+      // 4. 오브젝트 피해 (Cyst Pods, Blood Pylons, Boss)
+      for (let i = game.cystPods.length - 1; i >= 0; i--) {
+        const pod = game.cystPods[i];
+        if (Math.hypot(pod.x - barrel.x, pod.z - barrel.z) <= expRadius) pod.hp -= finalDmg;
+      }
+      for (let i = game.bloodPylons.length - 1; i >= 0; i--) {
+        const pyl = game.bloodPylons[i];
+        if (Math.hypot(pyl.x - barrel.x, pyl.z - barrel.z) <= expRadius) pyl.hp -= finalDmg * 1.5;
+      }
+      if (game.boss && game.boss.active && !game.boss.dead) {
+        if (Math.hypot(game.boss.x - barrel.x, game.boss.z - barrel.z) <= expRadius + game.boss.radius) {
+          damageBoss(Math.round(finalDmg * 0.95));
+        }
+      }
+
+      // 5. 영구동토 빙결 장판 생성 (모든 배럴 폭발 시 확정 생성!)
+      const cRad = 5.2 + (barrel.areaLv || 0) * 0.6 + (barrel.awakened ? 2.5 : 0);
+      const cMesh = new THREE.Mesh(
+        new THREE.CircleGeometry(cRad, 24),
+        new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.58 })
+      );
+      cMesh.rotation.x = -Math.PI / 2;
+      cMesh.position.set(barrel.x, 0.06, barrel.z);
+      effectsGroup.add(cMesh);
+      game.flamePools.push({
+        x: barrel.x,
+        z: barrel.z,
+        radius: cRad,
+        dps: Math.round(160 * secScale * (barrel.dmgMult || 1)),
+        life: barrel.awakened ? 7.5 : 5.5,
+        isCryo: true,
+        wIdx: 7,
+        mesh: cMesh
+      });
+
+      // 6. 팀킬 처리
+      if (game.friendlyFire) {
+        game.players.forEach(pl => {
+          if (pl.downed) return;
+          const distP = Math.hypot(pl.x - barrel.x, pl.z - barrel.z);
+          if (distP <= expRadius * 0.7) {
+            const ffDmg = Math.round(finalDmg * 0.22);
+            game.totalFriendlyFireDmg += ffDmg;
+            damagePlayer(pl, ffDmg);
+          }
+        });
+      }
+
+      // 7. 인접 배럴 연쇄 폭발
+      for (let br = game.barrels.length - 1; br >= 0; br--) {
+        const adj = game.barrels[br];
+        if (adj && adj !== barrel && !adj.detonating && Math.hypot(adj.x - barrel.x, adj.z - barrel.z) <= expRadius + adj.radius) {
+          adj.detonating = true;
+          setTimeout(() => {
+            if (game.running) detonateCryoBarrel(adj, attackerId);
+          }, 85);
+        }
+      }
+    }
+
     function triggerExplosion(x, z, radius, maxDamage, attackerId, isAwakenedGrenade, clusterDepth, isTier1Grenade) {
       SoundFX.play("explosion");
       const expMesh = new THREE.Mesh(
@@ -1326,6 +1484,17 @@
       expMesh.position.set(x, 1.0, z);
       effectsGroup.add(expMesh);
       game.particles.push({ mesh: expMesh, life: 0.30, maxLife: 0.30, expand: 1.35 });
+
+      // [v3.1 빙결 배럴 연쇄 폭발 유도]
+      for (let br = game.barrels.length - 1; br >= 0; br--) {
+        const barrel = game.barrels[br];
+        if (barrel && !barrel.detonating && Math.hypot(barrel.x - x, barrel.z - z) <= radius + barrel.radius) {
+          barrel.detonating = true;
+          setTimeout(() => {
+            if (game.running) detonateCryoBarrel(barrel, attackerId);
+          }, 70);
+        }
+      }
 
       // [v3.2 특수개조 구현] 유탄발사기 15Lv 집속 파편탄(자탄 2발) / 30Lv 확산 클러스터(자탄 4발 연쇄 폭격)
       if (!clusterDepth && (isAwakenedGrenade || isTier1Grenade)) {
@@ -1406,6 +1575,14 @@
         }
       }
 
+      // [v3.1 빙결 쇄빙(Shatter) 보너스] 완전 동결 상태의 감염체 피격 시 +35% 쇄빙 피해 및 얼음 파편 연출
+      if ((zmb.freezeTimer || 0) > 0) {
+        finalDmg = Math.round(finalDmg * 1.35);
+        if (Math.random() < 0.45) {
+          spawnIceShatterFX(zmb.x, zmb.z, 3);
+        }
+      }
+
       const resist = zmb.tenacity || 0;
       zmb.hp -= finalDmg;
 
@@ -1468,9 +1645,17 @@
 
       if (zmb.hp <= 0) {
         const wasStunned = zmb.stunTimer > 0;
+        const wasFrozen = (zmb.freezeTimer || 0) > 0;
         const zx = zmb.x, zz = zmb.z;
         const isMB = zmb.spec.isMidBoss;
         const isExp = zmb.spec.explosive;
+
+        if (zmb.iceBlock) {
+          try { zmb.group.remove(zmb.iceBlock); } catch (e) {}
+        }
+        if (wasFrozen) {
+          spawnIceShatterFX(zx, zz, 8);
+        }
 
         entitiesGroup.remove(zmb.group);
         game.zombies.splice(zIdx, 1);

@@ -92,6 +92,16 @@
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
             osc.connect(gain); gain.connect(this.ctx.destination);
             osc.start(now); osc.stop(now + 0.18);
+          } else if (type === "ice") {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(1580, now);
+            osc.frequency.exponentialRampToValueAtTime(420, now + 0.16);
+            gain.gain.setValueAtTime(0.22 * volMult, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.start(now); osc.stop(now + 0.18);
           } else if (type === "alarm" || type === "heartbeat") {
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
@@ -190,15 +200,15 @@
         roleDesc: "전용 방벽 키트 사용 · 길목 봉쇄 및 전류/포탑 화력 지원"
       },
       {
-        id: 7, key: "8", name: "적색 폭약통", eng: "Cryo-Barrel",
+        id: 7, key: "8", name: "빙결 배럴", eng: "Cryo-Barrel",
         ammoType: "BARREL", infinite: false, startAmmo: 6, maxAmmo: 18, packAmmo: 4, packCost: 75, baseCost: 48,
         reqParts: 0, unlockBpCost: 0,
-        fireRate: 0.42, damage: 240, speed: 0, spread: 0, pellets: 1,
-        stun: 1.25, knockback: 3.8, placeType: "barrel", explosiveRadius: 6.4,
-        color: 0xef4444, sound: "pickup", unlockedAtStart: true,
-        tier1Name: "냉각 가스통 (폭발 시 반경 5m 감염체 2.5초 급속 빙결)",
-        awakenName: "극저온 연쇄 지뢰 (대폭발 + 5초간 극저온 빙결·산성 장판 생성)",
-        roleDesc: "전용 폭약통 키트 사용 · 사격/근접 시 대폭발 및 빙결 유도"
+        fireRate: 0.42, damage: 680, speed: 0, spread: 0, pellets: 1,
+        stun: 4.5, knockback: 4.5, placeType: "barrel", explosiveRadius: 7.5,
+        color: 0x38bdf8, sound: "pickup", unlockedAtStart: true,
+        tier1Name: "급속 냉각 가스통 (폭발 시 반경 8.5m 5.5초 완전 빙결 + 쇄빙 추가피해)",
+        awakenName: "절대영도 퍼마프로스트 (반경 10.5m 극저온 대폭발 + 7초간 영구동토 빙결장판 생성)",
+        roleDesc: "극저온 빙결 배럴 설치 · 총격/폭발 시 대폭발, 감염체 완전 빙결(이동·공격 0) 및 영구동토 생성"
       }
     ];
 
@@ -260,7 +270,7 @@
         { key: "stun", label: "충격파저지", desc: "접근좀비 기절·넉백" },
         { key: "knock", label: "설치효율", desc: "무소모확률 +12%" }
       ],
-      // 7: 적색 폭약통 (설치형 지뢰 전용 5대 스탯!)
+      // 7: 빙결 배럴 (설치형 극저온 지뢰 전용 5대 스탯!)
       [
         { key: "atk", label: "기폭화력", desc: "폭발피해 +30%" },
         { key: "spd", label: "설치·기폭성능", desc: "설치속도·빙결시간↑" },

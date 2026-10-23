@@ -633,12 +633,14 @@
       if (game.waveTimer <= 0) {
         if (game.wavePhase === "CALM") {
           game.wavePhase = "SURGE";
-          game.waveTimer = 18.0 + Math.min(4.0, game.currentRoomIndex * 0.4);
+          game.waveTimer = 20.0 + Math.min(5.0, game.currentRoomIndex * 0.5);
           game.waveNumber = (game.waveNumber || 1) + 1;
           hideArmoriesDuringSurge();
 
           if (curRoom) {
             curRoom.roomWaveCount = (curRoom.roomWaveCount || 1) + 1;
+            curRoom.waveZombieQuota = calculateWaveQuota(curRoom.index, curRoom.roomWaveCount);
+            curRoom.waveZombiesSpawned = 0;
             // [v3.1] 스폰 구멍 추가 개방 이벤트: 타이머가 중반(50% 이하)으로 넘어간 이후에만, 배정된 확률 섹터에서 발생!
             const isPastMidTime = (curRoom.sectorTimer || 0) <= (curRoom.maxSectorTimer || 260) * 0.55;
             if (
@@ -666,9 +668,13 @@
           }
           SoundFX.play("alarm");
         } else {
-          // SURGE 웨이브 방어 체크: 웨이브 방어 중(waitingForWaveDefense)일 때는 잔당 5마리 이하 소탕까지 완료해야 소강기로 진입!
-          if (curRoom && curRoom.waitingForWaveDefense && game.zombies.length > 5) {
-            game.waveTimer = 0; // 방어 타이머는 완료됨, 잔당 소탕 대기 상태 유지
+          // SURGE 웨이브 방어 체크: 웨이브 방어 중(waitingForWaveDefense)일 때는:
+          // 1) 웨이브 정원(Quota)이 전부 스폰 완료되어야 하고
+          // 2) 생존 좀비 수가 5마리 이하로 소탕되어야 소강기(CALM)로 진입!
+          const quotaFinished = curRoom ? ((curRoom.waveZombiesSpawned || 0) >= (curRoom.waveZombieQuota || 1)) : true;
+          const zombiesCleared = game.zombies.length <= 5;
+          if (curRoom && curRoom.waitingForWaveDefense && (!quotaFinished || !zombiesCleared)) {
+            game.waveTimer = 0; // 정원 출현 및 잔당 5마리 이하 소탕 대기 상태 유지
           } else {
             game.wavePhase = "CALM";
             game.waveTimer = 18.0;
@@ -719,40 +725,99 @@
         });
       }
 
-      // [v3.1] 무한 누적 스폰 구조: 좀비를 잡지 않으면 1섹터라도 계속 스폰되어 쌓이는 구조 (엔진 안전선 360마리)
+      // [v3.1 웨이브별 확정 좀비 정원(Quota) & 섹터 스케일링 스폰 시스템]
+      // 각 섹터 및 웨이브별 정해진 마리수(waveZombieQuota)만큼 확실하게 스폰되어 누적되며,
+      // 정원이 모두 출현한 이후에는 스폰이 멈추고 5마리 이하 소탕 시 웨이브 방어 성공으로 판정됨!
       game.spawnTimer -= dt;
       const isSurge = (game.wavePhase === "SURGE") || (curRoom && (curRoom.collapsing || curRoom.berserkActive));
       const rWave = curRoom ? (curRoom.roomWaveCount || 1) : 1;
       const secCapLv = getSectorMaxStatLv(); // 1 ~ 10
-      const isWaveCleanup = (curRoom && curRoom.waitingForWaveDefense && game.waveTimer <= 0);
-      const maxSwarm = 360; // 상한으로 인한 스폰 중단 방지 — 잡지 않으면 계속 누적됨!
 
-      if (game.spawnTimer <= 0 && game.zombies.length < maxSwarm && !isWaveCleanup) {
+      if (curRoom && curRoom.waveZombieQuota === undefined) {
+        curRoom.waveZombieQuota = calculateWaveQuota(curRoom.index, curRoom.roomWaveCount || 1);
+        curRoom.waveZombiesSpawned = curRoom.waveZombiesSpawned || 0;
+      }
+
+      // 방어 중일 때 아직 스폰해야 할 남은 정원 계산
+      const remainingQuota = curRoom ? Math.max(0, (curRoom.waveZombieQuota || 0) - (curRoom.waveZombiesSpawned || 0)) : 999;
+      // 정원 스폰 완료 후에는 방어 중 추가 스폰 중단 (호드 소탕 단계)
+      const isWaveHordeFinished = curRoom && curRoom.waitingForWaveDefense && remainingQuota <= 0;
+      // 소강기(CALM) 중에는 정비 안전을 위해 맵에 좀비가 4마리 미만일 때만 가끔 1마리씩 정찰 스폰
+      const isCalmSpawningRestricted = (game.wavePhase === "CALM") && game.zombies.length >= 4;
+      const maxSwarm = 360; // 엔진 안전선
+
+      if (game.spawnTimer <= 0 && game.zombies.length < maxSwarm && !isWaveHordeFinished && !isCalmSpawningRestricted) {
         game.spawnTimer = isSurge
-          ? Math.max(0.42, 1.05 - game.currentRoomIndex * 0.04 - rWave * 0.02)
-          : Math.max(1.35, 2.3 - game.currentRoomIndex * 0.06);
+          ? Math.max(0.40, 0.95 - game.currentRoomIndex * 0.04 - rWave * 0.02)
+          : Math.max(1.8, 2.8 - game.currentRoomIndex * 0.06);
 
         if (curRoom) {
           const activeHoles = (curRoom.spawnHoles || []).filter(h => h.active);
           if (activeHoles.length > 0) {
-            const packSize = isSurge
-              ? Math.min(16, 4 + Math.floor(secCapLv * 0.8) + Math.floor(rWave * 0.5))
-              : (2 + Math.floor(Math.random() * 3));
-            const hole = activeHoles[Math.floor(Math.random() * activeHoles.length)];
+            let packSize = isSurge
+              ? Math.min(10, 3 + Math.floor(secCapLv * 0.6) + Math.floor(rWave * 0.4))
+              : 1;
 
-            const hw = curRoom.hw || curRoom.half;
-            const hd = curRoom.hd || curRoom.half;
-            const inX = hole.x < curRoom.wx - (hw - 12) ? hole.x + 2.4 : (hole.x > curRoom.wx + (hw - 12) ? hole.x - 2.4 : hole.x);
-            const inZ = hole.z < curRoom.wz - (hd - 12) ? hole.z + 2.4 : (hole.z > curRoom.wz + (hd - 12) ? hole.z - 2.4 : hole.z);
+            if (curRoom.waitingForWaveDefense) {
+              packSize = Math.min(packSize, remainingQuota);
+            }
 
-            for (let k = 0; k < packSize; k++) {
-              if (game.zombies.length >= maxSwarm) break;
-              const jitterA = (k / packSize) * Math.PI * 2 + Math.random() * 0.5;
-              const zx = Math.max(curRoom.wx - hw + 2.6, Math.min(curRoom.wx + hw - 2.6, inX + Math.cos(jitterA) * 1.6));
-              const zz = Math.max(curRoom.wz - hd + 2.6, Math.min(curRoom.wz + hd - 2.6, inZ + Math.sin(jitterA) * 1.6));
+            if (packSize > 0) {
+              curRoom.waveZombiesSpawned = (curRoom.waveZombiesSpawned || 0) + packSize;
+              const hole = activeHoles[Math.floor(Math.random() * activeHoles.length)];
 
-              // [v3.1] 섹터별 특수 좀비 계단식 순차 해금!
-              // 1섹터(index 0): 무조건 100% 기본 감염체(WALKER)만 출현!
+              const hw = curRoom.hw || curRoom.half;
+              const hd = curRoom.hd || curRoom.half;
+              const inX = hole.x < curRoom.wx - (hw - 12) ? hole.x + 2.4 : (hole.x > curRoom.wx + (hw - 12) ? hole.x - 2.4 : hole.x);
+              const inZ = hole.z < curRoom.wz - (hd - 12) ? hole.z + 2.4 : (hole.z > curRoom.wz + (hd - 12) ? hole.z - 2.4 : hole.z);
+
+              for (let k = 0; k < packSize; k++) {
+                if (game.zombies.length >= maxSwarm) break;
+                const jitterA = (k / packSize) * Math.PI * 2 + Math.random() * 0.5;
+                const zx = Math.max(curRoom.wx - hw + 2.6, Math.min(curRoom.wx + hw - 2.6, inX + Math.cos(jitterA) * 1.6));
+                const zz = Math.max(curRoom.wz - hd + 2.6, Math.min(curRoom.wz + hd - 2.6, inZ + Math.sin(jitterA) * 1.6));
+
+                // [v3.1] 섹터별 특수 좀비 계단식 순차 해금!
+                // 1섹터(index 0): 무조건 100% 기본 감염체(WALKER)만 출현!
+                // 2섹터(index 1): 러너 합류 | 3섹터(index 2): 스핏터·부머 합류 | 4~5섹터: 골리앗 합류 | 6섹터+: 블러드 데빌 합류
+                const roll = Math.random();
+                const sIdx = game.currentRoomIndex;
+                let zType = "WALKER";
+                if (sIdx === 0) {
+                  zType = "WALKER";
+                } else if (sIdx === 1) {
+                  if (roll < 0.28) zType = "RUNNER";
+                } else if (sIdx === 2) {
+                  if (roll < 0.22) zType = "RUNNER";
+                  else if (roll < 0.38) zType = "SPITTER";
+                  else if (roll < 0.50) zType = "BOOMER";
+                } else if (sIdx <= 4) {
+                  if (roll < 0.22) zType = "RUNNER";
+                  else if (roll < 0.38) zType = "SPITTER";
+                  else if (roll < 0.52) zType = "BOOMER";
+                  else if (roll < 0.66) zType = "GOLIATH";
+                } else {
+                  if (roll < 0.22) zType = "RUNNER";
+                  else if (roll < 0.38) zType = "SPITTER";
+                  else if (roll < 0.52) zType = "BOOMER";
+                  else if (roll < 0.68) zType = "GOLIATH";
+                  else if (roll < 0.82) zType = "DEVIL";
+                }
+
+                const zSpawned = spawnZombie(zType, zx, zz, curRoom.index);
+                if (curRoom.berserkActive && zSpawned) {
+                  zSpawned.berserkEnraged = true;
+                  zSpawned.speed *= 1.35;
+                  if (zSpawned.skinMat) {
+                    zSpawned.skinMat.emissive.setHex(0xef4444);
+                    zSpawned.skinMat.emissiveIntensity = 0.85;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
               // 2섹터(index 1): 러너 합류 | 3섹터(index 2): 스핏터·부머 합류 | 4~5섹터: 골리앗 합류 | 6섹터+: 블러드 데빌 합류
               const roll = Math.random();
               const sIdx = game.currentRoomIndex;
@@ -1660,6 +1725,10 @@
             const z = game.zombies[zi];
             if (Math.hypot(z.x - fp.x, z.z - fp.z) <= fp.radius) {
               damageZombie(zi, Math.round(fp.dps * 0.35), 0, 0, fp.isCryo ? 0.65 : 0.15, fp.wIdx || 1);
+              if (fp.isCryo && z) {
+                z.freezeTimer = Math.max(z.freezeTimer || 0, 1.8);
+                if (z.iceBlock) z.iceBlock.visible = true;
+              }
             }
           }
         }
@@ -1684,6 +1753,20 @@
             damageZombie(i, z.burnDps || 18, 0, 0, 0.05, 1);
             if (game.zombies.length < prevLen || !game.zombies[i]) continue;
           }
+        }
+
+        // [v3.1 극저온 완전 빙결 처리]
+        if ((z.freezeTimer || 0) > 0) {
+          z.freezeTimer -= dt;
+          if (z.iceBlock) z.iceBlock.visible = true;
+          z.group.position.set(z.x, 0, z.z);
+          if (z.freezeTimer <= 0) {
+            if (z.iceBlock) z.iceBlock.visible = false;
+            if (typeof spawnIceShatterFX === "function") spawnIceShatterFX(z.x, z.z, 5);
+          }
+          continue;
+        } else if (z.iceBlock && z.iceBlock.visible) {
+          z.iceBlock.visible = false;
         }
 
         if (z.stunTimer > 0) {
@@ -2118,37 +2201,8 @@
         if (!removeBullet && !b.isZombieProjectile) {
           for (let br = game.barrels.length - 1; br >= 0; br--) {
             const barrel = game.barrels[br];
-            if (Math.hypot(barrel.x - b.x, barrel.z - b.z) < barrel.radius + 0.4) {
-              entitiesGroup.remove(barrel.group);
-              game.barrels.splice(br, 1);
-              const expRad = 6.2 + barrel.areaLv * 1.1;
-              triggerExplosion(barrel.x, barrel.z, expRad, Math.round(240 * (barrel.dmgMult || 1)), b.ownerId, barrel.awakened, 1, false);
-              if (barrel.tier1Special || barrel.awakened) {
-                game.zombies.forEach(z => {
-                  if (Math.hypot(z.x - barrel.x, z.z - barrel.z) <= 5.5) z.stunTimer = Math.max(z.stunTimer, barrel.awakened ? 3.5 : 2.5);
-                });
-                if (barrel.awakened) {
-                  // [v3.2 특수개조 구현] 적색 폭약통 30Lv: 폭발 지점에 5초간 극저온 빙결·산성 장판 생성!
-                  const cRad = 4.6 + barrel.areaLv * 0.4;
-                  const cMesh = new THREE.Mesh(
-                    new THREE.CircleGeometry(cRad, 22),
-                    new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.52 })
-                  );
-                  cMesh.rotation.x = -Math.PI / 2;
-                  cMesh.position.set(barrel.x, 0.06, barrel.z);
-                  effectsGroup.add(cMesh);
-                  game.flamePools.push({
-                    x: barrel.x,
-                    z: barrel.z,
-                    radius: cRad,
-                    dps: Math.round(110 * (barrel.dmgMult || 1)),
-                    life: 5.0,
-                    isCryo: true,
-                    wIdx: 7,
-                    mesh: cMesh
-                  });
-                }
-              }
+            if (Math.hypot(barrel.x - b.x, barrel.z - b.z) < barrel.radius + 0.45) {
+              detonateCryoBarrel(barrel, b.ownerId);
               removeBullet = true;
               break;
             }
