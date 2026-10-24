@@ -156,11 +156,11 @@
       gunMesh.position.set(0.55, 1.18, 0.48);
       group.add(gunMesh);
 
-      // [v3.2 리얼 호러 전술 손전등] 전방 60도 피자조각 집중 조명 (THREE.SpotLight) + 등 뒤 완전 암전
-      const flashLight = new THREE.SpotLight(0xfffbeb, 0.0, 38, Math.PI / 6, 0.35, 1.15);
-      flashLight.position.set(0, 1.75, 0.3);
+      // [v3.4 리얼 호러 전술 손전등] 전방 집중 탐조등 (THREE.SpotLight) + 등 뒤 완전 암전
+      const flashLight = new THREE.SpotLight(0xfffbeb, 0.0, 42, Math.PI / 4.6, 0.45, 1.15);
+      flashLight.position.set(0, 1.65, 0.35);
       const spotTarget = new THREE.Object3D();
-      spotTarget.position.set(0, 0.8, 16);
+      spotTarget.position.set(0, 0.5, 24);
       group.add(spotTarget);
       flashLight.target = spotTarget;
       flashLight.visible = false;
@@ -172,13 +172,19 @@
       footLight.visible = false;
       group.add(footLight);
 
-      // 먼지 낀 공기를 가르는 입체 손전등 빔 원뿔 메쉬 (Additive Blending)
+      // 손전등 광원 원뿔 (피자 조각 꼭짓점이 캐릭터(z=0)를 향하고 전방(+z)으로 넓어지도록 교정; 테두리 메쉬는 비표시)
       const coneGeo = new THREE.ConeGeometry(5.2, 24, 20, 1, true);
-      coneGeo.rotateX(Math.PI / 2);
+      coneGeo.rotateX(-Math.PI / 2);
       coneGeo.translate(0, 0, 12);
       const flashCone = new THREE.Mesh(
         coneGeo,
-        new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+        new THREE.MeshBasicMaterial({
+          color: 0xfef08a,
+          transparent: true,
+          opacity: 0.0,
+          depthWrite: false,
+          visible: false
+        })
       );
       flashCone.position.set(0, 1.2, 0.3);
       flashCone.visible = false;

@@ -135,7 +135,20 @@
       game.comboCount = 0;
       game.totalRevives = (restoredData && restoredData.totalRevives) || 0;
       game.totalFriendlyFireDmg = 0;
+      game.collapseState = { active: false, roomIndex: -1, timer: 0 };
       camInitialized = false;
+
+      // 이전 세션의 잔류 알림 배너 및 타이머 완전 초기화
+      const collapseBanner = document.getElementById("hud-collapse-banner");
+      if (collapseBanner) collapseBanner.classList.add("hidden");
+      const collapseMsg = document.getElementById("hud-collapse-msg");
+      if (collapseMsg) collapseMsg.textContent = "";
+      const collapseTimer = document.getElementById("hud-collapse-timer");
+      if (collapseTimer) collapseTimer.textContent = "";
+      const safeBanner = document.getElementById("hud-safe-banner");
+      if (safeBanner) safeBanner.classList.add("hidden");
+      const safeText = document.getElementById("hud-safe-banner-text");
+      if (safeText) safeText.textContent = "";
 
       document.getElementById("hud-seed-label").textContent = "#" + game.seed;
       document.getElementById("hud-ff-badge").textContent = game.friendlyFire ? "ON" : "OFF";
@@ -268,6 +281,18 @@
     function finishGameSession(victory) {
       game.running = false;
       clearSavedGameSession();
+      game.collapseState = { active: false, roomIndex: -1, timer: 0 };
+      const collapseBanner = document.getElementById("hud-collapse-banner");
+      if (collapseBanner) collapseBanner.classList.add("hidden");
+      const collapseMsg = document.getElementById("hud-collapse-msg");
+      if (collapseMsg) collapseMsg.textContent = "";
+      const collapseTimer = document.getElementById("hud-collapse-timer");
+      if (collapseTimer) collapseTimer.textContent = "";
+      const safeBanner = document.getElementById("hud-safe-banner");
+      if (safeBanner) safeBanner.classList.add("hidden");
+      const safeText = document.getElementById("hud-safe-banner-text");
+      if (safeText) safeText.textContent = "";
+
       const modal = document.getElementById("result-modal");
       const badge = document.getElementById("result-badge");
       const title = document.getElementById("result-title");
@@ -302,6 +327,18 @@
     function returnToWaitingRoomLobby() {
       game.running = false;
       clearSavedGameSession();
+      game.collapseState = { active: false, roomIndex: -1, timer: 0 };
+      const collapseBanner = document.getElementById("hud-collapse-banner");
+      if (collapseBanner) collapseBanner.classList.add("hidden");
+      const collapseMsg = document.getElementById("hud-collapse-msg");
+      if (collapseMsg) collapseMsg.textContent = "";
+      const collapseTimer = document.getElementById("hud-collapse-timer");
+      if (collapseTimer) collapseTimer.textContent = "";
+      const safeBanner = document.getElementById("hud-safe-banner");
+      if (safeBanner) safeBanner.classList.add("hidden");
+      const safeText = document.getElementById("hud-safe-banner-text");
+      if (safeText) safeText.textContent = "";
+
       document.getElementById("result-modal").classList.add("hidden");
       document.getElementById("upgrade-modal").classList.add("hidden");
       document.getElementById("settings-modal").classList.add("hidden");

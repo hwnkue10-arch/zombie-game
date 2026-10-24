@@ -805,11 +805,11 @@
       const armoryBanner = document.getElementById("upg-armory-status");
       if (armoryBanner) {
         if (nearArmory) {
-          armoryBanner.className = "h-9 px-3 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-xs font-bold text-emerald-200 flex items-center truncate";
-          armoryBanner.textContent = `🟢 상시 무기고 연결됨 [R] — 현재 섹터(${game.currentRoomIndex + 1}섹터) 총 레벨 상한: Lv.${maxTotalHere}/50 (각 스탯 최대 Lv.10까지 자유 강화)`;
+          armoryBanner.className = "h-9 px-3 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-xs font-bold text-emerald-200 flex items-center whitespace-normal break-keep";
+          armoryBanner.textContent = `🟢 무기고 연결됨 [R] — S${game.currentRoomIndex + 1} 총 상한: Lv.${maxTotalHere}/50 (스탯당 최대 Lv.10 자유 강화)`;
         } else {
-          armoryBanner.className = "h-9 px-3 rounded-xl bg-rose-950/90 border border-rose-400/50 text-xs font-bold text-rose-200 flex items-center truncate";
-          armoryBanner.textContent = `🔴 무기고 반경 밖 — 외벽 [🔧상시무기고] 앞(6.8m)에서 언제든 강화·구매 가능 [R] (현재 상한 Lv.${maxTotalHere}/50)`;
+          armoryBanner.className = "h-9 px-3 rounded-xl bg-rose-950/90 border border-rose-400/50 text-xs font-bold text-rose-200 flex items-center whitespace-normal break-keep";
+          armoryBanner.textContent = `🔴 무기고 반경 밖 — 외벽 [🔧상시무기고] 앞(6.8m) 이용 가능 [R] (상한 Lv.${maxTotalHere}/50)`;
         }
       }
 

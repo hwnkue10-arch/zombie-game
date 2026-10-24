@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>BOXHEAD: THE CORE v3.3 — 우지/소총 차별화 · 슈트 카테고리화 & 시각 피드백 · 멀티플레이 동기화 완결판</title>
+  <title>BOXHEAD: THE CORE v3.4 — 테르밋 장판/위험구역 최적화 & 블랙아웃 조명 및 HUD 가독성 개선</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
@@ -25,16 +25,16 @@
   <div id="ingame-hud" class="hidden fixed inset-0 z-20 pointer-events-none flex flex-col justify-between p-3 sm:p-4">
 
     <!-- Top Floating Notification Banners (Out of normal layout flow -> ZERO UI shift when appearing!) -->
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2 pointer-events-none w-full max-w-xl px-4">
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2 pointer-events-none w-full max-w-2xl px-4">
       <div id="hud-collapse-banner" class="hidden hud-glass-red rounded-2xl px-4 py-2.5 w-full text-center animate-danger shadow-2xl">
-        <div class="text-xs sm:text-sm font-extrabold text-rose-100 flex items-center justify-between gap-3 overflow-hidden">
-          <span id="hud-collapse-msg" class="truncate flex-1 min-w-0 text-left">⚠️ 섹터 붕괴 진행 중 — 열린 통로로 즉시 탈출하세요!</span>
+        <div class="text-xs sm:text-sm font-extrabold text-rose-100 flex items-center justify-between gap-3">
+          <span id="hud-collapse-msg" class="flex-1 min-w-0 text-left whitespace-normal break-keep">⚠️ 섹터 붕괴 진행 중 — 열린 통로로 즉시 탈출하세요!</span>
           <span id="hud-collapse-timer" class="font-mono-code text-xs sm:text-sm font-black text-amber-300 shrink-0 text-right whitespace-nowrap">18.0s</span>
         </div>
       </div>
 
       <div id="hud-safe-banner" class="hidden hud-glass rounded-2xl px-4 py-2.5 w-full text-center border border-emerald-400/50 shadow-2xl">
-        <span id="hud-safe-banner-text" class="text-xs sm:text-sm font-bold text-emerald-200 block truncate">✅ 통로 개방 완료</span>
+        <span id="hud-safe-banner-text" class="text-xs sm:text-sm font-bold text-emerald-200 block whitespace-normal break-keep">✅ 통로 개방 완료</span>
       </div>
     </div>
 
@@ -380,7 +380,7 @@
         <div>
           <div class="flex items-center gap-2">
             <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white uppercase">4-PLAYER CO-OP</span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">v3.3 OVERHAUL · 우지/소총전술특화 · 슈트범주화 & 테두리발광 · 멀티동기화완결</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">v3.4 OVERHAUL · 테르밋 바닥위험장판 & 블랙아웃 조명/피자원뿔 교정 · 알림메시지 최적화</span>
           </div>
           <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
             BOXHEAD : <span class="text-red-500">THE CORE</span>

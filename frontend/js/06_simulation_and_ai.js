@@ -146,42 +146,69 @@
           door.thermiteLedMesh = ledMesh;
           door.thermiteCanMat = canMat;
 
-          // 4) 바닥 폭발 위험 반경(8.5m) 경고 링 & 반투명 위험 구역 원판
+          // 4) 바닥 폭발 위험 반경(6.2m) 고시인성 경고 장판 (방 내부 방향으로 정확히 정렬)
+          const blastRadius = 6.2;
+          const hX = door.x + (door.inNormX || 0) * 1.5;
+          const hZ = door.z + (door.inNormZ || 0) * 1.5;
+
           const dzGroup = new THREE.Group();
+          // 외곽 점멸 경고 링
+          const outerRingMat = new THREE.MeshBasicMaterial({
+            color: 0xef4444,
+            transparent: true,
+            opacity: 0.9,
+            side: THREE.DoubleSide
+          });
           const outerRing = new THREE.Mesh(
-            new THREE.RingGeometry(8.15, 8.55, 40),
-            new THREE.MeshBasicMaterial({
-              color: 0xef4444,
-              transparent: true,
-              opacity: 0.85,
-              side: THREE.DoubleSide
-            })
+            new THREE.RingGeometry(blastRadius - 0.35, blastRadius + 0.15, 48),
+            outerRingMat
           );
           outerRing.rotation.x = -Math.PI / 2;
           outerRing.position.y = 0.08;
           dzGroup.add(outerRing);
 
+          // 내부 빗살/보조 위험 링
+          const midRingMat = new THREE.MeshBasicMaterial({
+            color: 0xf59e0b,
+            transparent: true,
+            opacity: 0.75,
+            side: THREE.DoubleSide
+          });
+          const midRing = new THREE.Mesh(
+            new THREE.RingGeometry(blastRadius * 0.55 - 0.2, blastRadius * 0.55 + 0.2, 36),
+            midRingMat
+          );
+          midRing.rotation.x = -Math.PI / 2;
+          midRing.position.y = 0.07;
+          dzGroup.add(midRing);
+
+          // 바닥 붉은 위험 반투명 원판
           const innerDiscMat = new THREE.MeshBasicMaterial({
             color: 0xef4444,
             transparent: true,
-            opacity: 0.16,
+            opacity: 0.28,
             side: THREE.DoubleSide
           });
-          const innerDisc = new THREE.Mesh(new THREE.CircleGeometry(8.5, 40), innerDiscMat);
+          const innerDisc = new THREE.Mesh(new THREE.CircleGeometry(blastRadius, 48), innerDiscMat);
           innerDisc.rotation.x = -Math.PI / 2;
           innerDisc.position.y = 0.06;
           dzGroup.add(innerDisc);
 
-          dzGroup.position.set(door.x, 0, door.z);
+          dzGroup.position.set(hX, 0, hZ);
           effectsGroup.add(dzGroup);
           door.dangerZoneGroup = dzGroup;
           door.dangerDiscMat = innerDiscMat;
+          door.dangerOuterMat = outerRingMat;
+          door.dangerMidMat = midRingMat;
+          door.blastRadius = blastRadius;
+          door.hazardCenterX = hX;
+          door.hazardCenterZ = hZ;
 
           const bombRef = { done: false, roomIndex: room.index };
           door.thermiteBombRef = bombRef;
           door.thermiteBombSym = registerWorldSymbol(
             door.x + offX, 3.6, door.z + offZ,
-            "🧨 테르밋 용융 폭파 중 · ⚠️반경 8.5m 폭발 위험!",
+            "🧨 테르밋 용융",
             "bg-rose-950/95 border-rose-500 text-rose-200",
             bombRef, room.index
           );
@@ -270,22 +297,24 @@
         });
       }
 
-      // 2. 폭발 반경(8.5m) 내 근접 플레이어에게 심각한 폭발 데미지(최대 85 HP) + 화상 출혈 + 강한 넉백 부여!
-      const playerBlastRadius = 8.5;
+      // 2. 바닥 위험 장판(6.2m) 내 플레이어에게만 적정 폭발 피해(최대 38 HP, 출혈 없음) & 넉백 부여
+      const hX = door.hazardCenterX !== undefined ? door.hazardCenterX : (door.x + (door.inNormX || 0) * 1.5);
+      const hZ = door.hazardCenterZ !== undefined ? door.hazardCenterZ : (door.z + (door.inNormZ || 0) * 1.5);
+      const playerBlastRadius = door.blastRadius || 6.2;
       let localHitDmg = 0;
       game.players.forEach(p => {
         if (p.downed) return;
-        const dist = Math.hypot(p.x - door.x, p.z - door.z);
+        const dist = Math.hypot(p.x - hX, p.z - hZ);
         if (dist <= playerBlastRadius) {
-          const falloff = 1 - (dist / playerBlastRadius) * 0.55; // 중심부 100%, 외곽 45%
-          const blastDmg = Math.round(85 * falloff);
-          damagePlayer(p, blastDmg, true, false);
+          const falloff = 1 - (dist / playerBlastRadius) * 0.5; // 중심부 100%, 외곽 50%
+          const blastDmg = Math.round(38 * falloff);
+          damagePlayer(p, blastDmg, false, false); // 출혈(Bleed) 없이 즉발 피해만 부여하여 급사 차단!
           if (p.id === mySlotIndex) localHitDmg = blastDmg;
 
-          // 폭발 충격파 넉백
-          const nx = (p.x - door.x) / (dist || 1);
-          const nz = (p.z - door.z) / (dist || 1);
-          const kbDist = 5.5 * falloff;
+          // 폭발 충격파 넉백 (장판 중심에서 외곽으로)
+          const nx = (p.x - hX) / (dist || 1);
+          const nz = (p.z - hZ) / (dist || 1);
+          const kbDist = 4.2 * falloff;
           const tx = p.x + nx * kbDist;
           const tz = p.z + nz * kbDist;
           if (!isPointBlockedByWall(tx, tz, 0.75)) {
@@ -299,11 +328,11 @@
         const collapseBanner = document.getElementById("hud-collapse-banner");
         if (collapseBanner) {
           document.getElementById("hud-collapse-msg").textContent =
-            `💥 테르밋 폭발 반경에 휘말려 심각한 화상 피해를 입었습니다! (-${localHitDmg} HP)`;
+            `💥 테르밋 폭발 피해 (-${localHitDmg} HP)`;
           collapseBanner.classList.remove("hidden");
           setTimeout(() => {
             if (!game.collapseState.active) collapseBanner.classList.add("hidden");
-          }, 4200);
+          }, 2800);
         }
       }
 
@@ -390,7 +419,7 @@
         room.collapsing = true;
         game.collapseState = { active: true, roomIndex: room.index, timer: 24.0 };
         if (collapseBanner) {
-          document.getElementById("hud-collapse-msg").textContent = "⚠️ 구역 붕괴 카운트다운! 탈출로로 전력 질주하세요!";
+          document.getElementById("hud-collapse-msg").textContent = "⚠️ 구역 붕괴! 탈출로로 전력 질주!";
           collapseBanner.classList.remove("hidden");
         }
         if (safeBanner) safeBanner.classList.add("hidden");
@@ -403,16 +432,16 @@
         }
       } else {
         if (room.gasWaveActive && collapseBanner) {
-          document.getElementById("hud-collapse-msg").textContent = "🚪 미션 완수! 탈출로가 개방되었습니다. 독가스를 피해 탈출하세요!";
+          document.getElementById("hud-collapse-msg").textContent = "🚪 탈출로 개방! 다음 섹터로 전진!";
           collapseBanner.classList.remove("hidden");
         } else if (collapseBanner) {
           collapseBanner.classList.add("hidden");
         }
         if (safeBanner) {
           document.getElementById("hud-safe-banner-text").textContent =
-            `✅ S${nextIdx + 1} 개방! 보너스 +${clearBonusBp}BP · ⚙️무기부품 +1개 · 탄약 보급`;
+            `✅ S${nextIdx + 1} 개방! 보너스 +${clearBonusBp}BP · 부품+1 · 탄약 보급`;
           safeBanner.classList.remove("hidden");
-          setTimeout(() => safeBanner.classList.add("hidden"), 5000);
+          setTimeout(() => safeBanner.classList.add("hidden"), 4500);
         }
       }
       updateWeaponSlotsHUD();
@@ -809,14 +838,22 @@
             }
           }
 
-          // 5) 바닥 8.5m 위험 반경 경고 링 점멸 및 카운트다운 라벨 갱신
+          // 5) 바닥 위험 반경 장판 고속 점멸 및 간결한 카운트다운 라벨
+          const pulseSpeed = 3.5 + ratio * 8.5;
+          const pulseAlpha = 0.22 + Math.abs(Math.sin(game.elapsedTime * pulseSpeed)) * 0.35;
           if (curExitDoor.dangerDiscMat) {
-            curExitDoor.dangerDiscMat.opacity = 0.11 + Math.abs(Math.sin(game.elapsedTime * (3.5 + ratio * 8.5))) * 0.22;
+            curExitDoor.dangerDiscMat.opacity = remSec <= 4.0 ? (pulseAlpha + 0.25) : pulseAlpha;
+          }
+          if (curExitDoor.dangerOuterMat) {
+            curExitDoor.dangerOuterMat.opacity = remSec <= 4.0 ? (Math.sin(game.elapsedTime * 14.0) > 0 ? 1.0 : 0.3) : 0.9;
+          }
+          if (curExitDoor.dangerMidMat) {
+            curExitDoor.dangerMidMat.opacity = remSec <= 4.0 ? 0.95 : 0.65;
           }
           if (curExitDoor.thermiteBombSym && curExitDoor.thermiteBombSym.el) {
-            curExitDoor.thermiteBombSym.el.textContent = remSec <= 5.0
-              ? `🚨 폭발 임박 [${remSec.toFixed(1)}s] · 즉시 8.5m 밖으로 대피!`
-              : `🧨 테르밋 용융 중 [${remSec.toFixed(1)}s] · ⚠️반경 8.5m 폭발 위험!`;
+            curExitDoor.thermiteBombSym.el.textContent = remSec <= 4.0
+              ? `🚨 폭발 대피! [${remSec.toFixed(1)}s]`
+              : `🧨 테르밋 용융 [${remSec.toFixed(0)}s]`;
           }
         }
       }
@@ -987,14 +1024,18 @@
           SoundFX.play("explosion");
           const collapseBanner = document.getElementById("hud-collapse-banner");
           if (collapseBanner) collapseBanner.classList.add("hidden");
+          const collapseMsg = document.getElementById("hud-collapse-msg");
+          if (collapseMsg) collapseMsg.textContent = "";
+          const collapseTimerEl = document.getElementById("hud-collapse-timer");
+          if (collapseTimerEl) collapseTimerEl.textContent = "";
           if (game.collapseState) game.collapseState.active = false;
 
           const safeBanner = document.getElementById("hud-safe-banner");
           if (safeBanner) {
             document.getElementById("hud-safe-banner-text").textContent =
-              `🔒 후방 격벽 봉쇄 완료! 섹터 ${curRoom.index + 1} 무기 총 레벨 상한(총 Lv.${getSectorMaxStatLv() * 5}/50) 해금!`;
+              `🔒 후방 격벽 봉쇄! S${curRoom.index + 1} 강화 상한(총 Lv.${getSectorMaxStatLv() * 5}/50) 해금`;
             safeBanner.classList.remove("hidden");
-            setTimeout(() => safeBanner.classList.add("hidden"), 4800);
+            setTimeout(() => safeBanner.classList.add("hidden"), 4200);
           }
         }
       }
@@ -1034,7 +1075,7 @@
             const collapseBanner = document.getElementById("hud-collapse-banner");
             if (collapseBanner) {
               document.getElementById("hud-collapse-msg").textContent =
-                "☣️ 제한시간 초과! 신경 독가스 살포 & 🔥호드 광폭화! 미션을 신속히 완수하세요!";
+                "☣️ 제한시간 초과! 독가스 확산 & 호드 광폭화!";
               collapseBanner.classList.remove("hidden");
             }
           }
@@ -1070,9 +1111,9 @@
           const safeBanner = document.getElementById("hud-safe-banner");
           if (safeBanner) {
             document.getElementById("hud-safe-banner-text").textContent =
-              "⚠️ [경고] 보호 파일런 전멸! 변이 심장 '더 코어'가 완전 각성합니다!";
+              "⚠️ 보호 파일런 전멸! '더 코어' 완전 각성!";
             safeBanner.classList.remove("hidden");
-            setTimeout(() => safeBanner.classList.add("hidden"), 5000);
+            setTimeout(() => safeBanner.classList.add("hidden"), 4200);
           }
         }
       }
@@ -1151,7 +1192,11 @@
           const cRoom = game.rooms[game.collapseState.roomIndex];
           if (cRoom) executeRoomCollapse(cRoom);
           game.collapseState.active = false;
-          document.getElementById("hud-collapse-banner").classList.add("hidden");
+          const banner = document.getElementById("hud-collapse-banner");
+          if (banner) banner.classList.add("hidden");
+          const msg = document.getElementById("hud-collapse-msg");
+          if (msg) msg.textContent = "";
+          if (timerEl) timerEl.textContent = "";
         }
       }
 
@@ -1176,9 +1221,9 @@
           const safeBanner = document.getElementById("hud-safe-banner");
           if (safeBanner) {
             document.getElementById("hud-safe-banner-text").textContent =
-              "⚡ 비상 발전기 과부하 정전! 구역 조명이 다시 꺼졌습니다! (배전반을 다시 조작해 전력을 복구하세요)";
+              "⚡ 비상 발전기 과부하 정전! 배전반을 다시 조작하세요";
             safeBanner.classList.remove("hidden");
-            setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+            setTimeout(() => safeBanner.classList.add("hidden"), 4000);
           }
         }
       }
@@ -1205,17 +1250,17 @@
       game.players.forEach(p => {
         p.dashCooldown = Math.max(0, p.dashCooldown - dt);
         p.bashCooldown = Math.max(0, (p.bashCooldown || 0) - dt);
-        // [v3.2] 암전(Blackout) 상태일 때만 SpotLight 피자조각 전방 빔 + 발밑 풋라이트 점등!
+        // [v3.4] 암전 시 전방 집중 탐조등 점등 (시야 방해 테두리 메쉬 제거, 순수 조명만 투사)
         if (p.visual && p.visual.flashLight) {
           p.visual.flashLight.visible = isBlackoutNow && !p.downed;
-          p.visual.flashLight.intensity = (isBlackoutNow && !p.downed) ? 6.5 : 0.0;
+          p.visual.flashLight.intensity = (isBlackoutNow && !p.downed) ? 7.5 : 0.0;
         }
         if (p.visual && p.visual.footLight) {
           p.visual.footLight.visible = isBlackoutNow && !p.downed;
           p.visual.footLight.intensity = (isBlackoutNow && !p.downed) ? 0.35 : 0.0;
         }
         if (p.visual && p.visual.flashCone) {
-          p.visual.flashCone.visible = isBlackoutNow && !p.downed;
+          p.visual.flashCone.visible = false;
         }
         if (!p.downed && curRoom && curRoom.envType === "TOXIC_FOG" && !curRoom.envCleared && !curRoom.cleared) {
           damagePlayer(p, 1.45 * dt, false, false);
@@ -1311,9 +1356,9 @@
               const safeBanner = document.getElementById("hud-safe-banner");
               if (safeBanner) {
                 document.getElementById("hud-safe-banner-text").textContent =
-                  "🌑 비상 정전(BLACKOUT) 발생! 전술 손전등이 자동 점등됩니다 — 어둠 속 발광 안광을 경계하세요!";
+                  "⚡ 정전(BLACKOUT) 발생! 전방 손전등 자동 점등";
                 safeBanner.classList.remove("hidden");
-                setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                setTimeout(() => safeBanner.classList.add("hidden"), 4000);
               }
             }
           }
@@ -1349,17 +1394,17 @@
                 const safeBanner = document.getElementById("hud-safe-banner");
                 if (safeBanner) {
                   document.getElementById("hud-safe-banner-text").textContent =
-                    `🔓 웨이브 방어 & 잔당 소탕 성공! [${curRoom.unlockStage}단계 목표(${dirHint})] & 🔧전술 무기고 출현!`;
+                    `🔓 웨이브 방어 성공! [${curRoom.unlockStage}단계 목표] 개방 (${dirHint})`;
                   safeBanner.classList.remove("hidden");
-                  setTimeout(() => safeBanner.classList.add("hidden"), 5200);
+                  setTimeout(() => safeBanner.classList.add("hidden"), 4200);
                 }
               } else {
                 const safeBanner = document.getElementById("hud-safe-banner");
                 if (safeBanner) {
                   document.getElementById("hud-safe-banner-text").textContent =
-                    `🛡️ 소강상태(18s): 🔧무기고가 출현했습니다! 먼저 [${curRoom.unlockStage}단계 목표]를 완수하세요!`;
+                    `🛡️ 소강기(18s): [${curRoom.unlockStage}단계 목표]를 진행하세요`;
                   safeBanner.classList.remove("hidden");
-                  setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                  setTimeout(() => safeBanner.classList.add("hidden"), 3800);
                 }
               }
             }
@@ -1691,9 +1736,9 @@
                       const safeBanner = document.getElementById("hud-safe-banner");
                       if (safeBanner) {
                         document.getElementById("hud-safe-banner-text").textContent =
-                          "💡 비상 발전기 가동! 60초간 구역 조명이 복구됩니다. (과부하 방전 전까지 구역을 확보하세요!)";
+                          "💡 비상 발전기 가동! 60초간 정상 조명 유지";
                         safeBanner.classList.remove("hidden");
-                        setTimeout(() => safeBanner.classList.add("hidden"), 4200);
+                        setTimeout(() => safeBanner.classList.add("hidden"), 4000);
                       }
                     }
                     spawnMissionStageVFX(
@@ -1728,17 +1773,17 @@
                     const safeBanner = document.getElementById("hud-safe-banner");
                     if (safeBanner) {
                       document.getElementById("hud-safe-banner-text").textContent =
-                        "⚡ 냉각 반응로 과부하 완료! 중앙 생체 방어 파일런 3기가 기립합니다! (집중 사격 파괴)";
+                        "⚡ 냉각 과부하 완료! 생체 파일런 3기 파괴 (보스 일점사)";
                       safeBanner.classList.remove("hidden");
-                      setTimeout(() => safeBanner.classList.add("hidden"), 5000);
+                      setTimeout(() => safeBanner.classList.add("hidden"), 4200);
                     }
                   } else {
                     const safeBanner = document.getElementById("hud-safe-banner");
                     if (safeBanner) {
                       document.getElementById("hud-safe-banner-text").textContent =
-                        "❄️ 1번 콘솔 과부하 완료! 반대편 2번 냉각 콘솔을 과부하시키세요!";
+                        "❄️ 1번 콘솔 완료! 반대편 2번 냉각 콘솔을 가동하세요";
                       safeBanner.classList.remove("hidden");
-                      setTimeout(() => safeBanner.classList.add("hidden"), 4000);
+                      setTimeout(() => safeBanner.classList.add("hidden"), 3800);
                     }
                   }
                 }
@@ -1779,9 +1824,9 @@
                   const safeBanner = document.getElementById("hud-safe-banner");
                   if (safeBanner) {
                     document.getElementById("hud-safe-banner-text").textContent =
-                      "🔥 고열 테르밋 폭약 합성 완료! 출구 방화벽에 폭약을 부착하세요!";
+                      "🔥 테르밋 폭약 합성 완료! 출구 방화벽에 부착하세요";
                     safeBanner.classList.remove("hidden");
-                    setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                    setTimeout(() => safeBanner.classList.add("hidden"), 4000);
                   }
                 }
               } else {
@@ -1979,9 +2024,9 @@
                 const safeBanner = document.getElementById("hud-safe-banner");
                 if (safeBanner) {
                   document.getElementById("hud-safe-banner-text").textContent =
-                    "🧨 방화벽에 테르밋 폭약 부착 완료! 폭발 시 반경 8.5m 이내에 있으면 심각한 화상 피해를 입습니다!";
+                    "🧨 테르밋 설치 완료! 바닥 위험구역 밖으로 대피하세요";
                   safeBanner.classList.remove("hidden");
-                  setTimeout(() => safeBanner.classList.add("hidden"), 5000);
+                  setTimeout(() => safeBanner.classList.add("hidden"), 4200);
                 }
               }
             } else {
@@ -3260,9 +3305,9 @@
             const safeBanner = document.getElementById("hud-safe-banner");
             if (safeBanner) {
               document.getElementById("hud-safe-banner-text").textContent =
-                `📦 보급상자 개방! 전 총기 탄약 보충 + ⚙️무기 부품 1개 획득! (보유 부품: ${game.weaponParts}개)`;
+                `📦 보급상자 개방! 탄약 보급 & ⚙️무기부품 +1개 (보유: ${game.weaponParts}개)`;
               safeBanner.classList.remove("hidden");
-              setTimeout(() => safeBanner.classList.add("hidden"), 4000);
+              setTimeout(() => safeBanner.classList.add("hidden"), 3800);
             }
           }
           if (!document.getElementById("upgrade-modal").classList.contains("hidden")) renderUpgradeModal();
@@ -3280,9 +3325,9 @@
             const safeBanner = document.getElementById("hud-safe-banner");
             if (safeBanner) {
               document.getElementById("hud-safe-banner-text").textContent =
-                `🧬 [변이 코어] 직접 획득 완료! (보유 코어: ${game.coreSamples}개 — 무기고에서 15/30/45Lv 코어개조 가능)`;
+                `🧬 변이 코어 획득! (보유 코어: ${game.coreSamples}개)`;
               safeBanner.classList.remove("hidden");
-              setTimeout(() => safeBanner.classList.add("hidden"), 5500);
+              setTimeout(() => safeBanner.classList.add("hidden"), 4000);
             }
           } else {
             SoundFX.play("pickup");
