@@ -363,6 +363,31 @@
       if (room.condType === "EXTERMINATE" && (room.roomWaveCount || 1) < 2) return;
 
       room.cleared = true;
+
+      // 1. [안전 보장] 클리어 즉시 해당 방의 지향성 독가스 즉시 정지 및 비활성화 (급사 원천 차단)
+      room.gasWaveActive = false;
+      room.gasWaveProgress = 0;
+      if (room.gasMesh) room.gasMesh.visible = false;
+
+      // 2. [안전 보장] 방 내부 잔존 일반 감염체 전원 즉시 소탕 (미션 완료 후 후방 기습 끔살 원천 차단)
+      for (let i = game.zombies.length - 1; i >= 0; i--) {
+        const zmb = game.zombies[i];
+        if (zmb.roomIndex === room.index && !zmb.spec.isMidBoss) {
+          damageZombie(i, 99999, 0, 0, 1.0, 99);
+        }
+      }
+
+      // 3. [안전 보장] 방 내부 바닥 산성 장판 즉시 제거
+      game.acidPools = game.acidPools.filter(a => a.roomIndex !== room.index);
+
+      // 4. [안전 보장] 스쿼드 전원에게 4.0초간 환경/지속 피해 완전 무적 보호 버퍼 부여
+      game.players.forEach(p => {
+        p.postClearGraceTimer = 4.0;
+        if (p.drone && p.drone.modules && p.drone.modules.medi) {
+          p.drone.modules.medi.sectorRevivesUsed = 0; // 신규 섹터 진입 시 의무 드론 사용 횟수 리셋
+        }
+      });
+
       // 섹터 클리어 시 작전 성공 보너스 BP + ⚙️무기 부품 1개 확정 지급 + 해금된 전 무기에 탄약 보급!
       const clearBonusBp = 1500 + room.index * 1500;
       game.bioPoints += clearBonusBp;
@@ -377,7 +402,7 @@
       });
 
       game.wavePhase = "CALM";
-      game.waveTimer = 18.0;
+      game.waveTimer = 22.0;
       SoundFX.play("pickup");
 
       const nextIdx = room.index + 1;
@@ -389,6 +414,11 @@
           spawnMissionStageVFX(door.x, door.z, 0x10b981, 6.0, 18, false);
         }
         door.open = true;
+      }
+
+      // [2섹터 클리어 기념] 4대 작전 특성화 선택 모달 오픈!
+      if (room.index === 1) {
+        openSpecializationModal();
       }
 
       if (game.rooms[nextIdx]) {
@@ -429,34 +459,16 @@
       const collapseBanner = document.getElementById("hud-collapse-banner");
       const safeBanner = document.getElementById("hud-safe-banner");
 
-      if (Math.random() < 0.75) {
-        room.collapsing = true;
-        game.collapseState = { active: true, roomIndex: room.index, timer: 24.0 };
-        if (collapseBanner) {
-          document.getElementById("hud-collapse-msg").textContent = "⚠️ 구역 붕괴! 탈출로로 전력 질주!";
-          collapseBanner.classList.remove("hidden");
-        }
-        if (safeBanner) safeBanner.classList.add("hidden");
-        SoundFX.play("alarm");
-        if (door) {
-          for (let m = 0; m < 8; m++) {
-            const mType = m % 2 === 0 ? "RUNNER" : "WALKER";
-            spawnZombie(mType, door.x + (Math.random() - 0.5) * 8, door.z + (Math.random() - 0.5) * 8, nextIdx);
-          }
-        }
-      } else {
-        if (room.gasWaveActive && collapseBanner) {
-          document.getElementById("hud-collapse-msg").textContent = "🚪 탈출로 개방! 다음 섹터로 전진!";
-          collapseBanner.classList.remove("hidden");
-        } else if (collapseBanner) {
-          collapseBanner.classList.add("hidden");
-        }
-        if (safeBanner) {
-          document.getElementById("hud-safe-banner-text").textContent =
-            `✅ S${nextIdx + 1} 개방! 보너스 +${clearBonusBp}BP · 부품+1 · 탄약 보급`;
-          safeBanner.classList.remove("hidden");
-          setTimeout(() => safeBanner.classList.add("hidden"), 4500);
-        }
+      // 조기 구역 붕괴 및 출구 병목 감염체 기습 스폰 제거 -> 쾌적한 전진 정비 보장!
+      room.collapsing = false;
+      if (game.collapseState) game.collapseState.active = false;
+      if (collapseBanner) collapseBanner.classList.add("hidden");
+
+      if (safeBanner) {
+        document.getElementById("hud-safe-banner-text").textContent =
+          `✅ S${nextIdx + 1} 개방! 작전 성공 보너스 +${clearBonusBp}BP · 부품+1 · 탄약 보급`;
+        safeBanner.classList.remove("hidden");
+        setTimeout(() => safeBanner.classList.add("hidden"), 4500);
       }
       updateWeaponSlotsHUD();
     }
@@ -1298,6 +1310,81 @@
         p.dashActiveTimer = Math.max(0, p.dashActiveTimer - dt);
         p.stimBuffTimer = Math.max(0, p.stimBuffTimer - dt);
         p.swapOverchargeTimer = Math.max(0, p.swapOverchargeTimer - dt);
+        p.postClearGraceTimer = Math.max(0, (p.postClearGraceTimer || 0) - dt);
+        p.specCooldown = Math.max(0, (p.specCooldown || 0) - dt);
+
+        if (p.specActiveTimer > 0) {
+          p.specActiveTimer = Math.max(0, p.specActiveTimer - dt);
+          // 의무관 나노 치유 안개
+          if (p.specialization === "MEDIC" && p.healingMistActive) {
+            game.players.forEach(other => {
+              if (!other.downed && Math.hypot(other.x - p.healingMistX, other.z - p.healingMistZ) <= 5.0) {
+                other.hp = Math.min(other.maxHp, other.hp + 6.0 * dt);
+                other.bleedingTimer = 0;
+                other.acidTimer = 0;
+                other.shockTimer = 0;
+                other.frostTimer = 0;
+              }
+            });
+          }
+          if (p.specActiveTimer <= 0) {
+            p.overclockActive = false;
+            p.healingMistActive = false;
+            p.cloakActive = false;
+            if (p.visual && p.visual.body) {
+              p.visual.body.material.transparent = false;
+              p.visual.body.material.opacity = 1.0;
+            }
+          }
+        }
+        if (p.tempShield > 0 && p.specActiveTimer <= 0) {
+          p.tempShield = Math.max(0, p.tempShield - 18 * dt);
+        }
+
+        // 다목적 전술 드론 업데이트
+        if (p.drone && p.drone.modules) {
+          if (p.drone.modules.interceptor) {
+            p.drone.modules.interceptor.cooldown = Math.max(0, (p.drone.modules.interceptor.cooldown || 0) - dt);
+          }
+          if (p.drone.modules.medi) {
+            p.drone.modules.medi.cooldown = Math.max(0, (p.drone.modules.medi.cooldown || 0) - dt);
+            // 의무 드론 원격 소생 (18m 반경, 구급키트 1개 소모, 90초 쿨타임, 섹터당 최대 2회)
+            if (!p.downed && p.drone.modules.medi.cooldown <= 0 && (p.drone.modules.medi.sectorRevivesUsed || 0) < 2 && p.medkits >= 1) {
+              const downedMate = game.players.find(other => other.id !== p.id && other.downed && Math.hypot(other.x - p.x, other.z - p.z) <= 18.0);
+              if (downedMate) {
+                p.drone.modules.medi.cooldown = 90.0;
+                p.drone.modules.medi.sectorRevivesUsed = (p.drone.modules.medi.sectorRevivesUsed || 0) + 1;
+                p.medkits = Math.max(0, p.medkits - 1);
+                downedMate.downed = false;
+                downedMate.hp = 30;
+                downedMate.bleedingTimer = 0;
+                downedMate.acidTimer = 0;
+                downedMate.shockTimer = 0;
+                downedMate.frostTimer = 0;
+                downedMate.visual.body.rotation.x = 0;
+                downedMate.visual.body.position.y = 1.0;
+                downedMate.visual.head.position.set(0, 1.85, 0);
+                SoundFX.play("revive");
+                spawnBloodParticles(downedMate.x, 1.5, downedMate.z, 0x10b981, 18);
+                const safeBanner = document.getElementById("hud-safe-banner");
+                if (safeBanner) {
+                  document.getElementById("hud-safe-banner-text").textContent =
+                    `💉 [의무 드론] ${downedMate.name} 원격 소생 완료! (잔여 쿨타임 90초)`;
+                  safeBanner.classList.remove("hidden");
+                  setTimeout(() => safeBanner.classList.add("hidden"), 4000);
+                }
+              }
+            }
+          }
+        }
+
+        if (p.visual && p.visual.droneGroup) {
+          p.visual.droneGroup.position.y = 2.15 + Math.sin(Date.now() * 0.005 + p.id) * 0.08;
+          if (p.visual.droneEye) {
+            const isParryReady = (!p.drone || !p.drone.modules || !p.drone.modules.interceptor || p.drone.modules.interceptor.cooldown <= 0);
+            p.visual.droneEye.material.color.setHex(isParryReady ? 0x38bdf8 : 0xef4444);
+          }
+        }
 
         if (p.stimBuffTimer > 0) {
           p.bleedingTimer = 0;
@@ -1331,10 +1418,21 @@
           if (p.bandagingTimer <= 0) {
             const hasSyr = isPlayerSyringeUpgraded(p);
             p.medkits = Math.max(0, p.medkits - 1);
-            p.hp = Math.min(p.maxHp, p.hp + (hasSyr ? 80 : 65));
+            const healVal = hasSyr ? 80 : 65;
+            p.hp = Math.min(p.maxHp, p.hp + healVal);
             p.bleedingTimer = 0;
             if (hasSyr) p.acidTimer = 0;
             SoundFX.play("revive");
+            // [의무관 패시브] 치료 완료 시 4m 내 아군에게 회복량 25% 공유
+            if (p.specialization === "MEDIC") {
+              game.players.forEach(other => {
+                if (other.id !== p.id && !other.downed && Math.hypot(other.x - p.x, other.z - p.z) <= 4.0) {
+                  other.hp = Math.min(other.maxHp, other.hp + Math.round(healVal * 0.25));
+                  other.bleedingTimer = 0;
+                  spawnBloodParticles(other.x, 1.2, other.z, 0x10b981, 6);
+                }
+              });
+            }
           }
         }
 
@@ -2330,8 +2428,16 @@
                 interactBar.style.width = "0%";
               }
             } else {
-              interactTitle.textContent = "🔧 무기고 정비구역 — [B / T / U] 강화·탄약보급";
+              interactTitle.textContent = "🛠️ [F] 전진 무기고 정비 단말기 열기";
               interactBar.style.width = "100%";
+              if (holdingF) {
+                if (!p.fArmoryHeld) {
+                  p.fArmoryHeld = true;
+                  toggleUpgradeModal();
+                }
+              } else {
+                p.fArmoryHeld = false;
+              }
             }
           } else if (nearDecon) {
             showPrompt = true;
@@ -2359,7 +2465,8 @@
 
           if (p.dashActiveTimer > 0) {
             p.isSprinting = false;
-            moveEntityWithCollision(p, p.dashDirX * 22.0 * dt, p.dashDirZ * 22.0 * dt, 0.55, true);
+            const leapSpd = 22.0 * (p.specialization === "SCOUT" ? 1.25 : 1.0); // 척후병 점프 도약 비거리 +25%
+            moveEntityWithCollision(p, p.dashDirX * leapSpd * dt, p.dashDirZ * leapSpd * dt, 0.55, true);
           } else if (p.revivingTargetId === null) {
             let mx = 0, mz = 0;
             if (keys["KeyW"] || touchMove.w) mz -= 1;
@@ -2369,6 +2476,7 @@
 
             const isMoving = (mx !== 0 || mz !== 0);
             const holdingShift = !!(keys["ShiftLeft"] || keys["ShiftRight"] || window.touchSprintShift);
+            const scoutRegenMult = (p.specialization === "SCOUT") ? 1.50 : 1.0; // 척후병 스태미너 회복속도 +50%
             if (!p.downed && isMoving && holdingShift && (p.stamina > 0 || p.stimBuffTimer > 0) && (p.staminaExhaustTimer || 0) <= 0) {
               p.isSprinting = true;
               if (p.stimBuffTimer <= 0) {
@@ -2379,10 +2487,12 @@
               }
             } else {
               p.isSprinting = false;
-              p.stamina = Math.min(maxStam, p.stamina + regenStam * dt);
+              p.stamina = Math.min(maxStam, p.stamina + regenStam * scoutRegenMult * dt);
             }
 
             let moveSpeed = p.downed ? 2.5 : 9.2;
+            if (p.specialization === "SCOUT") moveSpeed *= 1.15; // 척후병 기본 이동속도 +15%
+            if (p.cloakActive) moveSpeed *= 1.20; // 척후병 은신 가동 중 이동속도 +20%
             // 나노 주사기 개조 시에는 자가 치료 중에도 이동속도 감속이 전혀 없음!
             if (p.bandagingTimer > 0 && !isPlayerSyringeUpgraded(p)) moveSpeed *= 0.42;
             if (p.carryingPayload) moveSpeed *= 0.78;
@@ -2401,10 +2511,26 @@
               moveEntityWithCollision(p, (mx / mLen) * moveSpeed * dt, (mz / mLen) * moveSpeed * dt, 0.55);
               p.rotY = Math.atan2(mx, mz);
               p.walkCycle += dt * (p.isSprinting ? 17 : 12);
+
+              // [선봉장 패시브] 일반 감염체 몸싸움 밀치기 돌파 (포위 갇힘 방지)
+              if (p.specialization === "JUGGERNAUT") {
+                game.zombies.forEach(z => {
+                  if (!z.spec.isMidBoss && !z.spec.isGoliath) {
+                    const zdx = z.x - p.x;
+                    const zdz = z.z - p.z;
+                    const zDist = Math.hypot(zdx, zdz);
+                    if (zDist < 1.05 && zDist > 0.01) {
+                      z.x += (zdx / zDist) * 1.5;
+                      z.z += (zdz / zDist) * 1.5;
+                    }
+                  }
+                });
+              }
             }
           } else {
             p.isSprinting = false;
-            p.stamina = Math.min(maxStam, p.stamina + regenStam * dt);
+            const scoutRegenMult = (p.specialization === "SCOUT") ? 1.50 : 1.0;
+            p.stamina = Math.min(maxStam, p.stamina + regenStam * scoutRegenMult * dt);
           }
 
           if (p.revivingTargetId === null && (p.bandagingTimer <= 0 || isPlayerSyringeUpgraded(p))) {
@@ -3390,7 +3516,23 @@
 
           if (!removeBullet && game.friendlyFire && !b.noFriendlyFire) {
             for (const pl of game.players) {
-              if (pl.id !== b.ownerId && !pl.downed && Math.hypot(pl.x - b.x, pl.z - b.z) < 0.65) {
+              if (pl.id !== b.ownerId && !pl.downed && Math.hypot(pl.x - b.x, pl.z - b.z) < 0.75) {
+                // [다목적 전술 드론: 탄약 요격 방어 모듈] 아군 오사 탄환을 착탄 직전 레이저로 즉시 요격 소멸!
+                if (pl.drone && pl.drone.modules && pl.drone.modules.interceptor && (pl.drone.modules.interceptor.cooldown || 0) <= 0) {
+                  const intLv = pl.drone.modules.interceptor.level || 1;
+                  const cdTable = [0, 6.0, 3.5, 1.8, 0.6];
+                  pl.drone.modules.interceptor.cooldown = cdTable[intLv] || 6.0;
+                  removeBullet = true;
+                  SoundFX.play("pickup");
+                  spawnBloodParticles(b.x, 1.2, b.z, 0x38bdf8, 8); // Cyan laser parry sparks
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent = `⚡ [요격 드론] 팀킬 탄환 레이저 요격 방어!`;
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 1800);
+                  }
+                  break;
+                }
                 if (b.explosiveRadius > 0) {
                   triggerExplosion(b.x, b.z, b.explosiveRadius, b.damage, b.ownerId, b.awakened, 0, b.tier1Special);
                 } else {
@@ -3563,6 +3705,26 @@
         }
       }
 
+      // [다목적 전술 드론: 자력 수거 모듈] 주변 아이템(탄약, 회복약, 스팀팩, 부품, 코어)을 플레이어에게 자동 견인!
+      game.players.forEach(p => {
+        if (p.downed || !p.drone || !p.drone.modules || !p.drone.modules.magnet) return;
+        const magLv = p.drone.modules.magnet.level || 1;
+        const magRadius = [0, 4.0, 6.0, 8.0, 10.0][magLv] || 4.0;
+        game.pickups.forEach(pk => {
+          const dist = Math.hypot(p.x - pk.x, p.z - pk.z);
+          if (dist <= magRadius && dist > 0.35) {
+            const pullSpd = 13.5;
+            pk.x += ((p.x - pk.x) / dist) * pullSpd * dt;
+            pk.z += ((p.z - pk.z) / dist) * pullSpd * dt;
+            if (pk.mesh) pk.mesh.position.set(pk.x, pk.mesh.position.y, pk.z);
+            if (pk.sym) {
+              pk.sym.x = pk.x;
+              pk.sym.z = pk.z;
+            }
+          }
+        });
+      });
+
       for (let i = game.pickups.length - 1; i >= 0; i--) {
         const pk = game.pickups[i];
         pk.mesh.rotation.y += dt * 2.5;
@@ -3584,6 +3746,7 @@
             else if (pk.kind === "STIM") tp.stims = Math.min(getPlayerMaxStims(tp), tp.stims + 1);
             else if (pk.kind === "PART") game.weaponParts = (game.weaponParts || 0) + 1;
             else {
+              const strikerMult = (tp.specialization === "STRIKER") ? 1.35 : 1.0; // 돌격수 탄약팩 획득량 +35%
               if (pk.wIdx !== undefined && tp.inventory[pk.wIdx]) {
                 // 특정 무기 전용 탄약팩 습득: 해당 무기만 보충
                 const targetW = pk.wIdx;
@@ -3591,7 +3754,7 @@
                 const maxA = getWeaponMaxAmmo(tp, targetW);
                 const packRatio = (targetW === 2 || targetW === 3) ? 0.75 : 0.6;
                 const bonus = (targetW === 2 ? (WEAPONS[2].ammoRefillBonus || 1.5) : 1.0);
-                const gained = Math.ceil(WEAPONS[targetW].packAmmo * packRatio * bonus);
+                const gained = Math.ceil(WEAPONS[targetW].packAmmo * packRatio * bonus * strikerMult);
                 if (inv.ammo >= maxA) {
                   // [v3.3] 만석 시 바닥에 라벨이 방치되는 현상 원천 해결: 20 BP로 자동 환전 흡수!
                   game.bioPoints = (game.bioPoints || 0) + 20;
@@ -3607,7 +3770,7 @@
                     if (inv.ammo < maxA) anyRefilled = true;
                     const packRatio = (wIdx === 2 || wIdx === 3) ? 0.75 : 0.5;
                     const bonus = (wIdx === 2 ? (WEAPONS[2].ammoRefillBonus || 1.5) : 1.0);
-                    inv.ammo = Math.min(maxA, inv.ammo + Math.ceil(WEAPONS[wIdx].packAmmo * packRatio * bonus));
+                    inv.ammo = Math.min(maxA, inv.ammo + Math.ceil(WEAPONS[wIdx].packAmmo * packRatio * bonus * strikerMult));
                   }
                 });
                 if (!anyRefilled) {

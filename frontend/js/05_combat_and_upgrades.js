@@ -100,8 +100,9 @@
       const me = game.players[mySlotIndex];
       if (!me) return;
 
-      if (code === "KeyR" || code === "KeyB" || code === "KeyU" || code === "KeyT") {
-        toggleUpgradeModal();
+      if (code === "KeyC") {
+        if (e.repeat) return;
+        triggerSpecializationActive(me);
         return;
       }
       if (code === "KeyO") {
@@ -109,11 +110,22 @@
         if (sm) sm.classList.toggle("hidden");
         return;
       }
-      if (code === "Escape") {
-        document.getElementById("upgrade-modal").classList.add("hidden");
+      if (code === "Escape" || code === "KeyU") {
+        const um = document.getElementById("upgrade-modal");
+        if (um && !um.classList.contains("hidden")) {
+          um.classList.add("hidden");
+          return;
+        }
         const sm = document.getElementById("settings-modal");
-        if (sm) sm.classList.add("hidden");
-        return;
+        if (sm && !sm.classList.contains("hidden")) {
+          sm.classList.add("hidden");
+          return;
+        }
+        const spm = document.getElementById("spec-modal");
+        if (spm && !spm.classList.contains("hidden") && me.specialization) {
+          spm.classList.add("hidden");
+          return;
+        }
       }
 
       if (code === "KeyZ") {
@@ -816,10 +828,10 @@
       if (armoryBanner) {
         if (nearArmory) {
           armoryBanner.className = "h-9 px-3 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-xs font-bold text-emerald-200 flex items-center whitespace-normal break-keep";
-          armoryBanner.textContent = `🟢 무기고 연결됨 [R] — S${game.currentRoomIndex + 1} 총 상한: Lv.${maxTotalHere}/50 (스탯당 최대 Lv.10 자유 강화)`;
+          armoryBanner.textContent = `🟢 무기고 단말기 연결됨 [F] — S${game.currentRoomIndex + 1} 총 상한: Lv.${maxTotalHere}/50 (스탯당 최대 Lv.10 자유 강화)`;
         } else {
           armoryBanner.className = "h-9 px-3 rounded-xl bg-rose-950/90 border border-rose-400/50 text-xs font-bold text-rose-200 flex items-center whitespace-normal break-keep";
-          armoryBanner.textContent = `🔴 무기고 반경 밖 — 외벽 [🔧상시무기고] 앞(6.8m) 이용 가능 [R] (상한 Lv.${maxTotalHere}/50)`;
+          armoryBanner.textContent = `🔴 무기고 반경 밖 — 외벽 [🛠️무기고] 단말기 앞(6.8m)에서 [F]로 이용 가능 (상한 Lv.${maxTotalHere}/50)`;
         }
       }
 
@@ -993,6 +1005,93 @@
           btn.addEventListener("click", () => {
             const sKey = btn.getAttribute("data-suit-upg");
             upgradePlayerSuitStat(me, sKey);
+          });
+        });
+      }
+
+      // ==================== 1b) 다목적 전술 드론 모듈 강화 그리드 렌더링 ====================
+      const droneGrid = document.getElementById("upgrade-drone-grid");
+      if (droneGrid) {
+        droneGrid.innerHTML = "";
+        if (!me.drone) {
+          me.drone = {
+            unlocked: true,
+            modules: {
+              magnet: { level: 1, maxLevel: 4 },
+              medi: { level: 1, maxLevel: 1, cooldown: 0, maxCooldown: 90.0, sectorRevivesUsed: 0 },
+              interceptor: { level: 1, maxLevel: 4, cooldown: 0 }
+            }
+          };
+        }
+        const modules = [
+          {
+            key: "magnet",
+            name: "🧲 자력 수거 모듈",
+            curLv: me.drone.modules.magnet.level || 1,
+            maxLv: 4,
+            costs: [0, 0, 800, 1600, 2800],
+            desc: "바닥의 탄약팩·부품·코어·회복약을 자석처럼 자동 견인 수거합니다.",
+            getStat: (lv) => `수거 반경: ${[0, 4.0, 6.0, 8.0, 10.0][lv]}m`
+          },
+          {
+            key: "interceptor",
+            name: "🛡️ 탄약 요격 방어 모듈",
+            curLv: me.drone.modules.interceptor.level || 1,
+            maxLv: 4,
+            costs: [0, 0, 1000, 2000, 3500],
+            desc: "아군 오사(팀킬) 탄환이 플레이어에게 닿기 직전 고에너지 레이저로 즉시 요격 소멸시킵니다.",
+            getStat: (lv) => `요격 쿨타임: ${[0, 6.0, 3.5, 1.8, 0.6][lv]}s`
+          },
+          {
+            key: "medi",
+            name: "💉 의무 나노 원격 소생",
+            curLv: 1,
+            maxLv: 1,
+            costs: [0, 0],
+            desc: "다운된 아군 발생 시 자동 비행하여 원격 소생 진행 (HP 30 회복 & 독가스/산성/출혈 치료).",
+            getStat: () => `쿨 90s · 구급키트 1개 소모 · 섹터당 2회`
+          }
+        ];
+
+        modules.forEach(m => {
+          const isMax = m.curLv >= m.maxLv;
+          const cost = isMax ? 0 : (m.costs[m.curLv + 1] || 1000);
+          const canUpg = nearArmory && !isMax && game.bioPoints >= cost;
+          const dCard = document.createElement("div");
+          dCard.className = "rounded-2xl p-2.5 border border-indigo-500/40 bg-slate-950/70 flex flex-col justify-between gap-2";
+          dCard.innerHTML = `
+            <div>
+              <div class="flex items-center justify-between pb-1 border-b border-slate-800">
+                <span class="text-xs font-black text-indigo-300">${m.name}</span>
+                <span class="text-[10px] font-mono-code font-bold px-1.5 py-0.5 rounded ${isMax ? "bg-amber-950 text-amber-300" : "bg-indigo-950 text-indigo-300"}">
+                  ${isMax ? "MAX Lv." + m.maxLv : "Lv." + m.curLv + " / " + m.maxLv}
+                </span>
+              </div>
+              <div class="text-[11px] font-mono-code font-bold text-emerald-400 mt-1">${m.getStat(m.curLv)}</div>
+              <div class="text-[10px] text-slate-300 mt-1 leading-snug break-keep">${m.desc}</div>
+            </div>
+            ${m.maxLv > 1 ? `
+              <button type="button" data-drone-upg="${m.key}" ${!canUpg ? "disabled" : ""}
+                      class="w-full py-1.5 px-2 rounded-lg border text-xs font-extrabold transition ${
+                        isMax
+                          ? "bg-slate-900 border-slate-700 text-slate-500 cursor-not-allowed"
+                          : (canUpg ? "bg-indigo-900/90 hover:bg-indigo-800 border-indigo-400 text-indigo-100 cursor-pointer" : "bg-slate-900 border-slate-800 text-slate-500 cursor-not-allowed")
+                      }">
+                ${isMax ? "최대 레벨 도달" : `모듈 업그레이드 (${cost} BP)`}
+              </button>
+            ` : `
+              <div class="py-1 px-2 rounded-lg bg-slate-900/90 border border-slate-800 text-[10px] font-bold text-center text-teal-400">
+                상시 가동 중 (기본 탑재)
+              </div>
+            `}
+          `;
+          droneGrid.appendChild(dCard);
+        });
+
+        droneGrid.querySelectorAll("[data-drone-upg]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const key = btn.getAttribute("data-drone-upg");
+            upgradeDroneModule(me, key);
           });
         });
       }
@@ -1318,7 +1417,7 @@
       const pierceCount = isDownedPistol ? 1 : ((wDef.piercing ? 99 : 1) + (wDef.pierceBase || 0) + (isPierceInArea ? effAreaLv : 0) + (wIdx === 0 && effTier1 ? 1 : 0) + (wIdx === 0 && effAwakened ? 2 : 0) + (pureBonus.extraPierce || 0));
       const areaMult = isPierceInArea ? 1.05 : rangeMult;
 
-      player.fireCooldown = Math.max(0.035, wDef.fireRate / spdMult);
+      player.fireCooldown = Math.max(0.030, (wDef.fireRate / spdMult) * (player.overclockActive ? 0.74 : 1.0));
 
       if (player.id === mySlotIndex) {
         SoundFX.play(wDef.sound);
@@ -1357,10 +1456,26 @@
       }
 
       const baseAngle = Math.atan2(nx, nz);
-      const finalDamage = Math.round(wDef.damage * atkMult);
+      let calculatedDmg = Math.round(wDef.damage * atkMult);
+      let effectivePierce = pierceCount + (player.specialization === "STRIKER" ? 1 : 0);
+
+      // [척후병 암살 관통샷] 은신 중 첫 발사: 2배 피해(보스 제외) 및 무한 관통 탄환 판정!
+      let isScoutAssassination = false;
+      if (player.cloakActive) {
+        isScoutAssassination = true;
+        calculatedDmg = Math.round(calculatedDmg * 2.0);
+        effectivePierce = 999;
+        player.cloakActive = false;
+        player.specActiveTimer = 0;
+        if (player.visual && player.visual.body) {
+          player.visual.body.material.transparent = false;
+          player.visual.body.material.opacity = 1.0;
+        }
+        spawnBloodParticles(player.x, 1.3, player.z, 0x10b981, 14);
+      }
 
       if (wIdx === 5) {
-        fireRailgunBeam(player, nx, nz, finalDamage, stunDur, knockVal, areaMult, effAwakened, effTier1);
+        fireRailgunBeam(player, nx, nz, calculatedDmg, stunDur, knockVal, areaMult, effAwakened, effTier1);
         return;
       }
 
@@ -1371,8 +1486,9 @@
       for (let p = 0; p < totalProjectiles; p++) {
         const spreadOffset = (shotRng() - 0.5) * wDef.spread;
         const a = baseAngle + spreadOffset;
-        const vx = Math.sin(a) * wDef.speed;
-        const vz = Math.cos(a) * wDef.speed;
+        const bSpeed = wDef.speed * (player.overclockActive ? 1.30 : 1.0);
+        const vx = Math.sin(a) * bSpeed;
+        const vz = Math.cos(a) * bSpeed;
 
         let bGeo = SHARED_GEO.pistolTracer;
         if (wIdx === 1) bGeo = SHARED_GEO.shotgunPellet;
@@ -1380,13 +1496,27 @@
         else if (wIdx === 3) bGeo = SHARED_GEO.rifleSlug;
         else if (wIdx === 4) bGeo = SHARED_GEO.grenadeShell;
 
-        const bulletColor = effAwakened ? 0x22d3ee : (effTier1 ? 0xe879f9 : wDef.color);
+        const bulletColor = isScoutAssassination ? 0x10b981 : (effAwakened ? 0x22d3ee : (effTier1 ? 0xe879f9 : wDef.color));
         const bulletMesh = new THREE.Mesh(bGeo, new THREE.MeshBasicMaterial({ color: bulletColor }));
         const sideOffset = (wIdx === 0 && effAwakened) ? (p === 0 ? -0.28 : 0.28) : 0;
         bulletMesh.position.set(player.x + nx * 0.9 + nz * sideOffset, 1.15, player.z + nz * 0.9 - nx * sideOffset);
         bulletMesh.rotation.y = a;
         bulletMesh.scale.set(areaMult, areaMult, areaMult);
         effectsGroup.add(bulletMesh);
+
+        // 총기별 유효 사거리(life) 정밀 확립 (피스톨은 유효사거리 스탯으로 비거리 대폭 증가)
+        let baseBulletLife = 0.80;
+        if (wIdx === 0) {
+          baseBulletLife = 0.65 * (1 + effKnockLv * 0.12); // 권총: 기본 ~28.6m -> 풀강시 ~45.7m
+        } else if (wIdx === 1) {
+          baseBulletLife = 0.38; // 산탄총: 근거리 ~13.7m - 16m
+        } else if (wIdx === 2) {
+          baseBulletLife = 0.52; // UZI: 중거리 ~22.9m
+        } else if (wIdx === 3) {
+          baseBulletLife = 0.94; // 돌격소총: 원거리 ~47.0m
+        } else if (wIdx === 4) {
+          baseBulletLife = 0.85; // 유탄발사기: 곡사 ~22.1m
+        }
 
         game.bullets.push({
           ownerId: player.id,
@@ -1401,15 +1531,16 @@
           originZ: player.z,
           heavyImpact: !!wDef.heavyImpact,
           vx, vz,
-          damage: finalDamage,
-          weakMult: isDownedPistol ? 1.0 : ((wDef.weakMult || 1.2) + (pureBonus.weakBonus || 0) + (wIdx === 0 ? effKnockLv * 0.28 + (effTier1 ? 0.6 : 0) : 0)),
+          damage: calculatedDmg,
+          isScoutAssassination,
+          weakMult: isDownedPistol ? 1.0 : ((wDef.weakMult || 1.2) + (pureBonus.weakBonus || 0) + (wIdx === 0 && effTier1 ? 0.6 : 0)),
           stun: stunDur,
           knockback: knockVal,
           explosiveRadius: (wDef.explosiveRadius || 0) * areaMult * (wIdx === 4 && effTier1 ? 1.25 : 1.0),
-          pierceLeft: pierceCount,
-          armorPen: isDownedPistol ? false : (!!pureBonus.armorIgnore || (isPierceInArea ? effAreaLv > 0 : (effTier1 || effAwakened))),
-          piercing: pierceCount > 1,
-          life: (wIdx === 1 ? 0.44 : 1.05) * rangeMult,
+          pierceLeft: effectivePierce,
+          armorPen: isDownedPistol ? false : (isScoutAssassination || !!pureBonus.armorIgnore || (isPierceInArea ? effAreaLv > 0 : (effTier1 || effAwakened))),
+          piercing: effectivePierce > 1,
+          life: baseBulletLife * (isPierceInArea ? 1.0 : rangeMult),
           mesh: bulletMesh
         });
       }
@@ -1997,8 +2128,7 @@
         }
         const getDropWeapon = () => (unlockedWeapons.length > 0) ? unlockedWeapons[Math.floor(Math.random() * unlockedWeapons.length)] : undefined;
 
-        const pistolExecLv = (mePlayer && !mePlayer.downed && mePlayer.inventory[0]) ? mePlayer.inventory[0].stats.knock : 0;
-        if (weaponIdx === 0 && wasStunned && Math.random() < (0.05 + pistolExecLv * 0.025)) {
+        if (weaponIdx === 0 && wasStunned && Math.random() < 0.05) {
           spawnPickup(zx, zz, "AMMO_PACK", getDropWeapon());
         }
 
@@ -2006,10 +2136,10 @@
           triggerExplosion(zx, zz, 4.0, 58, -1, false);
         }
 
-        // [v3.2 탄약 드랍 개편] 현재 보유(해금) 중인 무기들 중 무작위 1종 전용 탄약팩 드랍 (전체 0.8% 드랍, 획득 시 해당 무기만 보충)
+        // [v3.2 탄약 드랍 개편] 보유(해금) 무기 전용 탄약팩 드랍 (전체 1.0% 드랍 확립)
         const isElite = (zmb.typeKey === "GOLIATH" || zmb.typeKey === "DEVIL");
         const partChance = isElite ? 0.001 : 0.0;
-        const ammoDropChance = 0.008; // 0.8%
+        const ammoDropChance = 0.010; // 1.0%
         const r = Math.random();
         if (r < ammoDropChance) {
           spawnPickup(zx, zz, "AMMO_PACK", getDropWeapon());
@@ -2122,16 +2252,32 @@
     }
 
     function damagePlayer(player, dmg, causesBleed, causesAcid, causesShock, causesFrost) {
-      if (player.downed || player.dashActiveTimer > 0 || !game.running) return;
+      if (player.downed || player.dashActiveTimer > 0 || (player.postClearGraceTimer > 0) || !game.running) return;
 
       // Cancel self-bandaging if hit hard
       if (player.bandagingTimer > 0 && dmg > 8) {
         player.bandagingTimer = 0;
       }
 
+      // [선봉장 특성화] 기본 받는 피해 -10% 경감 및 [C] 결사 요새 발동 중 추가 -40% 피해 경감 (총 -50%)
+      let inDmg = dmg;
+      if (player.specialization === "JUGGERNAUT") {
+        inDmg *= 0.90;
+        if (player.specActiveTimer > 0) {
+          inDmg *= 0.60;
+        }
+      }
+
       // [v3.2 케블라 방탄 외골격] 받는 모든 피해 영구 경감 (-6%/Lv, 최대 -30%)
       const red = getPlayerDmgReduction(player);
-      let rem = Math.max(1, Math.round(dmg * (1 - red)));
+      let rem = Math.max(1, Math.round(inDmg * (1 - red)));
+
+      // [선봉장 결사 요새 임시 쉴드] 쉴드로 먼저 흡수!
+      if (player.tempShield > 0) {
+        const absorbedShield = Math.min(player.tempShield, rem);
+        player.tempShield -= absorbedShield;
+        rem -= absorbedShield;
+      }
 
       // Absorb with Temporary HP (Adrenaline Stim) first!
       if (player.tempHp > 0) {
@@ -2197,4 +2343,134 @@
         });
       }
     }
+
+    // =========================================================================
+    // 16. DRONE UPGRADE & SPECIALIZATION SELECTION / SKILL HANDLERS
+    // =========================================================================
+    function upgradeDroneModule(player, key) {
+      if (!player || !isPlayerNearArmory(player)) {
+        SoundFX.play("deny");
+        return;
+      }
+      if (!player.drone || !player.drone.modules || !player.drone.modules[key]) return;
+      const mod = player.drone.modules[key];
+      if (mod.level >= mod.maxLevel) return;
+
+      const costs = key === "magnet" ? [0, 0, 800, 1600, 2800] : [0, 0, 1000, 2000, 3500];
+      const nextCost = costs[mod.level + 1] || 1000;
+      if (game.bioPoints < nextCost) {
+        SoundFX.play("deny");
+        return;
+      }
+
+      game.bioPoints -= nextCost;
+      mod.level++;
+      SoundFX.play("upgrade");
+      renderUpgradeModal();
+      updateHUD();
+    }
+
+    function openSpecializationModal() {
+      const me = game.players[mySlotIndex];
+      if (!me || me.specialization) return;
+      const modal = document.getElementById("spec-modal");
+      if (modal) modal.classList.remove("hidden");
+      SoundFX.play("upgrade");
+    }
+
+    function chooseSpecialization(specKey) {
+      const me = game.players[mySlotIndex];
+      if (!me) return;
+      me.specialization = specKey;
+
+      if (specKey === "JUGGERNAUT") {
+        me.maxHp += 35;
+        me.hp = Math.min(me.maxHp, me.hp + 35);
+        me.canPassThroughZombies = true;
+      } else if (specKey === "MEDIC") {
+        game.reviveDuration = 3.5;
+      }
+
+      const modal = document.getElementById("spec-modal");
+      if (modal) modal.classList.add("hidden");
+      SoundFX.play("revive");
+      updateHUD();
+
+      if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+        try {
+          wsClient.send(JSON.stringify({
+            type: "SPEC_CHOSEN",
+            playerId: me.id,
+            specialization: specKey
+          }));
+        } catch (e) {}
+      }
+    }
+
+    function triggerSpecializationActive(player) {
+      if (!player || player.downed || !player.specialization) return;
+      if (player.specCooldown > 0) {
+        SoundFX.play("deny");
+        return;
+      }
+      const spec = player.specialization;
+      if (spec === "JUGGERNAUT") {
+        player.specCooldown = 40.0;
+        player.specActiveTimer = 6.0;
+        player.tempShield = (player.tempShield || 0) + 80;
+        SoundFX.play("explosion");
+        spawnMissionStageVFX(player.x, player.z, 0xf59e0b, 18.0, 30, false);
+        game.zombies.forEach(z => {
+          if (Math.hypot(z.x - player.x, z.z - player.z) <= 18.0) {
+            z.targetPlayerId = player.id;
+          }
+        });
+      } else if (spec === "STRIKER") {
+        player.specCooldown = 30.0;
+        player.specActiveTimer = 6.0;
+        player.overclockActive = true;
+        SoundFX.play("pickup");
+        spawnBloodParticles(player.x, 1.5, player.z, 0x38bdf8, 12);
+      } else if (spec === "MEDIC") {
+        player.specCooldown = 40.0;
+        player.specActiveTimer = 7.0;
+        player.healingMistActive = true;
+        player.healingMistX = player.x;
+        player.healingMistZ = player.z;
+        SoundFX.play("revive");
+        spawnMissionStageVFX(player.x, player.z, 0x10b981, 5.0, 25, false);
+      } else if (spec === "SCOUT") {
+        player.specCooldown = 35.0;
+        player.specActiveTimer = 7.5;
+        player.cloakActive = true;
+        SoundFX.play("shotgun");
+        spawnBloodParticles(player.x, 1.2, player.z, 0x64748b, 25);
+        if (player.visual && player.visual.body) {
+          player.visual.body.material.transparent = true;
+          player.visual.body.material.opacity = 0.35;
+        }
+        game.zombies.forEach(z => {
+          if (z.targetPlayerId === player.id) {
+            z.targetPlayerId = -1;
+          }
+        });
+      }
+
+      if (player.id === mySlotIndex && wsClient && wsClient.readyState === WebSocket.OPEN) {
+        try {
+          wsClient.send(JSON.stringify({
+            type: "SPEC_ACTIVE",
+            playerId: player.id
+          }));
+        } catch (e) {}
+      }
+    }
+
+    // Modal click listeners
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("btn-spec-juggernaut")?.addEventListener("click", () => chooseSpecialization("JUGGERNAUT"));
+      document.getElementById("btn-spec-striker")?.addEventListener("click", () => chooseSpecialization("STRIKER"));
+      document.getElementById("btn-spec-medic")?.addEventListener("click", () => chooseSpecialization("MEDIC"));
+      document.getElementById("btn-spec-scout")?.addEventListener("click", () => chooseSpecialization("SCOUT"));
+    });
 

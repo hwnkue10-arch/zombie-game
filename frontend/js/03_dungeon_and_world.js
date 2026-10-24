@@ -1671,7 +1671,7 @@
       game.armoryVaults.push(vaultObj);
       const sym = registerWorldSymbol(
         interactX, 4.2, interactZ,
-        "🔧상시무기고[R]",
+        "🛠️무기고[F]",
         "bg-indigo-950/95 border-amber-400 text-amber-200",
         vaultObj, roomIndex
       );
@@ -1689,7 +1689,7 @@
         v.mesh.visible = !!room.unlocked;
       }
       if (v.sym) {
-        v.sym.el.textContent = "🔧상시무기고[R]";
+        v.sym.el.textContent = "🛠️무기고[F]";
       }
     }
 

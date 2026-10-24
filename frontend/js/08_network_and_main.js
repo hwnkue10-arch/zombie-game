@@ -481,6 +481,31 @@
                 p.downed = !!msg.downed;
                 p.currentWeapon = msg.currentWeapon || 0;
                 p.walkCycle = msg.walkCycle || 0;
+                if (msg.specialization && p.specialization !== msg.specialization) {
+                  p.specialization = msg.specialization;
+                }
+                if (msg.tempShield !== undefined) p.tempShield = msg.tempShield;
+                if (p.drone && p.drone.modules) {
+                  if (msg.droneMagnetLv) p.drone.modules.magnet.level = msg.droneMagnetLv;
+                  if (msg.droneIntLv) p.drone.modules.interceptor.level = msg.droneIntLv;
+                }
+              }
+            } else if (msg.type === "SPEC_CHOSEN" && game.running) {
+              const p = game.players.find(pl => pl.id === msg.playerId);
+              if (p) {
+                p.specialization = msg.specialization;
+                if (msg.specialization === "JUGGERNAUT") {
+                  p.maxHp += 35;
+                  p.hp = Math.min(p.maxHp, p.hp + 35);
+                  p.canPassThroughZombies = true;
+                } else if (msg.specialization === "MEDIC") {
+                  game.reviveDuration = 3.5;
+                }
+              }
+            } else if (msg.type === "SPEC_ACTIVE" && game.running) {
+              const p = game.players.find(pl => pl.id === msg.playerId);
+              if (p && p.id !== mySlotIndex) {
+                triggerSpecializationActive(p);
               }
             } else if (msg.type === "REMOTE_FIRE" && game.running) {
               const p = game.players.find(pl => pl.id === msg.slotId);
@@ -899,9 +924,13 @@
           rotY: Math.round(me.rotY * 100) / 100,
           hp: Math.round(me.hp),
           tempHp: Math.round(me.tempHp || 0),
+          tempShield: Math.round(me.tempShield || 0),
           downed: !!me.downed,
           currentWeapon: me.currentWeapon,
-          walkCycle: Math.round(me.walkCycle * 10) / 10
+          walkCycle: Math.round(me.walkCycle * 10) / 10,
+          specialization: me.specialization || null,
+          droneMagnetLv: (me.drone && me.drone.modules && me.drone.modules.magnet) ? me.drone.modules.magnet.level : 1,
+          droneIntLv: (me.drone && me.drone.modules && me.drone.modules.interceptor) ? me.drone.modules.interceptor.level : 1
         }));
       } catch (e) {}
     }, 50);

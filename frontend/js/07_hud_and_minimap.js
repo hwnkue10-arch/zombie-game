@@ -65,7 +65,7 @@
       document.getElementById("hud-my-hp-bar").style.width = hpPct + "%";
       document.getElementById("hud-my-temphp-bar").style.width = tempPct + "%";
       document.getElementById("hud-my-hp-text").textContent =
-        `${Math.ceil(me.hp)}${me.tempHp > 0 ? " + " + Math.ceil(me.tempHp) : ""} / ${me.maxHp}`;
+        `${Math.ceil(me.hp)}${me.tempHp > 0 ? " + " + Math.ceil(me.tempHp) : ""}${me.tempShield > 0 ? " [🛡️" + Math.ceil(me.tempShield) + "]" : ""} / ${me.maxHp}`;
 
       const maxStam = getPlayerMaxStamina(me);
       const curStam = Math.max(0, Math.min(maxStam, me.stamina !== undefined ? me.stamina : maxStam));
@@ -138,13 +138,66 @@
       if (armProxEl) {
         if (nearArm) {
           armProxEl.className = "px-2.5 py-0.5 rounded-md bg-emerald-950/95 border border-emerald-400/60 text-emerald-200 font-extrabold text-[11px] truncate";
-          armProxEl.textContent = "🟢 소강기 무기고 연결됨 [T / U]";
-        } else if (game.wavePhase === "SURGE") {
-          armProxEl.className = "px-2.5 py-0.5 rounded-md bg-rose-950/90 border border-rose-500/40 text-rose-200 font-bold text-[11px] truncate";
-          armProxEl.textContent = "🔒 웨이브 중 무기고 지하수납 (소강기 출현)";
+          armProxEl.textContent = "🟢 무기고 단말기 접근 [F]";
         } else {
-          armProxEl.className = "px-2.5 py-0.5 rounded-md bg-amber-950/90 border border-amber-500/40 text-amber-200 font-bold text-[11px] truncate";
-          armProxEl.textContent = "🧭 소강기: 황금 비콘 무기고로 이동해 정비!";
+          armProxEl.className = "px-2.5 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-300 font-bold text-[11px] truncate";
+          armProxEl.textContent = "🔐 무기고 밖 (외벽 단말기 앞 [F] 이용)";
+        }
+      }
+
+      // [작전 특성화 카드 HUD 업데이트]
+      const specCard = document.getElementById("hud-spec-card");
+      if (specCard) {
+        if (me.specialization) {
+          specCard.classList.remove("hidden");
+          const specIcons = { JUGGERNAUT: "🛡️", STRIKER: "💥", MEDIC: "💉", SCOUT: "🥷" };
+          const specNames = { JUGGERNAUT: "선봉장", STRIKER: "돌격수", MEDIC: "의무관", SCOUT: "척후병" };
+          const iconEl = document.getElementById("hud-spec-icon");
+          if (iconEl) iconEl.textContent = specIcons[me.specialization] || "🎖️";
+          const nameEl = document.getElementById("hud-spec-name");
+          if (nameEl) nameEl.textContent = specNames[me.specialization] || me.specialization;
+          const statEl = document.getElementById("hud-spec-status");
+          if (statEl) {
+            if (me.specCooldown > 0) {
+              statEl.textContent = `쿨다운 ${me.specCooldown.toFixed(1)}s`;
+              statEl.className = "text-[10px] font-mono-code text-rose-400 font-bold";
+            } else if (me.specActiveTimer > 0) {
+              statEl.textContent = `가동 중 (${me.specActiveTimer.toFixed(1)}s)`;
+              statEl.className = "text-[10px] font-mono-code text-amber-300 font-bold animate-pulse";
+            } else {
+              statEl.textContent = "READY [C]";
+              statEl.className = "text-[10px] font-mono-code text-emerald-400 font-bold";
+            }
+          }
+        } else {
+          specCard.classList.add("hidden");
+        }
+      }
+
+      // [다목적 전술 드론 카드 HUD 업데이트]
+      const droneCard = document.getElementById("hud-drone-card");
+      if (droneCard && me.drone && me.drone.modules) {
+        const magLv = (me.drone.modules.magnet && me.drone.modules.magnet.level) || 1;
+        const magRad = [0, 4, 6, 8, 10][magLv] || 4;
+        const intLv = (me.drone.modules.interceptor && me.drone.modules.interceptor.level) || 1;
+        const intCd = [0, 6.0, 3.5, 1.8, 0.6][intLv] || 6.0;
+        const mediCd = (me.drone.modules.medi && me.drone.modules.medi.cooldown) || 0;
+        const droneSummEl = document.getElementById("hud-drone-summary");
+        if (droneSummEl) {
+          droneSummEl.textContent = `🧲수거 ${magRad}m · 🛡️요격 ${intCd}s · 💉의무`;
+        }
+        const droneStatEl = document.getElementById("hud-drone-status");
+        if (droneStatEl) {
+          if (me.drone.modules.interceptor && me.drone.modules.interceptor.cooldown > 0) {
+            droneStatEl.textContent = `🛡️ 요격 쿨다운 (${me.drone.modules.interceptor.cooldown.toFixed(1)}s)`;
+            droneStatEl.className = "text-[10px] font-mono-code text-cyan-300";
+          } else if (mediCd > 0) {
+            droneStatEl.textContent = `💉 의무 쿨다운 (${mediCd.toFixed(0)}s)`;
+            droneStatEl.className = "text-[10px] font-mono-code text-teal-300";
+          } else {
+            droneStatEl.textContent = "가동 준비 완료 (대기 중)";
+            droneStatEl.className = "text-[10px] font-mono-code text-emerald-400";
+          }
         }
       }
 

@@ -131,7 +131,7 @@
         color: 0xfacc15, sound: "pistol", unlockedAtStart: true,
         tier1Name: "할로우 포인트 (약점+0.6 · 관통+1 · 충격파)",
         awakenName: "아킴보 매그넘 (2연발 동시사격 + 관통 충격파)",
-        roleDesc: "무한탄약 · 보스 약점 2.2배 · 기절 처치 시 탄약 드랍"
+        roleDesc: "무한탄약 · 보스 약점 2.2배 · 유효사거리 강화 가능"
       },
       {
         id: 1, key: "2", name: "컴뱃 산탄총", eng: "Combat Shotgun",
@@ -222,7 +222,7 @@
         { key: "spd", label: "연사력", desc: "공속+16%" },
         { key: "stun", label: "저지력", desc: "기절·넉백↑" },
         { key: "area", label: "관통력", desc: "관통+1" },
-        { key: "knock", label: "약점·보급", desc: "약점·드랍↑" }
+        { key: "knock", label: "유효사거리", desc: "사거리+12%" }
       ],
       // 1: 컴뱃 산탄총
       [

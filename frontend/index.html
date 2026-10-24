@@ -261,6 +261,31 @@
         </div>
       </div>
 
+      <!-- Tactical Drone & Class Specialization Skill Dock -->
+      <div class="flex items-center justify-between w-full max-w-3xl px-1 pointer-events-auto gap-2">
+        <div id="hud-drone-card" class="hud-glass px-3 py-1.5 rounded-xl border border-cyan-500/40 flex items-center gap-2.5 shadow-lg">
+          <span class="text-base">🛸</span>
+          <div class="flex flex-col text-left">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-black text-cyan-300">전술 드론</span>
+              <span id="hud-drone-summary" class="text-[10px] font-mono-code text-cyan-200">🧲수거 4m · 🛡️요격 6.0s · 💉의무 90s</span>
+            </div>
+            <span id="hud-drone-status" class="text-[10px] font-mono-code text-cyan-400">대기 중</span>
+          </div>
+        </div>
+
+        <div id="hud-spec-card" class="hidden hud-glass px-3 py-1.5 rounded-xl border border-amber-500/50 flex items-center gap-2.5 shadow-lg">
+          <span id="hud-spec-icon" class="text-xl">🛡️</span>
+          <div class="flex flex-col text-left">
+            <div class="flex items-center gap-1.5">
+              <span id="hud-spec-name" class="text-xs font-black text-amber-300">선봉장</span>
+              <span class="text-[10px] font-mono-code px-1.5 py-0.5 rounded bg-amber-950 text-amber-200 border border-amber-500/40 font-bold">[C] 특수기</span>
+            </div>
+            <span id="hud-spec-status" class="text-[10px] font-mono-code text-emerald-400 font-bold">READY</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Spacious, Eye-Comfortable Bottom Weapon & Dedicated Ammo Dock -->
       <div class="hud-glass rounded-2xl px-3.5 py-2.5 pointer-events-auto w-full max-w-3xl flex flex-col gap-2">
         <!-- Fixed 2-Column Header Bar (No horizontal jitter when switching weapons!) -->
@@ -358,6 +383,15 @@
             <span class="text-[11px] font-mono-code text-slate-400">카테고리별 섹터 해금 조건 충족 시 무기고 근처에서 강화 가능</span>
           </div>
           <div id="upgrade-suit-grid" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+        </div>
+
+        <!-- Tactical Drone Modules Upgrade Section -->
+        <div class="bg-slate-950/85 rounded-2xl p-3 border border-indigo-500/35">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <span class="text-xs sm:text-sm font-black text-indigo-300">🛸 다목적 전술 드론 모듈 베이 (Tactical Drone System)</span>
+            <span class="text-[11px] font-mono-code text-slate-400">자력 수거 (최대 10m) · 탄약 요격 방어 (쿨 0.6s) · 의무 나노 원격 소생</span>
+          </div>
+          <div id="upgrade-drone-grid" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
         </div>
 
         <!-- 2-Column Weapon Upgrade Cards Grid -->
@@ -557,6 +591,97 @@
               class="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm transition shadow-lg">
         🏠 대기실(방)로 돌아가기
       </button>
+    </div>
+  </div>
+
+  <!-- ==================== CLASS SPECIALIZATION MODAL (Sector 2 Clear) ==================== -->
+  <div id="spec-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md pointer-events-auto">
+    <div class="hud-glass rounded-3xl max-w-4xl w-full p-5 sm:p-7 border border-amber-500/50 shadow-2xl flex flex-col gap-4 text-left">
+      <div class="flex flex-col gap-1 border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono-code font-black">SECTOR 2 CLEARED</span>
+          <h2 class="text-xl sm:text-2xl font-black text-white">🎖️ 작전 특성화 선택 (Class Specialization)</h2>
+        </div>
+        <p class="text-xs text-slate-300 mt-1">스쿼드의 전술 역할을 극대화할 특성화를 1개 선택하십시오. [C] 액티브 스킬과 강력한 패시브가 영구 부여됩니다.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <!-- 1. 선봉장 (Juggernaut) -->
+        <button id="btn-spec-juggernaut" type="button" class="group relative p-4 rounded-2xl bg-gradient-to-b from-amber-950/40 to-slate-900/90 border border-amber-500/40 hover:border-amber-400 hover:scale-[1.01] transition-all text-left flex flex-col justify-between gap-3 shadow-lg">
+          <div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <span class="text-base font-black text-amber-300">선봉장 (Juggernaut)</span>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-amber-950 border border-amber-500/40 text-amber-200">탱커 & 돌파</span>
+            </div>
+            <div class="mt-2.5 space-y-1 text-xs text-slate-300">
+              <div class="flex items-start gap-1.5"><span class="text-amber-400 font-bold">패시브:</span> 받는 피해 -10% 경감, 일반 감염체 몸싸움 관통 통과 (포위 갇힘 방지), 최대 HP +35</div>
+              <div class="flex items-start gap-1.5"><span class="text-amber-400 font-bold">[C] 액티브:</span> <b class="text-white">『전술 도발 & 결사 요새』</b> (쿨 40초 / 6초 지속)</div>
+              <div class="text-[11px] text-slate-400 pl-3">· 18m 반경 내 모든 일반 감염체 어그로 강제 집중<br>· +80 임시 쉴드 즉시 획득 & 발동 중 받는 피해 추가 -40% 경감 (총 -50%)</div>
+            </div>
+          </div>
+          <div class="w-full py-2 rounded-xl bg-amber-500 group-hover:bg-amber-400 text-slate-950 font-black text-xs text-center transition">선봉장 선택</div>
+        </button>
+
+        <!-- 2. 돌격수 (Striker) -->
+        <button id="btn-spec-striker" type="button" class="group relative p-4 rounded-2xl bg-gradient-to-b from-rose-950/40 to-slate-900/90 border border-rose-500/40 hover:border-rose-400 hover:scale-[1.01] transition-all text-left flex flex-col justify-between gap-3 shadow-lg">
+          <div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">💥</span>
+                <span class="text-base font-black text-rose-300">돌격수 (Striker)</span>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-rose-950 border border-rose-500/40 text-rose-200">화력 & 관통</span>
+            </div>
+            <div class="mt-2.5 space-y-1 text-xs text-slate-300">
+              <div class="flex items-start gap-1.5"><span class="text-rose-400 font-bold">패시브:</span> 전 무기 기본 관통력 +1 (모든 탄환 1체 추가 관통), 탄약팩 습득량 +35%</div>
+              <div class="flex items-start gap-1.5"><span class="text-rose-400 font-bold">[C] 액티브:</span> <b class="text-white">『오버클럭 트리거』</b> (쿨 30초 / 6초 지속)</div>
+              <div class="text-[11px] text-slate-400 pl-3">· 총기 연사속도 +35% (발사 딜레이 26% 감소)<br>· 탄환 비행속도 +30% 가속으로 장거리 즉발 타격</div>
+            </div>
+          </div>
+          <div class="w-full py-2 rounded-xl bg-rose-500 group-hover:bg-rose-400 text-slate-950 font-black text-xs text-center transition">돌격수 선택</div>
+        </button>
+
+        <!-- 3. 의무관 (Field Medic) -->
+        <button id="btn-spec-medic" type="button" class="group relative p-4 rounded-2xl bg-gradient-to-b from-emerald-950/40 to-slate-900/90 border border-emerald-500/40 hover:border-emerald-400 hover:scale-[1.01] transition-all text-left flex flex-col justify-between gap-3 shadow-lg">
+          <div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">💉</span>
+                <span class="text-base font-black text-emerald-300">의무관 (Field Medic)</span>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-emerald-950 border border-emerald-500/40 text-emerald-200">지원 & 치유</span>
+            </div>
+            <div class="mt-2.5 space-y-1 text-xs text-slate-300">
+              <div class="flex items-start gap-1.5"><span class="text-emerald-400 font-bold">패시브:</span> 아군 수동 구출 소생 시간 3.5초 (기본 8.0초), 회복제/스팀팩 사용 시 4m 내 아군에게 25% 효과 공유</div>
+              <div class="flex items-start gap-1.5"><span class="text-emerald-400 font-bold">[C] 액티브:</span> <b class="text-white">『나노 치유 안개』</b> (쿨 40초 / 7초 지속)</div>
+              <div class="text-[11px] text-slate-400 pl-3">· 5m 반경 나노 치유 안개 전개<br>· 안개 속 모든 아군 초당 +6 HP 재생 및 출혈·산성·중독 즉시 완전 정화</div>
+            </div>
+          </div>
+          <div class="w-full py-2 rounded-xl bg-emerald-500 group-hover:bg-emerald-400 text-slate-950 font-black text-xs text-center transition">의무관 선택</div>
+        </button>
+
+        <!-- 4. 척후병 (Phantom Scout) -->
+        <button id="btn-spec-scout" type="button" class="group relative p-4 rounded-2xl bg-gradient-to-b from-indigo-950/40 to-slate-900/90 border border-indigo-500/40 hover:border-indigo-400 hover:scale-[1.01] transition-all text-left flex flex-col justify-between gap-3 shadow-lg">
+          <div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🥷</span>
+                <span class="text-base font-black text-indigo-300">척후병 (Phantom Scout)</span>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-indigo-950 border border-indigo-500/40 text-indigo-200">기동 & 암살</span>
+            </div>
+            <div class="mt-2.5 space-y-1 text-xs text-slate-300">
+              <div class="flex items-start gap-1.5"><span class="text-indigo-400 font-bold">패시브:</span> 기본 이동속도 +15%, 회피 점프 도약 비거리 +25%, 스태미너 회복속도 +50% / 점프 소모량 -35%</div>
+              <div class="flex items-start gap-1.5"><span class="text-indigo-400 font-bold">[C] 액티브:</span> <b class="text-white">『연막 완전 은신 & 암살 관통샷』</b> (쿨 35초 / 7.5초 지속)</div>
+              <div class="text-[11px] text-slate-400 pl-3">· 즉시 연막 폭발 & 7.5초간 어그로 100% 해제 완전 은신 (이속 +20%)<br>· 은신 해제 첫 탄환은 2배 피해(보스 제외) 및 무한 관통 탄환 판정</div>
+            </div>
+          </div>
+          <div class="w-full py-2 rounded-xl bg-indigo-500 group-hover:bg-indigo-400 text-slate-950 font-black text-xs text-center transition">척후병 선택</div>
+        </button>
+      </div>
     </div>
   </div>
 

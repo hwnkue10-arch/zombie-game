@@ -228,7 +228,36 @@
       thermitePack.visible = false;
       group.add(thermitePack);
 
-      return { group, body, head, leftLeg, rightLeg, gunMesh, ringMat, flashLight, footLight, flashCone, payloadPack, pbCrystal, thermitePack };
+      // 다목적 전술 드론 (Tactical Drone Companion)
+      const droneGroup = new THREE.Group();
+      const droneBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.44, 0.18, 0.48),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.25 })
+      );
+      const droneEye = new THREE.Mesh(
+        new THREE.SphereGeometry(0.09, 12, 12),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+      );
+      droneEye.position.set(0, 0, 0.26);
+      const wingGeo = new THREE.BoxGeometry(0.20, 0.05, 0.30);
+      const wingMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.6 });
+      const leftWing = new THREE.Mesh(wingGeo, wingMat);
+      leftWing.position.set(-0.34, 0.02, -0.05);
+      const rightWing = new THREE.Mesh(wingGeo, wingMat);
+      rightWing.position.set(0.34, 0.02, -0.05);
+      const repGeo = new THREE.RingGeometry(0.04, 0.11, 16);
+      const repMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, side: THREE.DoubleSide });
+      const leftRep = new THREE.Mesh(repGeo, repMat);
+      leftRep.rotation.x = Math.PI / 2;
+      leftRep.position.set(-0.34, -0.06, -0.05);
+      const rightRep = new THREE.Mesh(repGeo, repMat);
+      rightRep.rotation.x = Math.PI / 2;
+      rightRep.position.set(0.34, -0.06, -0.05);
+      droneGroup.add(droneBody, droneEye, leftWing, rightWing, leftRep, rightRep);
+      droneGroup.position.set(0.92, 2.15, -0.45);
+      group.add(droneGroup);
+
+      return { group, body, head, leftLeg, rightLeg, gunMesh, ringMat, flashLight, footLight, flashCone, payloadPack, pbCrystal, thermitePack, droneGroup, droneEye };
     }
 
     function spawnSquadPlayers() {
@@ -335,6 +364,24 @@
           inventory,
           fireCooldown: 0,
           walkCycle: 0,
+          specialization: null, // "JUGGERNAUT", "STRIKER", "MEDIC", "SCOUT"
+          specActiveTimer: 0,
+          specCooldown: 0,
+          tempShield: 0,
+          postClearGraceTimer: 0,
+          cloakActive: false,
+          overclockActive: false,
+          firstShotAssassination: false,
+          canPassThroughZombies: false,
+          drone: {
+            unlocked: true,
+            modules: {
+              magnet: { level: 1, maxLevel: 4 },
+              medi: { level: 1, maxLevel: 1, cooldown: 0, maxCooldown: 90.0, sectorRevivesUsed: 0 },
+              interceptor: { level: 1, maxLevel: 4, cooldown: 0 }
+            },
+            state: "IDLE"
+          },
           visual,
           labelEl
         });
