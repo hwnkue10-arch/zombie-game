@@ -367,13 +367,18 @@
         }
         wsClient = new WebSocket(url);
         wsClient.onopen = () => {
+          const isHostCand = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
           if (statusEl) {
-            statusEl.textContent = "🟢 하마치 WebSocket 서버 연결됨!";
+            statusEl.textContent = isHostCand ? "🟢 로컬 호스트 연결 완료 (방장 준비됨)" : "🟢 멀티플레이 서버 연결 완료!";
             statusEl.className = "text-[11px] font-mono-code font-bold text-emerald-400";
           }
+          const connBtn = document.getElementById("btn-connect-ws");
+          if (connBtn) {
+            connBtn.textContent = "연결됨 ✓";
+            connBtn.className = "px-2.5 py-1.5 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 text-xs font-bold text-white whitespace-nowrap shadow";
+          }
           const netBadge = document.getElementById("hud-net-mode");
-          if (netBadge) netBadge.textContent = "HAMACHI WS";
-          const isHostCand = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+          if (netBadge) netBadge.textContent = isHostCand ? "HOST LOCAL" : "HAMACHI WS";
           const nickInput = document.getElementById("input-player-name");
           const nick = (nickInput && nickInput.value.trim()) || (isHostCand ? "HOST_P1" : "PLAYER");
           wsClient.send(JSON.stringify({
@@ -386,6 +391,11 @@
 
         wsClient.onclose = () => {
           if (!game.running) {
+            const connBtn = document.getElementById("btn-connect-ws");
+            if (connBtn) {
+              connBtn.textContent = "재접속";
+              connBtn.className = "px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white whitespace-nowrap";
+            }
             if (statusEl) {
               statusEl.textContent = "🟡 서버 연결 대기 중 (재연결 시도 중...)";
               statusEl.className = "text-[11px] font-mono-code font-bold text-amber-400";

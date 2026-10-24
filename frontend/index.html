@@ -421,8 +421,8 @@
         <div class="lg:col-span-7 flex flex-col gap-3">
           <div class="bg-slate-900/90 rounded-2xl p-3.5 border border-slate-800">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-bold text-slate-300">호스트 & 하마치 연결</span>
-              <span id="lobby-conn-status" class="text-[11px] font-mono-code font-bold text-emerald-400">● 로컬 리슨 호스트 준비됨</span>
+              <span class="text-xs font-bold text-slate-300">호스트 & 멀티플레이 연결</span>
+              <span id="lobby-conn-status" class="text-[11px] font-mono-code font-bold text-emerald-400">🟢 로컬 호스트 연결 완료</span>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
@@ -431,12 +431,16 @@
                        class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-amber-400" />
               </div>
               <div>
-                <label class="block text-[10px] text-slate-400 mb-0.5">서버 주소 (`npm start` 연동)</label>
+                <div class="flex items-center justify-between mb-0.5">
+                  <label class="block text-[10px] text-slate-400">서버 주소 (자동 연결됨)</label>
+                  <span class="text-[9px] text-slate-500">원격 참가자만 변경</span>
+                </div>
                 <div class="flex gap-1">
                   <input id="input-server-url" type="text" value="ws://localhost:3000"
-                         class="w-full px-2 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs font-mono-code text-slate-200 focus:outline-none" />
-                  <button id="btn-connect-ws" type="button" class="px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white whitespace-nowrap">
-                    접속
+                         title="호스트는 자동 연결되므로 수정할 필요가 없습니다. 원격 참가자만 친구의 하마치 IP를 입력하세요."
+                         class="w-full px-2 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs font-mono-code text-slate-300 focus:outline-none focus:border-sky-500" />
+                  <button id="btn-connect-ws" type="button" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white whitespace-nowrap shadow">
+                    연결됨 ✓
                   </button>
                 </div>
               </div>
