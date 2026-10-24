@@ -86,7 +86,7 @@
       const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
       // [v3.5 최종보스 위엄 확립] 3차 중간보스(S9 25.1만)의 2배 이상 규모(S10 53.6만)로 최종보스가 확실한 최대 체력을 보유하도록 조정!
       const bossSquadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.75;
-      const baseBossHp = game.pacing === "marathon" ? 235000 : (game.pacing === "blitz" ? 85000 : 165000);
+      const baseBossHp = 185000; // 단일 10섹터 풀 레이드 캠페인 기준 (1인: 18.5만 HP / 4인: 60.1만 HP)
       const maxHp = Math.round(baseBossHp * bossSquadScale);
       game.boss = {
         x: bx, z: bz,

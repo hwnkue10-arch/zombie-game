@@ -219,16 +219,16 @@
 
       const missionPool = ["THERMITE", "GENERATORS", "PAYLOAD", "RADAR_UPLINK", "HIVE_NODES", "DECON_PURGE", "EXTERMINATE"];
       const shapePool = ["RECT_BUNKER", "TUNNEL_LONG", "L_FACILITY", "OCTAGON_REACTOR", "CROSS_WAREHOUSE"];
-      const scaleMult = game.pacing === "marathon" ? 1.35 : (game.pacing === "blitz" ? 0.55 : 0.95);
 
-      let midBossRoomIndices = [2, 5, 8];
-      if (game.totalRooms <= 5) midBossRoomIndices = [1, 2, 3];
-      else if (game.totalRooms <= 7) midBossRoomIndices = [1, 3, 5];
+      // [v3.5] 단일 10섹터 풀 레이드 캠페인으로 단일화 (Sector 3, 6, 9는 중간보스 특화 섹터, Sector 10은 최종보스)
+      const midBossRoomIndices = [2, 5, 8];
 
       for (let i = 0; i < game.totalRooms; i++) {
         occupiedGrid.set(`${gx},${gz}`, i);
         const isBossRoom = (i === game.totalRooms - 1);
-        const shapeType = isBossRoom ? "BOSS_DOME" : shapePool[i % shapePool.length];
+        const mbOrder = midBossRoomIndices.indexOf(i);
+        const hasMidBoss = (!isBossRoom && mbOrder !== -1);
+        const shapeType = isBossRoom ? "BOSS_DOME" : (hasMidBoss ? "OCTAGON_REACTOR" : shapePool[i % shapePool.length]);
 
         let roomW = 94, roomD = 94;
         if (isBossRoom) {
@@ -250,23 +250,22 @@
         const wx = gx * GRID_STEP;
         const wz = gz * GRID_STEP;
 
-        const condType = isBossRoom ? "BOSS" : missionPool[i % missionPool.length];
+        // 중간보스 섹터는 "MID_BOSS", 최종보스는 "BOSS", 일반 섹터는 7대 순환 미션
+        const condType = isBossRoom ? "BOSS" : (hasMidBoss ? "MID_BOSS" : missionPool[i % missionPool.length]);
         // 중반(4~6섹터) 및 후반(7~9섹터) 미션 목표 개수 확장 (3 -> 4 -> 5개)
         const stageTier = i >= 6 ? 5 : (i >= 3 ? 4 : 3);
         let targetVal = 1;
-        if (condType === "THERMITE") targetVal = Math.round(22 * scaleMult);
+        if (condType === "THERMITE") targetVal = 22;
         else if (condType === "GENERATORS") targetVal = stageTier;
         else if (condType === "PAYLOAD") targetVal = 1;
         else if (condType === "RADAR_UPLINK") targetVal = 3;
         else if (condType === "DECON_PURGE") targetVal = Math.min(4, stageTier);
         else if (condType === "HIVE_NODES") targetVal = stageTier;
         else if (condType === "EXTERMINATE") targetVal = Math.max(2, stageTier - 1);
-
-        const mbOrder = midBossRoomIndices.indexOf(i);
-        const hasMidBoss = (!isBossRoom && mbOrder !== -1);
+        else if (condType === "MID_BOSS") targetVal = 1;
 
         const envPool = ["NORMAL", "BLACKOUT", "TOXIC_FOG", "BLOOD_RAIN", "CRYO_LEAK"];
-        const envType = (i === 0 || isBossRoom) ? "NORMAL" : envPool[1 + Math.floor(rng() * (envPool.length - 1))];
+        const envType = (i === 0 || isBossRoom || hasMidBoss) ? "NORMAL" : envPool[1 + Math.floor(rng() * (envPool.length - 1))];
         const bpCap = 999999;
 
         const payloadSteps = (i >= 3) ? 3 : 2; // 4섹터+ 블랙박스 미션은 중간에 🔐보안중계기 해독 단계 포함!
@@ -275,9 +274,9 @@
           : (condType === "RADAR_UPLINK" ? 3
           : targetVal));
 
-        const secTimer = isBossRoom ? 999 : Math.round((260 + i * 20) * (game.pacing === "blitz" ? 0.75 : 1.0));
+        const secTimer = (isBossRoom || hasMidBoss) ? 999 : Math.round(260 + i * 20);
         // 외벽 스폰 구멍 추가 파공 이벤트: 섹터당 약 42% 확률로만 발생(안 터지는 섹터 존재), 타이머 50% 이하 중반부터만 발동!
-        const willHaveExtraBreach = (i > 0 && !isBossRoom && rng() < 0.42);
+        const willHaveExtraBreach = (i > 0 && !isBossRoom && !hasMidBoss && rng() < 0.42);
         const maxExtraHoles = willHaveExtraBreach ? (rng() < 0.55 ? 1 : 2) : 0;
 
         const room = {
@@ -300,6 +299,8 @@
           hasMidBoss,
           midBossOrder: mbOrder,
           midBossSpawned: false,
+          midBossAwakened: false,
+          midBossKilled: false,
           envType,
           envCleared: false,
           blackoutEventTimer: 0,
@@ -706,9 +707,123 @@
             envNode, room.index
           );
         }
+
+        // [v3.5] 중간보스 섹터: 진입 즉시 스폰되지 않고, 중앙 생체 격리 캡슐에서 대기하며 스쿼드 정비 후 [F]로 개시!
+        if (room.hasMidBoss) {
+          const podGroup = new THREE.Group();
+          const basePed = new THREE.Mesh(
+            new THREE.CylinderGeometry(4.0, 4.6, 1.4, 20),
+            new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 })
+          );
+          basePed.position.y = 0.7;
+          const topLid = new THREE.Mesh(
+            new THREE.CylinderGeometry(4.2, 4.0, 1.2, 20),
+            new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.85, roughness: 0.25 })
+          );
+          topLid.position.y = 7.6;
+          podGroup.add(basePed, topLid);
+
+          const glassColor = room.midBossOrder === 0 ? 0xf97316 : (room.midBossOrder === 1 ? 0xa855f7 : 0x84cc16);
+          const glassCyl = new THREE.Mesh(
+            new THREE.CylinderGeometry(3.6, 3.6, 6.0, 24, 1, true),
+            new THREE.MeshStandardMaterial({
+              color: glassColor,
+              emissive: glassColor,
+              emissiveIntensity: 0.65,
+              transparent: true,
+              opacity: 0.55,
+              roughness: 0.1
+            })
+          );
+          glassCyl.position.y = 4.2;
+          podGroup.add(glassCyl);
+
+          const innerShadow = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(2.2, 1),
+            new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.9 })
+          );
+          innerShadow.position.y = 4.2;
+          podGroup.add(innerShadow);
+
+          // 전면 상호작용 제어 콘솔 단말기
+          const termPed = new THREE.Mesh(
+            new THREE.BoxGeometry(1.6, 1.8, 1.2),
+            new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7 })
+          );
+          termPed.position.set(0, 0.9, -5.2);
+          const termScreen = new THREE.Mesh(
+            new THREE.BoxGeometry(1.4, 0.8, 0.2),
+            new THREE.MeshStandardMaterial({ color: 0x06b6d4, emissive: 0x0891b2, emissiveIntensity: 0.9 })
+          );
+          termScreen.position.set(0, 1.7, -4.6);
+          termScreen.rotation.x = -Math.PI / 6;
+          podGroup.add(termPed, termScreen);
+
+          podGroup.position.set(room.wx, 0, room.wz);
+          entitiesGroup.add(podGroup);
+          addWallCollider(room.wx, room.wz, 7.2, 7.2);
+
+          const mbNode = {
+            roomIndex: room.index,
+            kind: "MID_BOSS_POD",
+            midBossOrder: room.midBossOrder,
+            x: room.wx,
+            z: room.wz - 5.2,
+            done: false,
+            holdTime: 0,
+            mesh: podGroup,
+            glassCyl
+          };
+          game.missionNodes.push(mbNode);
+          registerWorldSymbol(
+            room.wx, 3.6, room.wz - 5.2,
+            `🔬[F] 생체격리 해제 단말기`,
+            "bg-cyan-950/95 border-cyan-400 text-cyan-200 animate-pulse",
+            mbNode, room.index
+          );
+        }
       } else if (room.isBossRoom) {
-        room.bossPhaseStage = 1;
+        // [v3.5] 최종보스전 스쿼드 최종 정비 단계(0단계): 입장 후 전원 탄약·무기 완충 후 [F] 콘솔로 시작!
+        room.bossPhaseStage = 0;
         room.coolantsDone = 0;
+
+        // 10섹터 입구 부근 마스터 오버라이드 콘솔 (wx, wz - 26)
+        const mGroup = new THREE.Group();
+        const mBase = new THREE.Mesh(
+          new THREE.CylinderGeometry(2.0, 2.4, 1.4, 16),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.85, roughness: 0.2 })
+        );
+        mBase.position.y = 0.7;
+        mGroup.add(mBase);
+
+        const mPillar = new THREE.Mesh(
+          new THREE.OctahedronGeometry(1.2, 1),
+          new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xbe123c, emissiveIntensity: 0.95 })
+        );
+        mPillar.position.y = 2.1;
+        mGroup.add(mPillar);
+
+        const mPos = { x: room.wx, z: room.wz - 26 };
+        mGroup.position.set(mPos.x, 0, mPos.z);
+        entitiesGroup.add(mGroup);
+
+        const masterNode = {
+          roomIndex: room.index,
+          kind: "BOSS_MASTER_CONSOLE",
+          x: mPos.x,
+          z: mPos.z,
+          done: false,
+          holdTime: 0,
+          mesh: mGroup
+        };
+        game.missionNodes.push(masterNode);
+        registerWorldSymbol(
+          mPos.x, 3.6, mPos.z,
+          `🚨[F] 심장 코어 격벽 해제 콘솔`,
+          "bg-rose-950/90 border-rose-500 text-rose-200 animate-pulse",
+          masterNode, room.index
+        );
+
         // 10섹터 3단계 레이드 1단계: 돔 좌·우 양측 보조 냉각 콘솔 2기 배치!
         [-26, 26].forEach((cx, idx) => {
           const cGroup = new THREE.Group();
@@ -990,7 +1105,7 @@
 
     // 웨이브 방어 성공 시 해당 단계(stepOrder)의 미션 목표를 섹터 내 랜덤 위치에 출현시키는 함수!
     function spawnRandomMissionStepForRoom(room, stepOrder) {
-      if (!room || room.isBossRoom) return;
+      if (!room || room.isBossRoom || room.hasMidBoss) return;
       const pos = findRandomSafeMissionPos(room);
       room.activeMissionTargetPos = pos;
 

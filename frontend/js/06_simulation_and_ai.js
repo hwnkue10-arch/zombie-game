@@ -357,6 +357,7 @@
 
     function checkRoomClear(room) {
       if (room.cleared || room.isBossRoom) return;
+      if (room.hasMidBoss && !room.midBossKilled) return;
       if (room.progress < room.targetVal) return;
       // 섬멸 미션도 최소 2웨이브 이상 방어해야 클리어 인정!
       if (room.condType === "EXTERMINATE" && (room.roomWaveCount || 1) < 2) return;
@@ -397,20 +398,31 @@
         relocateArmoryForCalmPhase(nextR);
         updateRoomVisibility();
 
-        // 정확히 지정된 3개 섹터(중간보스 I, II, III) 진입 시 중간보스 출현!
-        if (nextR.hasMidBoss && !nextR.midBossSpawned) {
-          nextR.midBossSpawned = true;
-          const mbPool = ["MB_JUGGERNAUT", "MB_SUMMONER", "MB_ACIDQUEEN"];
-          const mbKey = mbPool[Math.max(0, nextR.midBossOrder) % mbPool.length];
-          spawnZombie(mbKey, nextR.wx, nextR.wz, nextIdx);
-          SoundFX.play("alarm");
+        // [v3.5] 중간보스 섹터: 진입 즉시 스폰하지 않고, 중앙 생체 격리 캡슐에서 대기하며 스쿼드 전원 정비 후 [F] 단말기로 개시!
+        if (nextR.hasMidBoss && !nextR.midBossAwakened) {
+          const safeBanner = document.getElementById("hud-safe-banner");
+          if (safeBanner) {
+            document.getElementById("hud-safe-banner-text").textContent =
+              "⚠️ 중간보스 생체 캡슐 감지! 스쿼드 정비 후 [F] 단말기를 가동하십시오.";
+            safeBanner.classList.remove("hidden");
+            setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+          }
         }
 
-        if (nextR.isBossRoom && game.boss) {
-          // [v3.2 10섹터 3단계 레이드]: 1단계(냉각 무력화) 및 2단계(파일런 파괴) 동안 보스는 고치 속 동면 상태 유지
-          game.boss.active = false;
-          game.boss.shielded = true;
-          if (game.boss.shieldMat) game.boss.shieldMat.opacity = 0.75;
+        if (nextR.isBossRoom) {
+          // [v3.5] 최종보스 섹터 진입 시: 0단계(스쿼드 최종 정비) 활성화 및 보스는 완전 동면 상태 유지
+          if (game.boss) {
+            game.boss.active = false;
+            game.boss.shielded = true;
+            if (game.boss.shieldMat) game.boss.shieldMat.opacity = 0.85;
+          }
+          const safeBanner = document.getElementById("hud-safe-banner");
+          if (safeBanner) {
+            document.getElementById("hud-safe-banner-text").textContent =
+              "👑 최종 결전지 도달! 무기고 정비 완료 후 입구의 [F] 격벽 콘솔을 가동하십시오.";
+            safeBanner.classList.remove("hidden");
+            setTimeout(() => safeBanner.classList.add("hidden"), 5000);
+          }
         }
       }
 
@@ -1448,6 +1460,13 @@
       const isCalmSpawningRestricted = (game.wavePhase === "CALM") && game.zombies.length >= 4;
       const maxSwarm = 360; // 엔진 안전선
 
+      // [v3.5] 보스 격전지 진입 시 정비 단계(스쿼드 준비 및 무기고 쇼핑) 중에는 호드 스폰 일시 정지!
+      const isBossPrepState = (curRoom && curRoom.hasMidBoss && !curRoom.midBossAwakened) ||
+                              (curRoom && curRoom.isBossRoom && (curRoom.bossPhaseStage || 0) === 0);
+      if (isBossPrepState) {
+        return;
+      }
+
       if (game.spawnTimer <= 0 && game.zombies.length < maxSwarm && !isWaveHordeFinished && !isCalmSpawningRestricted) {
         game.spawnTimer = isSurge
           ? Math.max(0.40, 0.95 - game.currentRoomIndex * 0.04 - rWave * 0.02)
@@ -1761,40 +1780,96 @@
                   interactBar.style.width = "0%";
                 }
               }
-            } else if (nearMissionNode.kind === "BOSS_COOLANT") {
-              interactTitle.textContent = `❄️ [F 홀드] ${nearMissionNode.coolantIdx}번 보조 냉각콘솔 과부하`;
+            } else if (nearMissionNode.kind === "MID_BOSS_POD") {
+              interactTitle.textContent = "🔬 [F 홀드] 생체격리 해제 단말기 가동";
+              interactDesc.textContent = "스쿼드 정비 완료 후 가동 권장 (1.5초)";
               if (holdingF) {
                 nearMissionNode.holdTime += dt;
-                interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 2.0) * 100) + "%";
-                if (nearMissionNode.holdTime >= 2.0) {
+                interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 1.5) * 100) + "%";
+                if (nearMissionNode.holdTime >= 1.5) {
                   nearMissionNode.done = true;
+                  curRoom.midBossAwakened = true;
+                  curRoom.midBossSpawned = true;
                   entitiesGroup.remove(nearMissionNode.mesh);
-                  curRoom.coolantsDone = (curRoom.coolantsDone || 0) + 1;
-                  spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x06b6d4, 8.0, 20, false);
-                  SoundFX.play("upgrade");
-                  if (curRoom.coolantsDone >= 2) {
-                    curRoom.bossPhaseStage = 2;
-                    spawnSector10DefensePylons(curRoom);
-                    SoundFX.play("alarm");
-                    const safeBanner = document.getElementById("hud-safe-banner");
-                    if (safeBanner) {
-                      document.getElementById("hud-safe-banner-text").textContent =
-                        "⚡ 냉각 과부하 완료! 생체 파일런 3기 파괴 (보스 일점사)";
-                      safeBanner.classList.remove("hidden");
-                      setTimeout(() => safeBanner.classList.add("hidden"), 4200);
-                    }
-                  } else {
-                    const safeBanner = document.getElementById("hud-safe-banner");
-                    if (safeBanner) {
-                      document.getElementById("hud-safe-banner-text").textContent =
-                        "❄️ 1번 콘솔 완료! 반대편 2번 냉각 콘솔을 가동하세요";
-                      safeBanner.classList.remove("hidden");
-                      setTimeout(() => safeBanner.classList.add("hidden"), 3800);
-                    }
+                  spawnIceShatterFX(curRoom.wx, curRoom.wz, 15);
+                  spawnBloodParticles(curRoom.wx, 2.5, curRoom.wz, 0x06b6d4, 25);
+                  SoundFX.play("alarm");
+                  const mbPool = ["MB_JUGGERNAUT", "MB_SUMMONER", "MB_ACIDQUEEN"];
+                  const mbKey = mbPool[Math.max(0, curRoom.midBossOrder) % mbPool.length];
+                  const mb = spawnZombie(mbKey, curRoom.wx, curRoom.wz, curRoom.index);
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      `🚨 경보: [${mb.spec.name}] 격리 해제! 즉시 격멸하십시오!`;
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 4500);
                   }
                 }
               } else {
                 interactBar.style.width = "0%";
+              }
+            } else if (nearMissionNode.kind === "BOSS_MASTER_CONSOLE") {
+              interactTitle.textContent = "🚨 [F 홀드] 최종 레이드 개시 (심장 격벽 해제)";
+              interactDesc.textContent = "스쿼드 전원 정비 완료 후 가동 (1.5초)";
+              if (holdingF) {
+                nearMissionNode.holdTime += dt;
+                interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 1.5) * 100) + "%";
+                if (nearMissionNode.holdTime >= 1.5) {
+                  nearMissionNode.done = true;
+                  curRoom.bossPhaseStage = 1;
+                  entitiesGroup.remove(nearMissionNode.mesh);
+                  SoundFX.play("alarm");
+                  spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0xf43f5e, 10.0, 25, true);
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      "🚨 격벽 해제 개시! 돔 좌·우 보조 냉각콘솔 2기를 과부하시키십시오!";
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                  }
+                }
+              } else {
+                interactBar.style.width = "0%";
+              }
+            } else if (nearMissionNode.kind === "BOSS_COOLANT") {
+              if ((curRoom.bossPhaseStage || 0) < 1) {
+                interactTitle.textContent = "🔒 중앙 심장 격벽 콘솔을 먼저 가동해야 합니다!";
+                interactBar.style.width = "0%";
+              } else {
+                interactTitle.textContent = `❄️ [F 홀드] ${nearMissionNode.coolantIdx}번 보조 냉각콘솔 과부하`;
+                if (holdingF) {
+                  nearMissionNode.holdTime += dt;
+                  interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 2.0) * 100) + "%";
+                  if (nearMissionNode.holdTime >= 2.0) {
+                    nearMissionNode.done = true;
+                    entitiesGroup.remove(nearMissionNode.mesh);
+                    curRoom.coolantsDone = (curRoom.coolantsDone || 0) + 1;
+                    spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x06b6d4, 8.0, 20, false);
+                    SoundFX.play("upgrade");
+                    if (curRoom.coolantsDone >= 2) {
+                      curRoom.bossPhaseStage = 2;
+                      spawnSector10DefensePylons(curRoom);
+                      SoundFX.play("alarm");
+                      const safeBanner = document.getElementById("hud-safe-banner");
+                      if (safeBanner) {
+                        document.getElementById("hud-safe-banner-text").textContent =
+                          "⚡ 냉각 과부하 완료! 생체 파일런 3기 파괴 (보스 일점사)";
+                        safeBanner.classList.remove("hidden");
+                        setTimeout(() => safeBanner.classList.add("hidden"), 4200);
+                      }
+                    } else {
+                      const safeBanner = document.getElementById("hud-safe-banner");
+                      if (safeBanner) {
+                        document.getElementById("hud-safe-banner-text").textContent =
+                          "❄️ 1번 콘솔 완료! 반대편 2번 냉각 콘솔을 가동하세요";
+                        safeBanner.classList.remove("hidden");
+                        setTimeout(() => safeBanner.classList.add("hidden"), 3800);
+                      }
+                    }
+                  }
+                } else {
+                  interactBar.style.width = "0%";
+                }
               }
             } else if (nearMissionNode.kind === "CHEM_PART") {
               interactTitle.textContent = `🧪 [F] ${reqStep}번 화학원료 회수`;

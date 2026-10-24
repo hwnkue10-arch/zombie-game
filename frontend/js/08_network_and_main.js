@@ -112,7 +112,7 @@
       if (lobbySlots[mySlotIndex]) lobbySlots[mySlotIndex].name = chosenNick;
       if (optNickInput) optNickInput.value = chosenNick;
 
-      game.pacing = document.getElementById("select-pacing").value;
+      game.pacing = document.getElementById("select-pacing") ? document.getElementById("select-pacing").value : "marathon";
       game.totalRooms = parseInt(document.getElementById("select-room-count").value, 10) || 10;
       game.collapseChance = parseFloat(document.getElementById("select-collapse-chance").value);
       game.friendlyFire = document.getElementById("select-friendly-fire").value === "1";

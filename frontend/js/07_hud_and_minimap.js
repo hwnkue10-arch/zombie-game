@@ -289,7 +289,11 @@
           }
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.condType === "THERMITE" ? 3 : (curRoom.reqWaves || curRoom.targetVal || 3));
         } else if (curRoom.isBossRoom) {
-          if ((curRoom.bossPhaseStage || 1) === 1) {
+          if ((curRoom.bossPhaseStage || 0) === 0) {
+            objText.textContent = `👑 심장 코어 격벽 해제 콘솔 가동 [F]`;
+            if (objSub) objSub.textContent = `무기고 정비 및 스쿼드 전원 집결 후 개시`;
+            objBar.style.width = "0%";
+          } else if (curRoom.bossPhaseStage === 1) {
             objText.textContent = `❄️ 냉각 콘솔 과부하 [F] (${curRoom.coolantsDone || 0}/2)`;
             if (objSub) objSub.textContent = `돔 양쪽 콘솔 2기 조작`;
             objBar.style.width = ((curRoom.coolantsDone || 0) * 50) + "%";
@@ -302,6 +306,20 @@
             objText.textContent = "💀 최종 보스 '더 코어' 섬멸";
             if (objSub) objSub.textContent = `보스 보호막 해제 · 총력전`;
             objBar.style.width = ((1 - game.boss.hp / game.boss.maxHp) * 100) + "%";
+          }
+        } else if (curRoom.condType === "MID_BOSS" || curRoom.hasMidBoss) {
+          if (!curRoom.midBossAwakened) {
+            objText.textContent = `🔬 중간보스 생체격리 해제 [F]`;
+            if (objSub) objSub.textContent = `무기고 정비 완료 후 중앙 단말기 가동`;
+            objBar.style.width = "0%";
+          } else if (game.midBoss && game.midBoss.hp > 0) {
+            objText.textContent = `💀 ${game.midBoss.spec.name} 섬멸`;
+            if (objSub) objSub.textContent = `50% 무적 쉴드 시 증폭기 2기 파괴 필수`;
+            objBar.style.width = ((1 - game.midBoss.hp / game.midBoss.maxHp) * 100) + "%";
+          } else {
+            objText.textContent = `✅ 중간보스 격멸 완료! 탈출구 이동`;
+            if (objSub) objSub.textContent = `🧬변이 코어 및 전리품 회수`;
+            objBar.style.width = "100%";
           }
         } else if (curRoom.condType === "THERMITE") {
           if (curRoom.subStage === 0) {

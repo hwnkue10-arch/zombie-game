@@ -1955,6 +1955,11 @@
           spawnPickup(zx + 1.5, zz, "AMMO_PACK");
           spawnPickup(zx, zz + 1.5, "MEDKIT");
           SoundFX.play("revive");
+          if (curR && curR.hasMidBoss) {
+            curR.midBossKilled = true;
+            curR.progress = curR.targetVal;
+            checkRoomClear(curR);
+          }
         }
 
         game.totalKills++;
