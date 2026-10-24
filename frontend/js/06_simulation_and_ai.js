@@ -3107,22 +3107,13 @@
             else if (pk.kind === "PART") game.weaponParts = (game.weaponParts || 0) + 1;
             else {
               if (pk.wIdx !== undefined && tp.inventory[pk.wIdx]) {
-                // 특정 무기 전용 탄약팩 습득: 해당 무기만 보충
+                // 특정 무기 전용 탄약팩 습득: 해당 무기만 보충 (상단 배너 표시 제거 — 하단 탄약 HUD로만 직관적 갱신)
                 const targetW = pk.wIdx;
                 const inv = tp.inventory[targetW];
                 const maxA = getWeaponMaxAmmo(tp, targetW);
                 const packRatio = (targetW === 2 || targetW === 3) ? 0.75 : 0.6;
                 const gained = Math.ceil(WEAPONS[targetW].packAmmo * packRatio);
                 inv.ammo = Math.min(maxA, inv.ammo + gained);
-                if (tp.id === mySlotIndex) {
-                  const safeBanner = document.getElementById("hud-safe-banner");
-                  if (safeBanner) {
-                    document.getElementById("hud-safe-banner-text").textContent =
-                      `🔫 [${WEAPONS[targetW].name}] 전용 탄약 +${gained}발 보급 완료! (${inv.ammo}/${maxA})`;
-                    safeBanner.classList.remove("hidden");
-                    setTimeout(() => safeBanner.classList.add("hidden"), 2500);
-                  }
-                }
               } else {
                 // 범용 탄약팩 (보급상자/콤보 달성 시 전 총기 보충)
                 tp.inventory.forEach((inv, wIdx) => {

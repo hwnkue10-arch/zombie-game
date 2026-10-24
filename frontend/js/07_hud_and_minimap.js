@@ -255,89 +255,89 @@
 
         const getSequentialWaveSubText = (maxSteps) => {
           const remSec = Math.ceil(curRoom.sectorTimer || 0);
-          const timerTag = curRoom.berserkActive ? `☣️독가스·🔥광폭화` : `⏱️제한 ${remSec}s`;
+          const timerTag = curRoom.berserkActive ? `☣️독가스 확산` : `⏱️${remSec}s`;
           if (compStg >= maxSteps) {
-            return `✅ 모든 목표 달성! 열린 통로로 전진 · ${timerTag}`;
+            return `🚪 탈출로 개방 완료 (전원 진입)`;
           }
           if (curRoom.waitingForWaveDefense) {
             const quota = curRoom.waveZombieQuota || 30;
             const spawned = curRoom.waveZombiesSpawned || 0;
             if (spawned < quota) {
-              return `🌊 [웨이브 호드] 출현: ${spawned}/${quota}마리 | 생존: ${game.zombies.length}마리 · ${timerTag}`;
+              return `생존 감염체: ${game.zombies.length}마리 · ${timerTag}`;
             } else {
-              return `⚔️ [호드 소탕전] 출현 완료! 남은 좀비: ${game.zombies.length}마리 (5마리 이하 처치 시 완료) · ${timerTag}`;
+              return `5마리 이하 소탕 시 해금 · ${timerTag}`;
             }
           }
           const hint = curRoom.activeMissionTargetPos
             ? getCompassDirectionHint(me.x, me.z, curRoom.activeMissionTargetPos.x, curRoom.activeMissionTargetPos.z)
             : "섹터 내부";
-          return `🧭 [${unlockStg}/${maxSteps}단계] 수색: ${hint} 방향 · ${timerTag}`;
+          return `🧭 ${hint} 이동 [F] · ${timerTag}`;
         };
 
         if (curRoom.waitingForWaveDefense) {
           const quota = curRoom.waveZombieQuota || 30;
           const spawned = curRoom.waveZombiesSpawned || 0;
           if (spawned < quota) {
-            objText.textContent = `🌊 호드 침공 진행 중! 출현: ${spawned}/${quota}마리 (생존: ${game.zombies.length}마리 · 5마리 이하 소탕)`;
+            objText.textContent = `⚔️ 호드 방어 (${spawned}/${quota})`;
             objBar.style.width = Math.min(100, Math.max(0, (spawned / quota) * 100)) + "%";
           } else {
-            objText.textContent = `⚔️ 호드 출현 완료! 잔당 소탕 중: ${game.zombies.length}마리 (5마리 이하 처치 시 목표 해금)`;
+            objText.textContent = `🎯 잔당 소탕 (남은 감염체: ${game.zombies.length}마리)`;
             const clearProg = Math.max(0, 1 - Math.max(0, game.zombies.length - 5) / Math.max(1, quota * 0.4));
             objBar.style.width = Math.min(100, Math.max(0, clearProg * 100)) + "%";
           }
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.condType === "THERMITE" ? 3 : (curRoom.reqWaves || curRoom.targetVal || 3));
         } else if (curRoom.isBossRoom) {
           if ((curRoom.bossPhaseStage || 1) === 1) {
-            objText.textContent = `🎯 [1단계] 보조 냉각 콘솔 2기 과부하 [F] (${curRoom.coolantsDone || 0}/2)`;
-            if (objSub) objSub.textContent = `호드의 급습을 막아내며 돔 양쪽 냉각기를 과부하시키세요!`;
+            objText.textContent = `❄️ 냉각 콘솔 과부하 [F] (${curRoom.coolantsDone || 0}/2)`;
+            if (objSub) objSub.textContent = `돔 양쪽 콘솔 2기 조작`;
             objBar.style.width = ((curRoom.coolantsDone || 0) * 50) + "%";
           } else if (curRoom.bossPhaseStage === 2) {
             const remPyl = game.bloodPylons ? game.bloodPylons.length : 0;
-            objText.textContent = `🎯 [2단계] 생체 방어 파일런 3기 파괴 (${Math.max(0, 3 - remPyl)}/3)`;
-            if (objSub) objSub.textContent = `코어를 보호하는 방어 파일런 3기를 집중 사격으로 파괴하세요!`;
+            objText.textContent = `🛡️ 방어 파일런 파괴 (${Math.max(0, 3 - remPyl)}/3)`;
+            if (objSub) objSub.textContent = `중앙 방어 파일런 3기 집중 사격`;
             objBar.style.width = (((3 - remPyl) / 3) * 100) + "%";
           } else if (game.boss) {
-            objText.textContent = "🎯 [3단계] 최종 진화 하이브 마인드 '더 코어' 섬멸";
-            if (objSub) objSub.textContent = `보스 무적기믹 파훼 · 50Lv 풀강 화력 총동원`;
+            objText.textContent = "💀 최종 보스 '더 코어' 섬멸";
+            if (objSub) objSub.textContent = `보스 보호막 해제 · 총력전`;
             objBar.style.width = ((1 - game.boss.hp / game.boss.maxHp) * 100) + "%";
           }
         } else if (curRoom.condType === "THERMITE") {
           if (curRoom.subStage === 0) {
             objText.textContent = game.thermiteParts < 2
-              ? `🎯 목표: 화학원료 순차 회수 [F] (${game.thermiteParts}/2)`
-              : `🎯 목표: 중앙 조합대에서 테르밋 합성 [F]`;
+              ? `🧪 화학원료 회수 [F] (${game.thermiteParts}/2)`
+              : `🔬 테르밋 합성 [F] (중앙)`;
             objBar.style.width = (game.thermiteParts * 25) + "%";
           } else if (curRoom.subStage === 1) {
-            objText.textContent = `🎯 목표: 출구 격벽에 테르밋 부착 [F]`;
+            objText.textContent = `🚪 격벽에 테르밋 부착 [F]`;
             objBar.style.width = "60%";
           } else {
             const rem = Math.max(0, curRoom.targetVal - curRoom.progress).toFixed(0);
-            objText.textContent = `🎯 목표: 격벽 용융 방어 (${rem}초 남음)`;
+            objText.textContent = `🔥 격벽 용융 방어 (${rem}초)`;
             objBar.style.width = (60 + (curRoom.progress / curRoom.targetVal) * 40) + "%";
           }
           if (objSub) objSub.textContent = getSequentialWaveSubText(3);
         } else if (curRoom.condType === "GENERATORS") {
-          objText.textContent = `🎯 목표: 발전기 ${curRoom.targetVal}기 순차 가동 [F] (${curRoom.progress}/${curRoom.targetVal})`;
+          objText.textContent = `⚡ 발전기 가동 [F] (${curRoom.progress}/${curRoom.targetVal})`;
           objBar.style.width = ((curRoom.progress / curRoom.targetVal) * 100) + "%";
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.reqWaves || curRoom.targetVal);
         } else if (curRoom.condType === "PAYLOAD") {
           if (!me.carryingPayload && compStg < 1) {
-            objText.textContent = `🎯 목표: 데이터 블랙박스 회수 [F]`;
+            objText.textContent = `📦 데이터 블랙박스 회수 [F]`;
             objBar.style.width = "15%";
           } else if (curRoom.reqWaves >= 3 && compStg < 2) {
-            objText.textContent = `🎯 목표: 🔐보안중계기 수색 및 암호 해독 [F]`;
+            objText.textContent = `🔐 보안중계기 암호 해독 [F]`;
             objBar.style.width = "50%";
           } else {
-            objText.textContent = `🎯 목표: 🛰️업로드 송신기에 블랙박스 업로드 [F]`;
+            objText.textContent = `🛰️ 송신기에 블랙박스 업로드 [F]`;
             objBar.style.width = "80%";
           }
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.reqWaves || 2);
         } else if (curRoom.condType === "HIVE_NODES") {
-          objText.textContent = `🎯 목표: 생체 신경절 ${curRoom.targetVal}개 순차 파괴 (${curRoom.progress}/${curRoom.targetVal})`;
+          objText.textContent = `🧬 생체 신경절 파괴 (${curRoom.progress}/${curRoom.targetVal})`;
           objBar.style.width = ((curRoom.progress / curRoom.targetVal) * 100) + "%";
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.reqWaves || curRoom.targetVal);
         } else {
-          objText.textContent = `🎯 목표: 군락 증폭기 ${curRoom.targetVal}기 수색·파괴 (${curRoom.progress}/${curRoom.targetVal})`;
+          objText.textContent = `💥 군락 증폭기 파괴 (${curRoom.progress}/${curRoom.targetVal})`;
           objBar.style.width = ((curRoom.progress / curRoom.targetVal) * 100) + "%";
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.reqWaves || curRoom.targetVal);
         }
