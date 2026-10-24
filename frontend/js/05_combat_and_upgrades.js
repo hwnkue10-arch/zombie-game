@@ -1832,7 +1832,7 @@
       const zmb = game.zombies[zIdx];
       if (!zmb) return;
 
-      // 중간보스 무적 기믹 및 단발 피해 상한(1초 순삭 방지!)
+      // 중간보스 무적 기믹 및 단발 피해 상한(4인 협동 1초 순삭 방지!)
       let finalDmg = dmg;
       if (zmb.spec.isMidBoss) {
         if (zmb.mbShieldActive) {
@@ -1842,11 +1842,15 @@
         if (weaponIdx !== undefined && WEAPONS[weaponIdx]) {
           finalDmg = Math.round(dmg * (WEAPONS[weaponIdx].weakMult || 1.15));
         }
+        const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
         if (zmb.mbGroggyTimer > 0) {
-          finalDmg = Math.round(finalDmg * 1.75);
+          // [v3.5] 그로기 폭딜 보너스(1.75배) 유지하되, 4인 집중 일제사격 시 1초 삭제를 방지하는 동적 상한선 (4인 기준 2.6%, 1인 5.5%)
+          const groggyCapRatio = activeSquadCount >= 4 ? 0.026 : (activeSquadCount >= 2 ? 0.038 : 0.055);
+          finalDmg = Math.min(Math.round(finalDmg * 1.75), Math.round(zmb.maxHp * groggyCapRatio));
         } else {
-          // 중화기 연사로도 1초컷이 나지 않도록 중장갑 감쇄(45%) + 타격당 최대 체력의 2.6% 캡 적용!
-          finalDmg = Math.min(Math.round(finalDmg * 0.55), Math.round(zmb.maxHp * 0.026));
+          // [v3.5] 평시 중장갑 감쇄(48% 차감) + 4인 기준 타격당 1.2% (1인 2.6%) 동적 캡 적용으로 순삭 방지
+          const hitCapRatio = activeSquadCount >= 4 ? 0.012 : (activeSquadCount >= 2 ? 0.018 : 0.026);
+          finalDmg = Math.min(Math.round(finalDmg * 0.52), Math.round(zmb.maxHp * hitCapRatio));
         }
       }
 
@@ -1893,10 +1897,13 @@
           pGroup.position.set(nx, 0, nz);
           entitiesGroup.add(pGroup);
 
+          const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
+          const squadNodeScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.70;
+          const nodeHp = Math.round((1800 + (zmb.roomIndex || game.currentRoomIndex || 0) * 850) * squadNodeScale);
           const nodePod = {
             x: nx, z: nz,
-            hp: 680,
-            maxHp: 680,
+            hp: nodeHp,
+            maxHp: nodeHp,
             isMissionHive: false,
             isMidBossShieldNode: true,
             parentMidBoss: zmb,
@@ -2018,14 +2025,26 @@
       }
       b.shielded = false;
 
-      // [v3.4 30Lv 코어 각성: 보스 맞춤형 장갑 파쇄 (+20% 취약 디버프)]
+      const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
       let bossHitDmg = dmg;
+
+      // [v3.5 4인 레이드 밸런스 오버홀]
+      // 평시: 생체 외피 감쇄(32% 방어) + 4인 기준 타격당 1.2% (1인 2.5%) 상한선으로 순간 순삭 방지!
+      // 그로기: 2.2배 그로기 폭딜 보너스를 부여하되, 4인 기준 타격당 2.8% (1인 5.5%) 상한선으로 레이드 보스의 품격 유지!
+      if (b.groggyTimer > 0) {
+        const groggyCapRatio = activeSquadCount >= 4 ? 0.028 : (activeSquadCount >= 2 ? 0.040 : 0.055);
+        bossHitDmg = Math.min(Math.round(bossHitDmg * 2.2), Math.round(b.maxHp * groggyCapRatio));
+      } else {
+        const hitCapRatio = activeSquadCount >= 4 ? 0.012 : (activeSquadCount >= 2 ? 0.018 : 0.025);
+        bossHitDmg = Math.min(Math.round(bossHitDmg * 0.68), Math.round(b.maxHp * hitCapRatio));
+      }
+
+      // [v3.4 30Lv 코어 각성: 보스 맞춤형 장갑 파쇄 (+20% 취약 디버프)]
       if ((b.armorShredTimer || 0) > 0) {
         bossHitDmg = Math.round(bossHitDmg * (b.armorShredMult || 1.20));
       }
 
-      // Groggy bonus damage (2.5x when groggy after stopping Nutrient Hosts!)
-      const finalDmg = b.groggyTimer > 0 ? Math.round(bossHitDmg * 2.5) : bossHitDmg;
+      const finalDmg = Math.max(1, bossHitDmg);
       b.hp = Math.max(0, b.hp - finalDmg);
       spawnBloodParticles(b.x + (Math.random() - 0.5) * 3.5, 2.5, b.z + (Math.random() - 0.5) * 3.5, 0xf43f5e, 3);
 
@@ -2045,14 +2064,23 @@
         SoundFX.play("alarm");
         const bossRoom = game.rooms[game.rooms.length - 1];
         const off = bossRoom.half - 10;
-        [[-off, -off], [off, -off], [-off, off], [off, off]].forEach(co => {
+        const pylonScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.70;
+        const pylonHp = Math.round(9200 * pylonScale);
+        [[-off, -off], [off, -off], [-off, off], [off, off]].forEach((co, pIdx) => {
           const pMesh = new THREE.Mesh(
             new THREE.CylinderGeometry(1.1, 1.4, 5.5, 10),
             new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xbe123c, emissiveIntensity: 0.8 })
           );
           pMesh.position.set(bossRoom.wx + co[0], 2.75, bossRoom.wz + co[1]);
           entitiesGroup.add(pMesh);
-          game.bloodPylons.push({ x: bossRoom.wx + co[0], z: bossRoom.wz + co[1], hp: 950, mesh: pMesh });
+          const pObj = { x: bossRoom.wx + co[0], z: bossRoom.wz + co[1], hp: pylonHp, maxHp: pylonHp, mesh: pMesh, isPylon: true };
+          game.bloodPylons.push(pObj);
+          registerWorldSymbol(
+            pObj.x, 3.8, pObj.z,
+            `🩸핏빛기둥#${pIdx + 1}[집중파괴]`,
+            "bg-rose-950/90 border-rose-500 text-rose-200 animate-pulse",
+            pObj, bossRoom.index
+          );
         });
       } else if (ratio <= 0.50 && !b.invulnTriggered.p50) {
         b.invulnTriggered.p50 = true;

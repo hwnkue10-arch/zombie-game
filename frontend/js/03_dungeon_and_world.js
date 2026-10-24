@@ -926,10 +926,11 @@
       });
     }
 
-    // [v3.2] 10섹터 2단계: 중앙 보스 코어를 감싸는 생체 방어 파일런 3기 기립
+    // [v3.5] 10섹터 2단계: 중앙 보스 코어를 감싸는 생체 방어 파일런 3기 기립 (스쿼드 인원수 연동)
     function spawnSector10DefensePylons(room) {
-      const squadScale = (game.players.length || 1) >= 4 ? 1.6 : 1.0;
-      const pylonHp = Math.round(14000 * squadScale);
+      const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
+      const squadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.55;
+      const pylonHp = Math.round(13500 * squadScale);
       const angles = [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3];
       angles.forEach((ang, idx) => {
         const px = room.wx + Math.cos(ang) * 16.5;

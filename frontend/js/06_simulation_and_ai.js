@@ -494,7 +494,7 @@
           b.invulnState = "NONE";
           b.shielded = false;
           b.groggyTimer = 8.0;
-          b.lastPatternText = "⚡ GROGGY (2.5x DMG)";
+          b.lastPatternText = "⚡ GROGGY (2.2x DMG)";
           SoundFX.play("revive");
         }
       } else if (b.invulnState === "LASERS_50") {
@@ -526,7 +526,7 @@
           b.shielded = false;
           b.laserGroup.visible = false;
           b.groggyTimer = 8.0;
-          b.lastPatternText = "⚡ GROGGY (2.5x DMG)";
+          b.lastPatternText = "⚡ GROGGY (2.2x DMG)";
           SoundFX.play("revive");
         }
       } else if (b.invulnState === "HOSTS_25") {
@@ -551,7 +551,7 @@
           b.invulnState = "NONE";
           b.shielded = false;
           b.groggyTimer = 10.0;
-          b.lastPatternText = "⚡ GROGGY (2.5x DMG)";
+          b.lastPatternText = "⚡ GROGGY (2.2x DMG)";
           SoundFX.play("revive");
         }
       }
@@ -638,6 +638,8 @@
       } else if (chosen === "CYST_PODS") {
         b.lastPatternText = "🥚 자폭 낭종 파괴";
         const bossRoom = game.rooms[game.rooms.length - 1];
+        const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
+        const podHp = Math.round(950 * (1.0 + Math.max(0, activeSquadCount - 1) * 0.65));
         for (let i = 0; i < 3; i++) {
           const px = bossRoom.wx + (Math.random() - 0.5) * 32;
           const pz = bossRoom.wz + (Math.random() - 0.5) * 32;
@@ -647,7 +649,7 @@
           );
           podMesh.position.set(px, 1.0, pz);
           entitiesGroup.add(podMesh);
-          game.cystPods.push({ x: px, z: pz, hp: 110, isMissionHive: false, timer: 8.0, mesh: podMesh });
+          game.cystPods.push({ x: px, z: pz, hp: podHp, isMissionHive: false, timer: 8.0, mesh: podMesh });
         }
       } else if (chosen === "ACID_POOLS") {
         b.lastPatternText = "🧪 산성 웅덩이";
@@ -667,7 +669,8 @@
         const target = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
         clearBossGrapple();
         b.grappleTarget = target;
-        b.grappleHp = 220;
+        const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
+        b.grappleHp = Math.round(1800 * (1.0 + Math.max(0, activeSquadCount - 1) * 0.65));
         b.lastPatternText = `🩸 ${target.name} 견인중 ([V] 기절충격파로 절단!)`;
         const lineGeo = new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(b.x, 2.8, b.z),

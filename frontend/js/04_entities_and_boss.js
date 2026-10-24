@@ -84,8 +84,9 @@
       entitiesGroup.add(bossGroup);
 
       const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
-      const bossSquadScale = Math.max(1.0, 1.0 + (activeSquadCount - 1) * 0.52);
-      const baseBossHp = game.pacing === "marathon" ? 110000 : (game.pacing === "blitz" ? 38000 : 75000);
+      // [v3.5 4인 레이드 밸런스] 4인 집중 화력에 대응하는 정밀 스쿼드 체력 곡선 (1P 1.0x, 2P 1.82x, 3P 2.64x, 4P 3.46x)
+      const bossSquadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.82;
+      const baseBossHp = game.pacing === "marathon" ? 118000 : (game.pacing === "blitz" ? 44000 : 82000);
       const maxHp = Math.round(baseBossHp * bossSquadScale);
       game.boss = {
         x: bx, z: bz,
@@ -447,11 +448,14 @@
       group.position.set(x, 0, z);
       entitiesGroup.add(group);
 
-      // [v3.3] 섹터별 강화 한계치(Lv.5->Lv.50)에 맞춘 정밀 스펙 스케일링:
-      // 중간보스는 후반 플레이어 화력 인플레이션(x45배)에 맞춰 지수 스케일링(1.34^섹터) 및 스쿼드 인원수 연동!
+      // [v3.5] 섹터별 강화 한계치(Lv.5->Lv.50) 및 4인 협동 집결 화력에 맞춘 정밀 스펙 스케일링:
+      // 중간보스는 4인 집중포화에도 패턴을 모두 선보일 수 있도록 스쿼드 계수(1P 1.0x ~ 4P 3.31x) 및 1.36^섹터 지수 스케일링 적용!
       const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
-      const squadMult = Math.max(1.0, 1.0 + (activeSquadCount - 1) * 0.45);
-      const hpScale = spec.isMidBoss ? (Math.pow(1.34, roomIndex) * squadMult) : Math.pow(1.27, roomIndex);
+      const midBossSquadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.77;
+      const hostSquadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.65;
+      const hpScale = spec.isMidBoss
+        ? (Math.pow(1.36, roomIndex) * midBossSquadScale)
+        : (spec.isNutrientHost ? Math.pow(1.27, roomIndex) * hostSquadScale : Math.pow(1.27, roomIndex));
       const dmgScale = 1 + roomIndex * 0.12;
       const zObj = {
         typeKey,
