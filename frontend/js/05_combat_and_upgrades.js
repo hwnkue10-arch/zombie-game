@@ -1360,9 +1360,9 @@
       const finalDmg = Math.round(baseDmg * (barrel.dmgMult || 1));
       const hasFreeze = Boolean(barrel.tier1Special || barrel.awakened);
       const hasCryoField = Boolean(barrel.awakened);
-      // 15Lv 냉각 폭약통 빙결 반경 대폭 상향 (12.5m = 지름 25m 초대형 결빙 폭풍)
-      const expRadius = (barrel.awakened ? 15.0 : (barrel.tier1Special ? 12.5 : 8.0)) + (barrel.areaLv || 0) * 1.2;
-      const freezeSec = (barrel.awakened ? 8.0 : 6.0) + (barrel.stunBonus || 0);
+      // 15Lv 냉각 폭약통(10.0m) / 30Lv 절대영도 퍼마프로스트(기존 적정 반경 10.5m 복원)
+      const expRadius = (barrel.awakened ? 10.5 : (barrel.tier1Special ? 10.0 : 8.0)) + (barrel.areaLv || 0) * 0.8;
+      const freezeSec = (barrel.awakened ? 7.5 : 5.5) + (barrel.stunBonus || 0);
 
       SoundFX.play("explosion");
       if (hasFreeze) SoundFX.play("ice");
@@ -1451,9 +1451,9 @@
         }
       }
 
-      // 5. 영구동토 냉각 장판 생성 — 오직 30Lv 코어 각성(awakened) 시에만 생성!
+      // 5. 영구동토 냉각 장판 생성 — 오직 30Lv 코어 각성(awakened) 시에만 생성! (적정 기본 반경 5.2m)
       if (hasCryoField) {
-        const cRad = 6.8 + (barrel.areaLv || 0) * 0.8;
+        const cRad = 5.2 + (barrel.areaLv || 0) * 0.6;
         const cMesh = new THREE.Mesh(
           new THREE.CircleGeometry(cRad, 24),
           new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.58 })

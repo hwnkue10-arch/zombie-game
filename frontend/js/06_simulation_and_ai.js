@@ -67,7 +67,10 @@
       if (Math.random() < 0.75) {
         room.collapsing = true;
         game.collapseState = { active: true, roomIndex: room.index, timer: 24.0 };
-        if (collapseBanner) collapseBanner.classList.remove("hidden");
+        if (collapseBanner) {
+          document.getElementById("hud-collapse-msg").textContent = "⚠️ 구역 붕괴 카운트다운! 탈출로로 전력 질주하세요!";
+          collapseBanner.classList.remove("hidden");
+        }
         if (safeBanner) safeBanner.classList.add("hidden");
         SoundFX.play("alarm");
         if (door) {
@@ -77,6 +80,12 @@
           }
         }
       } else {
+        if (room.gasWaveActive && collapseBanner) {
+          document.getElementById("hud-collapse-msg").textContent = "🚪 미션 완수! 탈출로가 개방되었습니다. 독가스를 피해 탈출하세요!";
+          collapseBanner.classList.remove("hidden");
+        } else if (collapseBanner) {
+          collapseBanner.classList.add("hidden");
+        }
         if (safeBanner) {
           document.getElementById("hud-safe-banner-text").textContent =
             `✅ S${nextIdx + 1} 개방! 보너스 +${clearBonusBp}BP · ⚙️무기부품 +1개 · 탄약 보급`;
@@ -459,7 +468,8 @@
         }
       }
 
-      // 1c. 섹터 제한시간(260~440초) 초과 시 [🚨 호드 광폭화(체력+75%·이속+35%·공격력+35%) + 탈출로 즉시 강제개방 + 신경 독가스 100% 전역 살포]!
+      // 1c. 섹터 제한시간(260~440초) 초과 시 [🚨 타임아웃 페널티: 신경 독가스 살포 & 호드 광폭화(체력+75%·이속+35%·공격력+35%)]!
+      // (주의: 타임아웃 시 문은 절대 열리지 않으며, 반드시 미션을 완수해야만 탈출로가 개방됩니다!)
       if (curRoom && !curRoom.cleared && !curRoom.isBossRoom) {
         curRoom.sectorTimer = Math.max(0, (curRoom.sectorTimer || 260) - dt);
         if (curRoom.sectorTimer <= 0) {
@@ -470,16 +480,6 @@
             curRoom.gasWaveProgress = 0.05;
             while ((curRoom.spawnHoles || []).some(h => !h.active)) {
               activateAdditionalSpawnHole(curRoom);
-            }
-            // 🚨 탈출로(다음 섹터 통로 문) 즉시 비상 개방하여 탈출 가능하도록 조치!
-            const nextIdx = curRoom.index + 1;
-            const door = game.doors.find(d => d.fromRoom === curRoom.index && d.toRoom === nextIdx);
-            if (door) {
-              door.open = true;
-              door.mesh.position.y = -4.2;
-            }
-            if (game.rooms[nextIdx]) {
-              game.rooms[nextIdx].unlocked = true;
             }
 
             // 현재 살아있는 모든 감염체도 즉시 광폭화(체력 +75%, 공격력 +35%, 이속 +35%, 핏빛 발광, 15% 벌크업) 적용!
@@ -503,7 +503,7 @@
             const collapseBanner = document.getElementById("hud-collapse-banner");
             if (collapseBanner) {
               document.getElementById("hud-collapse-msg").textContent =
-                "☣️ 신경 독가스 살포 & 🔥호드 광폭화! 열린 탈출로로 즉시 전진하세요!";
+                "☣️ 제한시간 초과! 신경 독가스 살포 & 🔥호드 광폭화! 미션을 신속히 완수하세요!";
               collapseBanner.classList.remove("hidden");
             }
           }

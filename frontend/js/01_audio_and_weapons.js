@@ -206,8 +206,8 @@
         fireRate: 0.42, damage: 680, speed: 0, spread: 0, pellets: 1,
         stun: 1.4, knockback: 4.5, placeType: "barrel", explosiveRadius: 8.0,
         color: 0xef4444, sound: "pickup", unlockedAtStart: true,
-        tier1Name: "냉각 폭약통 (반경 12.5m 6초 광역 빙결 + 쇄빙)",
-        awakenName: "절대영도 냉각장판 (반경 15m 빙결 + 7.5초 냉각장판)",
+        tier1Name: "냉각 폭약통 (반경 10.0m 5.5초 광역 빙결 + 쇄빙)",
+        awakenName: "절대영도 퍼마프로스트 (반경 10.5m 빙결 + 영구동토 장판)",
         roleDesc: "고폭 드럼통 설치 (15Lv 코어: 광역빙결 / 30Lv 코어: 냉각장판)"
       }
     ];
