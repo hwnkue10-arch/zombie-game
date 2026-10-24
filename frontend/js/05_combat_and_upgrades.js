@@ -1614,7 +1614,7 @@
         });
       }
 
-      // 3. 반경 내 감염체 폭발 피해 (15Lv/30Lv 코어 개조 시에만 완전 동결 부여!)
+      // 3. 반경 내 감염체 폭발 피해 (15Lv 코어: 완전 동결 / 30Lv 코어: 완전 동결 + 장갑 파쇄 취약화)
       for (let i = game.zombies.length - 1; i >= 0; i--) {
         const zmb = game.zombies[i];
         const dist = Math.hypot(zmb.x - barrel.x, zmb.z - barrel.z);
@@ -1624,12 +1624,20 @@
           const baseStun = 1.4 + (barrel.stunBonus || 0);
           damageZombie(i, hitDmg, (zmb.x - barrel.x) * 2.2, (zmb.z - barrel.z) * 2.2, baseStun, 7);
 
-          if (hasFreeze && game.zombies[i] && game.zombies[i].hp > 0) {
+          if (game.zombies[i] && game.zombies[i].hp > 0) {
             const zTarget = game.zombies[i];
-            const actualDur = zTarget.spec.isMidBoss ? Math.max(2.5, freezeSec * 0.5) : freezeSec;
-            zTarget.freezeTimer = Math.max(zTarget.freezeTimer || 0, actualDur);
-            zTarget.stunTimer = Math.max(zTarget.stunTimer || 0, actualDur);
-            if (zTarget.iceBlock) zTarget.iceBlock.visible = true;
+            if (hasFreeze) {
+              const actualDur = zTarget.spec.isMidBoss ? Math.max(2.5, freezeSec * 0.5) : freezeSec;
+              zTarget.freezeTimer = Math.max(zTarget.freezeTimer || 0, actualDur);
+              zTarget.stunTimer = Math.max(zTarget.stunTimer || 0, actualDur);
+              if (zTarget.iceBlock) zTarget.iceBlock.visible = true;
+            }
+            // [v3.4 30Lv 코어 각성: 절대영도 파쇄] 일반/엘리트 좀비 6초간 받는 총기 피해 +35% 증폭 & 장갑 무력화!
+            if (barrel.awakened) {
+              zTarget.armorShredTimer = 6.0;
+              zTarget.armorShredMult = 1.35;
+              spawnBloodParticles(zTarget.x, 1.8, zTarget.z, 0xa855f7, 3);
+            }
           }
         }
       }
@@ -1646,14 +1654,20 @@
       if (game.boss && game.boss.active && !game.boss.dead) {
         if (Math.hypot(game.boss.x - barrel.x, game.boss.z - barrel.z) <= expRadius + game.boss.radius) {
           damageBoss(Math.round(finalDmg * 0.95));
+          // [v3.4 30Lv 코어 각성: 보스 맞춤형 밸런스 장갑 파쇄] 6초간 받는 피해 +20% 취약 디버프 부여!
+          if (barrel.awakened) {
+            game.boss.armorShredTimer = 6.0;
+            game.boss.armorShredMult = 1.20;
+            spawnBloodParticles(game.boss.x, 2.5, game.boss.z, 0xa855f7, 8);
+          }
         }
       }
 
-      // 5. 영구동토 냉각 장판 및 [v3.4 신규] 소이화염 잔류 장판 생성
+      // 5. 15Lv/30Lv 코어 개조 전용 영구동토 냉각 장판 생성 (기본 폭약통은 장판 없이 순수 고폭 파편에 집중!)
       if (hasCryoField) {
         const cRad = 5.2 + (barrel.areaLv || 0) * 0.6;
-        const cryoDps = Math.round((165 + (barrel.fireLv || 0) * 35) * secScale * (barrel.dmgMult || 1));
-        const cryoLife = 7.5 + (barrel.fireLv || 0) * 0.5;
+        const cryoDps = Math.round((barrel.awakened ? 210 : 165) * secScale * (barrel.dmgMult || 1));
+        const cryoLife = barrel.awakened ? 8.0 : 6.5;
         const cMesh = new THREE.Mesh(
           new THREE.CircleGeometry(cRad, 24),
           new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.58 })
@@ -1671,27 +1685,43 @@
           wIdx: 7,
           mesh: cMesh
         });
-      } else if ((barrel.fireLv || 0) > 0) {
-        // [v3.4 소이화염 개조] 폭약통 폭발 지점에 강력한 잔류 화염 장판 생성 (설치속도 대체)
-        const fRad = 3.6 + (barrel.fireLv * 0.35) + (barrel.areaLv || 0) * 0.3;
-        const fDps = Math.round((120 + barrel.fireLv * 40) * secScale * (barrel.dmgMult || 1));
-        const fLife = 3.8 + barrel.fireLv * 0.55;
-        const fMesh = new THREE.Mesh(
-          new THREE.CircleGeometry(fRad, 24),
-          new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.62 })
+      }
+
+      // 6. [v3.4 신규 스탯: 고폭파편] 폭발 순간 360° 전방위로 관통 파편 탄환 12발 방사!
+      const shrapnelCount = 12;
+      const shrapnelDmg = Math.round((140 + (barrel.shrapnelLv || 0) * 55) * secScale * (barrel.dmgMult || 1));
+      for (let s = 0; s < shrapnelCount; s++) {
+        const sAng = (s / shrapnelCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.15;
+        const sSpd = 26.0 + (barrel.shrapnelLv || 0) * 1.5;
+        const sMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(0.24, 0.24, 0.48),
+          new THREE.MeshBasicMaterial({ color: hasFreeze ? 0x38bdf8 : 0xfacc15 })
         );
-        fMesh.rotation.x = -Math.PI / 2;
-        fMesh.position.set(barrel.x, 0.06, barrel.z);
-        effectsGroup.add(fMesh);
-        game.flamePools.push({
+        sMesh.position.set(barrel.x, 0.8, barrel.z);
+        sMesh.rotation.y = Math.atan2(Math.sin(sAng), Math.cos(sAng));
+        effectsGroup.add(sMesh);
+        game.bullets.push({
+          ownerId: barrel.ownerId !== undefined ? barrel.ownerId : -1,
+          wIdx: 7,
+          tier1Special: barrel.tier1Special,
+          awakened: barrel.awakened,
+          noFriendlyFire: true,
+          isZombieProjectile: false,
           x: barrel.x,
           z: barrel.z,
-          radius: fRad,
-          dps: fDps,
-          life: fLife,
-          isCryo: false,
-          wIdx: 7,
-          mesh: fMesh
+          originX: barrel.x,
+          originZ: barrel.z,
+          vx: Math.cos(sAng) * sSpd,
+          vz: Math.sin(sAng) * sSpd,
+          damage: shrapnelDmg,
+          pierceLeft: 2,
+          piercing: true,
+          range: 16.0 + (barrel.shrapnelLv || 0) * 1.2,
+          life: 0.75,
+          maxLife: 0.75,
+          mesh: sMesh,
+          stun: 0.6,
+          knockback: 2.8
         });
       }
 
@@ -1826,6 +1856,11 @@
         if (Math.random() < 0.45) {
           spawnIceShatterFX(zmb.x, zmb.z, 3);
         }
+      }
+
+      // [v3.4 30Lv 코어 각성: 장갑 파쇄 디버프 (+35% 피해 증폭 및 아머 무력화)]
+      if ((zmb.armorShredTimer || 0) > 0) {
+        finalDmg = Math.round(finalDmg * (zmb.armorShredMult || 1.35));
       }
 
       const resist = zmb.tenacity || 0;
@@ -1983,8 +2018,14 @@
       }
       b.shielded = false;
 
+      // [v3.4 30Lv 코어 각성: 보스 맞춤형 장갑 파쇄 (+20% 취약 디버프)]
+      let bossHitDmg = dmg;
+      if ((b.armorShredTimer || 0) > 0) {
+        bossHitDmg = Math.round(bossHitDmg * (b.armorShredMult || 1.20));
+      }
+
       // Groggy bonus damage (2.5x when groggy after stopping Nutrient Hosts!)
-      const finalDmg = b.groggyTimer > 0 ? Math.round(dmg * 2.5) : dmg;
+      const finalDmg = b.groggyTimer > 0 ? Math.round(bossHitDmg * 2.5) : bossHitDmg;
       b.hp = Math.max(0, b.hp - finalDmg);
       spawnBloodParticles(b.x + (Math.random() - 0.5) * 3.5, 2.5, b.z + (Math.random() - 0.5) * 3.5, 0xf43f5e, 3);
 

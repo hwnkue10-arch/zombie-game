@@ -474,6 +474,7 @@
       if (!b || !b.active || b.dead) return;
 
       b.groggyTimer = Math.max(0, b.groggyTimer - dt);
+      if ((b.armorShredTimer || 0) > 0) b.armorShredTimer = Math.max(0, b.armorShredTimer - dt);
 
       const pulseSpeed = b.phase === 1 ? 4.0 : (b.phase === 2 ? 6.5 : 9.2);
       b.pulseTime += dt * pulseSpeed;
@@ -2659,6 +2660,11 @@
             damageZombie(i, z.burnDps || 18, 0, 0, 0.05, 1);
             if (game.zombies.length < prevLen || !game.zombies[i]) continue;
           }
+        }
+
+        // [v3.4 30Lv 코어 각성: 장갑 파쇄 타이머]
+        if ((z.armorShredTimer || 0) > 0) {
+          z.armorShredTimer = Math.max(0, z.armorShredTimer - dt);
         }
 
         // [v3.1 극저온 완전 빙결 처리]

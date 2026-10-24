@@ -208,9 +208,9 @@
         fireRate: 0.42, damage: 680, speed: 0, spread: 0, pellets: 1,
         stun: 1.4, knockback: 4.5, placeType: "barrel", explosiveRadius: 8.0,
         color: 0xef4444, sound: "pickup", unlockedAtStart: true,
-        tier1Name: "냉각 폭약통 (반경 10.0m 5.5초 광역 빙결 + 쇄빙)",
-        awakenName: "절대영도 퍼마프로스트 (반경 10.5m 빙결 + 영구동토 장판)",
-        roleDesc: "고폭 드럼통 설치 (15Lv 코어: 광역빙결 / 30Lv 코어: 냉각장판)"
+        tier1Name: "냉각 폭약통 (10.0m 광역 빙결 + 바닥 영구동토 냉각장판)",
+        awakenName: "절대영도 파쇄 (10.5m 빙결 + 장갑 파쇄·받는 피해 20%~35% 증폭)",
+        roleDesc: "고폭 드럼통 설치 (15Lv 코어: 냉각장판 / 30Lv 코어: 장갑파쇄)"
       }
     ];
 
@@ -275,7 +275,7 @@
       // 7: 고폭 폭약통
       [
         { key: "atk", label: "기폭화력", desc: "폭발딜+35%" },
-        { key: "spd", label: "소이화염", desc: "잔류장판·지속딜↑" },
+        { key: "spd", label: "고폭파편", desc: "파편위력+35%" },
         { key: "area", label: "폭발반경", desc: "범위+1.1m" },
         { key: "stun", label: "충격저지", desc: "기절·빙결↑" },
         { key: "knock", label: "설치효율", desc: "무소모+6.5%" }

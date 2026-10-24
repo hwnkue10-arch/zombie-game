@@ -385,7 +385,12 @@
           game.boss.groggyTimer > 0 ? "⚡GROGGY" : `P${game.boss.phase}`;
         document.getElementById("hud-boss-hp-text").textContent = `${Math.ceil(game.boss.hp)}`;
         document.getElementById("hud-boss-bar").style.width = ((game.boss.hp / game.boss.maxHp) * 100) + "%";
-        document.getElementById("hud-boss-pattern-alert").textContent = game.boss.lastPatternText;
+        if ((game.boss.armorShredTimer || 0) > 0) {
+          document.getElementById("hud-boss-pattern-alert").textContent =
+            `🛡️ 장갑파쇄 취약 활성 (+20% 피해) [${game.boss.armorShredTimer.toFixed(1)}s]`;
+        } else {
+          document.getElementById("hud-boss-pattern-alert").textContent = game.boss.lastPatternText;
+        }
         document.getElementById("hud-boss-shield-overlay").classList.toggle("hidden", game.boss.invulnState === "NONE");
       } else {
         bossBox.classList.add("hidden");
