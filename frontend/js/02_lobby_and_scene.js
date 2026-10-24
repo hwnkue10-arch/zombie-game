@@ -20,6 +20,9 @@
     let wsClient = null;
     let isRemoteClient = false;
     let mySlotIndex = 0;
+    function isHostPlayer() {
+      return !isRemoteClient && mySlotIndex === 0;
+    }
 
     function kickLobbySlot(idx) {
       if (idx <= 0 || idx >= lobbySlots.length) return;

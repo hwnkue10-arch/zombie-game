@@ -515,11 +515,208 @@
               const r = game.rooms[msg.roomIdx];
               if (r) {
                 if (msg.action === "ADVANCE_STAGE") {
-                  r.completedStage = Math.max(r.completedStage || 0, msg.completedStep);
+                  r.completedStage = Math.max(r.completedStage || 0, msg.completedStep || 0);
                   r.waitingForWaveDefense = true;
                   if (game.wavePhase === "CALM" && game.waveTimer > 4.0) {
                     game.waveTimer = 4.0;
                   }
+                } else if (msg.action === "ATTACH_THERMITE") {
+                  r.subStage = 2;
+                  r.lastSubStageChangeTime = Date.now();
+                  const nextDoor = game.doors.find(d => d.fromRoom === r.index && !d.open);
+                  if (nextDoor) {
+                    ensureThermiteDoorVisuals(r, nextDoor);
+                    spawnMissionStageVFX(nextDoor.x, nextDoor.z, 0xf97316, 5.0, 16, false);
+                  }
+                  SoundFX.play("alarm");
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      "🧨 테르밋 설치 완료! 바닥 위험구역 밖으로 대피하세요";
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 4200);
+                  }
+                } else if (msg.action === "SYNTHESIZE_THERMITE") {
+                  const node = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "SYNTH_TABLE" && !n.done);
+                  if (node) {
+                    node.done = true;
+                    if (node.mesh) entitiesGroup.remove(node.mesh);
+                  }
+                  r.subStage = 1;
+                  r.completedStage = 3;
+                  r.lastSubStageChangeTime = Date.now();
+                  if (node) spawnMissionStageVFX(node.x, node.z, 0xf97316, 6.5, 22, true);
+                  SoundFX.play("upgrade");
+                  const nextDoor = game.doors.find(d => d.fromRoom === r.index && !d.open);
+                  if (nextDoor) ensureThermiteDoorVisuals(r, nextDoor);
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      "🔥 테르밋 폭약 합성 완료! 출구 방화벽에 부착하세요";
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 4000);
+                  }
+                } else if (msg.action === "PICKUP_CHEM_PART") {
+                  const node = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "CHEM_PART" && n.stepOrder === msg.stepOrder && !n.done);
+                  if (node) {
+                    node.done = true;
+                    if (node.mesh) entitiesGroup.remove(node.mesh);
+                  }
+                  game.thermiteParts = Math.max(game.thermiteParts || 0, msg.stepOrder || 1);
+                  if (node) spawnMissionStageVFX(node.x, node.z, 0xf59e0b, 4.2, 14, false);
+                  SoundFX.play("pickup");
+                  advanceRoomMissionStage(
+                    r,
+                    msg.stepOrder,
+                    msg.stepOrder === 1
+                      ? "✅ 1번 원료 회수 완료! 다음 웨이브를 막으면 2번 원료가 개방됩니다!"
+                      : "✅ 2번 원료 회수 완료! 다음 웨이브를 막으면 중앙 합성대가 개방됩니다!"
+                  );
+                } else if (msg.action === "IGNITE_GENERATOR") {
+                  const node = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "GENERATOR" && n.stepOrder === msg.stepOrder && !n.done);
+                  if (node) {
+                    node.done = true;
+                    if (node.coreMat) node.coreMat.color.setHex(0x38bdf8);
+                    spawnMissionStageVFX(node.x, node.z, 0x38bdf8, 6.8, 20, false);
+                  }
+                  r.progress++;
+                  SoundFX.play("upgrade");
+                  if (r.progress < r.targetVal) {
+                    advanceRoomMissionStage(
+                      r,
+                      msg.stepOrder,
+                      `✅ 발전기 #${msg.stepOrder} 가동 완료! 다음 웨이브를 막으면 발전기 #${msg.stepOrder + 1}이 개방됩니다!`
+                    );
+                  }
+                  checkRoomClear(r);
+                } else if (msg.action === "WAKE_MIDBOSS") {
+                  r.midBossAwakened = true;
+                  r.midBossSpawned = true;
+                  const podNode = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "MID_BOSS_POD");
+                  if (podNode) {
+                    podNode.done = true;
+                    if (podNode.mesh) entitiesGroup.remove(podNode.mesh);
+                  }
+                  spawnIceShatterFX(r.wx, r.wz, 15);
+                  spawnBloodParticles(r.wx, 2.5, r.wz, 0x06b6d4, 25);
+                  SoundFX.play("alarm");
+                  if (!isRemoteClient) {
+                    const mbPool = ["MB_JUGGERNAUT", "MB_SUMMONER", "MB_ACIDQUEEN"];
+                    const mbKey = mbPool[Math.max(0, r.midBossOrder) % mbPool.length];
+                    const mb = spawnZombie(mbKey, r.wx, r.wz, r.index);
+                    const safeBanner = document.getElementById("hud-safe-banner");
+                    if (safeBanner) {
+                      document.getElementById("hud-safe-banner-text").textContent =
+                        `🚨 경보: [${mb.spec.name}] 격리 해제! 즉시 격멸하십시오!`;
+                      safeBanner.classList.remove("hidden");
+                      setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                    }
+                  }
+                } else if (msg.action === "START_FINAL_BOSS") {
+                  r.bossPhaseStage = 1;
+                  const consoleNode = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "BOSS_MASTER_CONSOLE");
+                  if (consoleNode) {
+                    consoleNode.done = true;
+                    if (consoleNode.mesh) entitiesGroup.remove(consoleNode.mesh);
+                  }
+                  SoundFX.play("alarm");
+                  if (consoleNode) spawnMissionStageVFX(consoleNode.x, consoleNode.z, 0xf43f5e, 10.0, 25, true);
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      "🚨 격벽 해제 개시! 돔 좌·우 보조 냉각콘솔 2기를 과부하시키십시오!";
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                  }
+                } else if (msg.action === "OVERLOAD_COOLANT") {
+                  const coolantNode = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "BOSS_COOLANT" && n.coolantIdx === msg.coolantIdx);
+                  if (coolantNode) {
+                    coolantNode.done = true;
+                    if (coolantNode.mesh) entitiesGroup.remove(coolantNode.mesh);
+                    spawnMissionStageVFX(coolantNode.x, coolantNode.z, 0x06b6d4, 8.0, 20, false);
+                  }
+                  r.coolantsDone = (r.coolantsDone || 0) + 1;
+                  SoundFX.play("upgrade");
+                  if (r.coolantsDone >= 2) {
+                    r.bossPhaseStage = 2;
+                    if (!isRemoteClient) spawnSector10DefensePylons(r);
+                    SoundFX.play("alarm");
+                  }
+                } else if (msg.action === "PICKUP_BLACKBOX") {
+                  const bbNode = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "BLACKBOX");
+                  if (bbNode) {
+                    bbNode.done = true;
+                    if (bbNode.mesh) entitiesGroup.remove(bbNode.mesh);
+                    spawnMissionStageVFX(bbNode.x, bbNode.z, 0x38bdf8, 4.5, 14, false);
+                  }
+                  SoundFX.play("pickup");
+                  advanceRoomMissionStage(
+                    r,
+                    1,
+                    r.reqWaves >= 3
+                      ? "✅ 블랙박스 회수 완료! 다음 웨이브를 방어하면 🔐보안중계기가 출현합니다!"
+                      : "✅ 블랙박스 회수 완료! 다음 웨이브를 방어하면 출구 업로드 단말기가 개방됩니다!"
+                  );
+                } else if (msg.action === "DECRYPT_RELAY") {
+                  const relNode = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "SECURITY_RELAY");
+                  if (relNode) {
+                    relNode.done = true;
+                    if (relNode.mesh) entitiesGroup.remove(relNode.mesh);
+                    spawnMissionStageVFX(relNode.x, relNode.z, 0x6366f1, 5.8, 18, false);
+                  }
+                  SoundFX.play("upgrade");
+                  advanceRoomMissionStage(
+                    r,
+                    2,
+                    "✅ 보안중계기 암호 해독 완료! 다음 웨이브를 방어하면 🛰️업로드 송신기가 출현합니다!"
+                  );
+                } else if (msg.action === "UPLOAD_PAYLOAD") {
+                  const upNode = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "UPLOAD_TERMINAL");
+                  if (upNode) {
+                    upNode.done = true;
+                    if (upNode.mesh) entitiesGroup.remove(upNode.mesh);
+                    spawnMissionStageVFX(upNode.x, upNode.z, 0x38bdf8, 7.5, 24, true);
+                  }
+                  r.progress = 1;
+                  r.completedStage = 2;
+                  checkRoomClear(r);
+                } else if (msg.action === "RADAR_STAGE") {
+                  const kinds = ["RADAR_CONSOLE", "RADAR_DISH", "RADAR_BEACON"];
+                  const k = kinds[(msg.stepOrder || 1) - 1] || "RADAR_CONSOLE";
+                  const node = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === k);
+                  if (node) {
+                    node.done = true;
+                    spawnMissionStageVFX(node.x, node.z, 0x38bdf8, 6.0, 18, false);
+                  }
+                  r.progress = msg.stepOrder;
+                  SoundFX.play("upgrade");
+                  if (r.progress >= 3) {
+                    checkRoomClear(r);
+                  } else {
+                    advanceRoomMissionStage(
+                      r,
+                      msg.stepOrder,
+                      msg.stepOrder === 1
+                        ? "✅ 통신 배전반 가동 완료! 다음 웨이브를 방어하면 🛰️레이더 안테나가 활성화됩니다!"
+                        : "✅ 레이더 안테나 각도 정렬 완료! 다음 웨이브를 방어하면 📶위성 송신 비콘이 가동됩니다!"
+                    );
+                  }
+                } else if (msg.action === "DECON_VALVE") {
+                  const node = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "DECON_VALVE" && n.stepOrder === msg.stepOrder);
+                  if (node) {
+                    node.done = true;
+                    spawnMissionStageVFX(node.x, node.z, 0x10b981, 6.5, 18, false);
+                  }
+                  r.progress++;
+                  SoundFX.play("upgrade");
+                  if (r.progress < r.targetVal) {
+                    advanceRoomMissionStage(
+                      r,
+                      msg.stepOrder,
+                      `✅ 오염 밸브 #${msg.stepOrder} 차단 완료 (+500 BP)! 다음 웨이브를 방어하면 밸브 #${reqStep + 1}이 개방됩니다!`
+                    );
+                  }
+                  checkRoomClear(r);
                 }
               }
             } else if (msg.type === "SECTOR_LOCK_TELEPORT" && game.running) {
@@ -596,7 +793,14 @@
               const cr = game.rooms[game.currentRoomIndex];
               if (cr && msg.roomState) {
                 cr.progress = msg.roomState.progress;
-                if (msg.roomState.subStage !== undefined) cr.subStage = msg.roomState.subStage;
+                if (msg.roomState.subStage !== undefined) {
+                  // 클라이언트가 테르밋 부착 완료(subStage=2) 후 호스트 스냅샷 왕복 지연(2.5초) 동안 이전 값(1)으로 롤백되는 현상 방지
+                  if (cr.subStage === 2 && msg.roomState.subStage < 2 && (Date.now() - (cr.lastSubStageChangeTime || 0)) < 2500) {
+                    // 호스트 수신 확인 대기 (클라이언트 상태 2 유지)
+                  } else {
+                    cr.subStage = msg.roomState.subStage;
+                  }
+                }
                 cr.unlockStage = msg.roomState.unlockStage;
                 cr.completedStage = msg.roomState.completedStage;
                 cr.waitingForWaveDefense = msg.roomState.waitingForWaveDefense;
@@ -606,6 +810,17 @@
                 cr.berserkActive = msg.roomState.berserkActive;
                 cr.gasWaveActive = msg.roomState.gasWaveActive;
                 cr.gasWaveProgress = msg.roomState.gasWaveProgress;
+                if (msg.roomState.midBossAwakened !== undefined) cr.midBossAwakened = msg.roomState.midBossAwakened;
+                if (msg.roomState.bossPhaseStage !== undefined) cr.bossPhaseStage = msg.roomState.bossPhaseStage;
+                if (msg.roomState.thermiteDetonated !== undefined) cr.thermiteDetonated = msg.roomState.thermiteDetonated;
+              }
+
+              if (msg.thermiteParts !== undefined) {
+                game.thermiteParts = msg.thermiteParts;
+              }
+
+              if (Array.isArray(msg.missionNodes)) {
+                msg.missionNodes.forEach(syncMissionNodeFromNetwork);
               }
 
               if (Array.isArray(msg.roomsGas)) {
@@ -711,6 +926,19 @@
           doorsState: (game.doors || []).map(d => [d.open ? 1 : 0, d.lockedPermanently ? 1 : 0]),
           roomsState: (game.rooms || []).map(r => [r.unlocked ? 1 : 0, r.cleared ? 1 : 0, r.lockedBehind ? 1 : 0]),
           roomsGas: (game.rooms || []).map(r => [r.gasWaveActive ? 1 : 0, Math.round((r.gasWaveProgress || 0) * 1000) / 1000]),
+          thermiteParts: game.thermiteParts || 0,
+          missionNodes: (game.missionNodes || [])
+            .filter(n => n.roomIndex === game.currentRoomIndex)
+            .map(n => ({
+              roomIndex: n.roomIndex,
+              kind: n.kind,
+              stepOrder: n.stepOrder || 0,
+              x: Math.round(n.x * 10) / 10,
+              z: Math.round(n.z * 10) / 10,
+              done: !!n.done,
+              genIndex: n.genIndex || 0,
+              coolantIdx: n.coolantIdx || 0
+            })),
           roomState: cr ? {
             progress: cr.progress,
             subStage: cr.subStage,
@@ -722,7 +950,10 @@
             sectorTimer: Math.round(cr.sectorTimer),
             berserkActive: cr.berserkActive,
             gasWaveActive: cr.gasWaveActive,
-            gasWaveProgress: Math.round((cr.gasWaveProgress || 0) * 1000) / 1000
+            gasWaveProgress: Math.round((cr.gasWaveProgress || 0) * 1000) / 1000,
+            midBossAwakened: !!cr.midBossAwakened,
+            bossPhaseStage: cr.bossPhaseStage || 0,
+            thermiteDetonated: !!cr.thermiteDetonated
           } : null,
           zombies: zSnap
         }));

@@ -226,6 +226,8 @@ class RoomManager {
       case PACKET_TYPES.WORLD_SNAPSHOT:
       case PACKET_TYPES.REVIVE_SYNC:
       case PACKET_TYPES.MISSION_SYNC:
+      case PACKET_TYPES.MISSION_ACTION:
+      case PACKET_TYPES.SECTOR_LOCK_TELEPORT:
         this.broadcast(msg, client);
         break;
       case PACKET_TYPES.PING:

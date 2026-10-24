@@ -1068,8 +1068,14 @@
             curRoom.berserkActive = true;
             curRoom.gasWaveActive = true;
             curRoom.gasWaveProgress = 0.05;
-            while ((curRoom.spawnHoles || []).some(h => !h.active)) {
-              activateAdditionalSpawnHole(curRoom);
+            if (curRoom.spawnHoles) {
+              curRoom.spawnHoles.forEach(h => {
+                if (!h.active) {
+                  h.active = true;
+                  if (h.intactWallMesh) h.intactWallMesh.visible = false;
+                  if (h.breachDetailGroup) h.breachDetailGroup.visible = true;
+                }
+              });
             }
 
             // 현재 살아있는 모든 감염체도 즉시 광폭화(체력 +75%, 공격력 +35%, 이속 +35%, 핏빛 발광, 15% 벌크업) 적용!
@@ -1142,7 +1148,9 @@
         if (!r.gasWaveActive || r.collapsed) return;
 
         // 멈추지 않고 1.0 (100%)까지 전진 (진행 속도: dt * 0.038, 약 26초 만에 맵 100% 완전 잠식)
-        if (isHost || !network.connected) {
+        const isHost = (!isRemoteClient && mySlotIndex === 0);
+        const hasNet = (wsClient && wsClient.readyState === WebSocket.OPEN);
+        if (isHost || !hasNet) {
           r.gasWaveProgress = Math.min(1.0, (r.gasWaveProgress || 0) + dt * 0.038);
         }
         const prog = r.gasWaveProgress || 0;
@@ -1398,31 +1406,33 @@
             }
 
             if (curRoom && !curRoom.cleared && !curRoom.isBossRoom) {
-              if (curRoom.waitingForWaveDefense) {
-                curRoom.unlockStage = (curRoom.unlockStage || 0) + 1;
-                curRoom.waitingForWaveDefense = false;
-                spawnRandomMissionStepForRoom(curRoom, curRoom.unlockStage);
-                SoundFX.play("pickup");
+              if (!isRemoteClient) {
+                if (curRoom.waitingForWaveDefense) {
+                  curRoom.unlockStage = (curRoom.unlockStage || 0) + 1;
+                  curRoom.waitingForWaveDefense = false;
+                  spawnRandomMissionStepForRoom(curRoom, curRoom.unlockStage);
+                  SoundFX.play("pickup");
 
-                const meP = game.players[mySlotIndex] || game.players[0];
-                const dirHint = (meP && curRoom.activeMissionTargetPos)
-                  ? getCompassDirectionHint(meP.x, meP.z, curRoom.activeMissionTargetPos.x, curRoom.activeMissionTargetPos.z)
-                  : "섹터 내부";
+                  const meP = game.players[mySlotIndex] || game.players[0];
+                  const dirHint = (meP && curRoom.activeMissionTargetPos)
+                    ? getCompassDirectionHint(meP.x, meP.z, curRoom.activeMissionTargetPos.x, curRoom.activeMissionTargetPos.z)
+                    : "섹터 내부";
 
-                const safeBanner = document.getElementById("hud-safe-banner");
-                if (safeBanner) {
-                  document.getElementById("hud-safe-banner-text").textContent =
-                    `🔓 웨이브 방어 성공! [${curRoom.unlockStage}단계 목표] 개방 (${dirHint})`;
-                  safeBanner.classList.remove("hidden");
-                  setTimeout(() => safeBanner.classList.add("hidden"), 4200);
-                }
-              } else {
-                const safeBanner = document.getElementById("hud-safe-banner");
-                if (safeBanner) {
-                  document.getElementById("hud-safe-banner-text").textContent =
-                    `🛡️ 소강기(18s): [${curRoom.unlockStage}단계 목표]를 진행하세요`;
-                  safeBanner.classList.remove("hidden");
-                  setTimeout(() => safeBanner.classList.add("hidden"), 3800);
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      `🔓 웨이브 방어 성공! [${curRoom.unlockStage}단계 목표] 개방 (${dirHint})`;
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 4200);
+                  }
+                } else {
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      `🛡️ 소강기(18s): [${curRoom.unlockStage}단계 목표]를 진행하세요`;
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 3800);
+                  }
                 }
               }
             }
@@ -1669,7 +1679,7 @@
 
           const nextDoor = game.doors.find(d => d.fromRoom === game.currentRoomIndex && !d.open);
           const nearThermiteDoor = (!p.downed && curRoom && curRoom.condType === "THERMITE" &&
-            curRoom.subStage === 1 && nextDoor && Math.hypot(nextDoor.x - p.x, nextDoor.z - p.z) < 4.8);
+            curRoom.subStage === 1 && nextDoor && Math.hypot(nextDoor.x - p.x, nextDoor.z - p.z) < 5.6);
 
           const uploadTerm = (!p.downed && curRoom && curRoom.condType === "PAYLOAD")
             ? game.missionNodes.find(n => n.roomIndex === curRoom.index && n.kind === "UPLOAD_TERMINAL" && !n.done)
@@ -1794,15 +1804,27 @@
                   spawnIceShatterFX(curRoom.wx, curRoom.wz, 15);
                   spawnBloodParticles(curRoom.wx, 2.5, curRoom.wz, 0x06b6d4, 25);
                   SoundFX.play("alarm");
-                  const mbPool = ["MB_JUGGERNAUT", "MB_SUMMONER", "MB_ACIDQUEEN"];
-                  const mbKey = mbPool[Math.max(0, curRoom.midBossOrder) % mbPool.length];
-                  const mb = spawnZombie(mbKey, curRoom.wx, curRoom.wz, curRoom.index);
-                  const safeBanner = document.getElementById("hud-safe-banner");
-                  if (safeBanner) {
-                    document.getElementById("hud-safe-banner-text").textContent =
-                      `🚨 경보: [${mb.spec.name}] 격리 해제! 즉시 격멸하십시오!`;
-                    safeBanner.classList.remove("hidden");
-                    setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                  if (!isRemoteClient) {
+                    const mbPool = ["MB_JUGGERNAUT", "MB_SUMMONER", "MB_ACIDQUEEN"];
+                    const mbKey = mbPool[Math.max(0, curRoom.midBossOrder) % mbPool.length];
+                    const mb = spawnZombie(mbKey, curRoom.wx, curRoom.wz, curRoom.index);
+                    const safeBanner = document.getElementById("hud-safe-banner");
+                    if (safeBanner) {
+                      document.getElementById("hud-safe-banner-text").textContent =
+                        `🚨 경보: [${mb.spec.name}] 격리 해제! 즉시 격멸하십시오!`;
+                      safeBanner.classList.remove("hidden");
+                      setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                    }
+                  }
+                  if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                    try {
+                      wsClient.send(JSON.stringify({
+                        type: "MISSION_ACTION",
+                        slotId: mySlotIndex,
+                        roomIdx: curRoom.index,
+                        action: "WAKE_MIDBOSS"
+                      }));
+                    } catch (e) {}
                   }
                 }
               } else {
@@ -1827,6 +1849,16 @@
                     safeBanner.classList.remove("hidden");
                     setTimeout(() => safeBanner.classList.add("hidden"), 4500);
                   }
+                  if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                    try {
+                      wsClient.send(JSON.stringify({
+                        type: "MISSION_ACTION",
+                        slotId: mySlotIndex,
+                        roomIdx: curRoom.index,
+                        action: "START_FINAL_BOSS"
+                      }));
+                    } catch (e) {}
+                  }
                 }
               } else {
                 interactBar.style.width = "0%";
@@ -1848,7 +1880,7 @@
                     SoundFX.play("upgrade");
                     if (curRoom.coolantsDone >= 2) {
                       curRoom.bossPhaseStage = 2;
-                      spawnSector10DefensePylons(curRoom);
+                      if (!isRemoteClient) spawnSector10DefensePylons(curRoom);
                       SoundFX.play("alarm");
                       const safeBanner = document.getElementById("hud-safe-banner");
                       if (safeBanner) {
@@ -1865,6 +1897,17 @@
                         safeBanner.classList.remove("hidden");
                         setTimeout(() => safeBanner.classList.add("hidden"), 3800);
                       }
+                    }
+                    if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                      try {
+                        wsClient.send(JSON.stringify({
+                          type: "MISSION_ACTION",
+                          slotId: mySlotIndex,
+                          roomIdx: curRoom.index,
+                          action: "OVERLOAD_COOLANT",
+                          coolantIdx: nearMissionNode.coolantIdx
+                        }));
+                      } catch (e) {}
                     }
                   }
                 } else {
@@ -1887,6 +1930,17 @@
                     ? "✅ 1번 원료 회수 완료! 다음 웨이브를 막으면 2번 원료가 개방됩니다!"
                     : "✅ 2번 원료 회수 완료! 다음 웨이브를 막으면 중앙 합성대가 개방됩니다!"
                 );
+                if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                  try {
+                    wsClient.send(JSON.stringify({
+                      type: "MISSION_ACTION",
+                      slotId: mySlotIndex,
+                      roomIdx: curRoom.index,
+                      action: "PICKUP_CHEM_PART",
+                      stepOrder: nearMissionNode.stepOrder
+                    }));
+                  } catch (e) {}
+                }
               }
             } else if (nearMissionNode.kind === "SYNTH_TABLE") {
               interactTitle.textContent = game.thermiteParts >= 2 ? "🔬 [F 홀드] 고열 테르밋 합성" : `🧪 원료 2개 필요 (${game.thermiteParts}/2)`;
@@ -1900,14 +1954,27 @@
                   nearMissionNode.done = true;
                   curRoom.subStage = 1;
                   curRoom.completedStage = 3;
+                  curRoom.lastSubStageChangeTime = Date.now();
                   spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0xf97316, 6.5, 22, true);
                   SoundFX.play("upgrade");
+                  const nextDoor = game.doors.find(d => d.fromRoom === curRoom.index && !d.open);
+                  if (nextDoor) ensureThermiteDoorVisuals(curRoom, nextDoor);
                   const safeBanner = document.getElementById("hud-safe-banner");
                   if (safeBanner) {
                     document.getElementById("hud-safe-banner-text").textContent =
                       "🔥 테르밋 폭약 합성 완료! 출구 방화벽에 부착하세요";
                     safeBanner.classList.remove("hidden");
                     setTimeout(() => safeBanner.classList.add("hidden"), 4000);
+                  }
+                  if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                    try {
+                      wsClient.send(JSON.stringify({
+                        type: "MISSION_ACTION",
+                        slotId: mySlotIndex,
+                        roomIdx: curRoom.index,
+                        action: "SYNTHESIZE_THERMITE"
+                      }));
+                    } catch (e) {}
                   }
                 }
               } else {
@@ -1941,6 +2008,17 @@
                     );
                   }
                   checkRoomClear(curRoom);
+                  if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                    try {
+                      wsClient.send(JSON.stringify({
+                        type: "MISSION_ACTION",
+                        slotId: mySlotIndex,
+                        roomIdx: curRoom.index,
+                        action: "IGNITE_GENERATOR",
+                        stepOrder: nearMissionNode.stepOrder
+                      }));
+                    } catch (e) {}
+                  }
                 }
               } else {
                 interactBar.style.width = "0%";
@@ -1963,6 +2041,16 @@
                     : "✅ 블랙박스 회수 완료! 다음 웨이브를 방어하면 출구 업로드 단말기가 개방됩니다!"
                 );
                 updateWeaponSlotsHUD();
+                if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                  try {
+                    wsClient.send(JSON.stringify({
+                      type: "MISSION_ACTION",
+                      slotId: mySlotIndex,
+                      roomIdx: curRoom.index,
+                      action: "PICKUP_BLACKBOX"
+                    }));
+                  } catch (e) {}
+                }
               }
             } else if (nearMissionNode.kind === "SECURITY_RELAY") {
               interactTitle.textContent = "🔐 [F 홀드] 보안중계기 암호 해독";
@@ -1982,6 +2070,16 @@
                     2,
                     "✅ 보안중계기 암호 해독 완료! 다음 웨이브를 방어하면 🛰️업로드 송신기가 출현합니다!"
                   );
+                  if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                    try {
+                      wsClient.send(JSON.stringify({
+                        type: "MISSION_ACTION",
+                        slotId: mySlotIndex,
+                        roomIdx: curRoom.index,
+                        action: "DECRYPT_RELAY"
+                      }));
+                    } catch (e) {}
+                  }
                 }
               } else {
                 nearMissionNode.holdTime = 0;
@@ -2005,6 +2103,17 @@
                     1,
                     "✅ 통신 배전반 가동 완료! 다음 웨이브를 방어하면 🛰️레이더 안테나가 활성화됩니다!"
                   );
+                  if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                    try {
+                      wsClient.send(JSON.stringify({
+                        type: "MISSION_ACTION",
+                        slotId: mySlotIndex,
+                        roomIdx: curRoom.index,
+                        action: "RADAR_STAGE",
+                        stepOrder: 1
+                      }));
+                    } catch (e) {}
+                  }
                 }
               } else {
                 nearMissionNode.holdTime = 0;
@@ -2028,6 +2137,17 @@
                     2,
                     "✅ 레이더 안테나 각도 정렬 완료! 다음 웨이브를 방어하면 📶위성 송신 비콘이 가동됩니다!"
                   );
+                  if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                    try {
+                      wsClient.send(JSON.stringify({
+                        type: "MISSION_ACTION",
+                        slotId: mySlotIndex,
+                        roomIdx: curRoom.index,
+                        action: "RADAR_STAGE",
+                        stepOrder: 2
+                      }));
+                    } catch (e) {}
+                  }
                 }
               } else {
                 nearMissionNode.holdTime = 0;
@@ -2053,6 +2173,17 @@
                   });
                   SoundFX.play("upgrade");
                   checkRoomClear(curRoom);
+                  if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                    try {
+                      wsClient.send(JSON.stringify({
+                        type: "MISSION_ACTION",
+                        slotId: mySlotIndex,
+                        roomIdx: curRoom.index,
+                        action: "RADAR_STAGE",
+                        stepOrder: 3
+                      }));
+                    } catch (e) {}
+                  }
                 }
               } else {
                 nearMissionNode.holdTime = 0;
@@ -2080,6 +2211,17 @@
                     );
                   }
                   checkRoomClear(curRoom);
+                  if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                    try {
+                      wsClient.send(JSON.stringify({
+                        type: "MISSION_ACTION",
+                        slotId: mySlotIndex,
+                        roomIdx: curRoom.index,
+                        action: "DECON_VALVE",
+                        stepOrder: nearMissionNode.stepOrder
+                      }));
+                    } catch (e) {}
+                  }
                 }
               } else {
                 nearMissionNode.holdTime = 0;
@@ -2097,6 +2239,7 @@
               }
               if (curRoom.thermiteAttachHold >= 1.4) {
                 curRoom.subStage = 2;
+                curRoom.lastSubStageChangeTime = Date.now();
                 if (nextDoor) {
                   ensureThermiteDoorVisuals(curRoom, nextDoor);
                   spawnMissionStageVFX(nextDoor.x, nextDoor.z, 0xf97316, 5.0, 16, false);
@@ -2108,6 +2251,16 @@
                     "🧨 테르밋 설치 완료! 바닥 위험구역 밖으로 대피하세요";
                   safeBanner.classList.remove("hidden");
                   setTimeout(() => safeBanner.classList.add("hidden"), 4200);
+                }
+                if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                  try {
+                    wsClient.send(JSON.stringify({
+                      type: "MISSION_ACTION",
+                      slotId: mySlotIndex,
+                      roomIdx: curRoom.index,
+                      action: "ATTACH_THERMITE"
+                    }));
+                  } catch (e) {}
                 }
               }
             } else {
@@ -2139,6 +2292,16 @@
                   curRoom.progress = 1;
                   curRoom.completedStage = 2;
                   checkRoomClear(curRoom);
+                  if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                    try {
+                      wsClient.send(JSON.stringify({
+                        type: "MISSION_ACTION",
+                        slotId: mySlotIndex,
+                        roomIdx: curRoom.index,
+                        action: "UPLOAD_PAYLOAD"
+                      }));
+                    } catch (e) {}
+                  }
                 }
               } else {
                 curRoom.payloadUploadHold = 0;

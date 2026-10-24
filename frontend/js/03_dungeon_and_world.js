@@ -1104,9 +1104,9 @@
     }
 
     // 웨이브 방어 성공 시 해당 단계(stepOrder)의 미션 목표를 섹터 내 랜덤 위치에 출현시키는 함수!
-    function spawnRandomMissionStepForRoom(room, stepOrder) {
+    function spawnRandomMissionStepForRoom(room, stepOrder, forcePos) {
       if (!room || room.isBossRoom || room.hasMidBoss) return;
-      const pos = findRandomSafeMissionPos(room);
+      const pos = forcePos ? { x: forcePos.x, z: forcePos.z } : findRandomSafeMissionPos(room);
       room.activeMissionTargetPos = pos;
 
       // 출현 위치에 하늘로 솟구치는 신호 비콘 이펙트 생성
@@ -1526,6 +1526,46 @@
           "bg-rose-950/90 border-rose-400 text-rose-200",
           podObj, room.index
         );
+      }
+    }
+
+    // [v3.3 멀티플레이 미션 오브젝트 동기화] 호스트가 생성한 미션 노드를 원격 클라이언트의 3D 월드에 완벽 생성/동기화
+    function syncMissionNodeFromNetwork(nodeData) {
+      if (!nodeData || typeof nodeData.roomIndex !== "number") return;
+      const room = game.rooms[nodeData.roomIndex];
+      if (!room) return;
+
+      let existing = game.missionNodes.find(n =>
+        n.roomIndex === nodeData.roomIndex &&
+        n.kind === nodeData.kind &&
+        ((nodeData.kind === "BOSS_COOLANT" && nodeData.coolantIdx) ? n.coolantIdx === nodeData.coolantIdx : n.stepOrder === nodeData.stepOrder)
+      );
+
+      if (nodeData.done) {
+        if (existing && !existing.done) {
+          existing.done = true;
+          if (existing.mesh) {
+            entitiesGroup.remove(existing.mesh);
+          }
+          if (existing.sym && existing.sym.el) {
+            existing.sym.el.style.display = "none";
+          }
+        }
+        return;
+      }
+
+      if (existing) {
+        if (Math.hypot(existing.x - nodeData.x, existing.z - nodeData.z) > 0.3) {
+          existing.x = nodeData.x;
+          existing.z = nodeData.z;
+          if (existing.mesh) existing.mesh.position.set(nodeData.x, 0, nodeData.z);
+          if (existing.sym) {
+            existing.sym.x = nodeData.x;
+            existing.sym.z = nodeData.z;
+          }
+        }
+      } else {
+        spawnRandomMissionStepForRoom(room, nodeData.stepOrder, { x: nodeData.x, z: nodeData.z });
       }
     }
 
