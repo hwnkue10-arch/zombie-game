@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — Co-op Squad Room Manager (backend/roomManager.js)
+ * BOXHEAD: THE CORE v3.3 — Co-op Squad Room Manager (backend/roomManager.js)
  * Manages 4-player slots, Host authority, Kick system, Seed sync & State relay
  * =========================================================================
  */

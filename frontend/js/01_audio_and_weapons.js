@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.2 — Frontend Module: 01_audio_and_weapons.js
+ * BOXHEAD: THE CORE v3.3 — Frontend Module: 01_audio_and_weapons.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -148,23 +148,25 @@
         id: 2, key: "3", name: "기관단총 UZI", eng: "Micro UZI",
         ammoType: "SMG", infinite: false, startAmmo: 220, maxAmmo: 560, packAmmo: 130, packCost: 75, baseCost: 52,
         reqParts: 2, unlockBpCost: 600,
-        fireRate: 0.066, damage: 30, speed: 42, spread: 0.09, pellets: 1,
-        stun: 0.18, knockback: 0.45, weakMult: 1.15,
+        fireRate: 0.066, damage: 38, speed: 44, spread: 0.08, pellets: 1,
+        stun: 0.20, knockback: 0.40, weakMult: 1.20,
+        runAndGun: true, ammoRefillBonus: 1.5,
         color: 0x38bdf8, sound: "uzi", unlockedAtStart: false,
         tier1Name: "정전기 탄환 (인근 1마리 전이 스파크 +45%딜)",
         awakenName: "쇼크 과부하 (3마리 연쇄 감전 + 감전기절)",
-        roleDesc: "초고속 연사 탄막 · 탄약 드랍 1.2% & 탄약팩 획득량 증가"
+        roleDesc: "기동 사격 특화 (이속+16% · 무감속 런앤건) · 연쇄 감전 탄막 · 탄약 보급량 +50%"
       },
       {
         id: 3, key: "4", name: "중화기 돌격소총", eng: "Heavy Rifle",
         ammoType: "RIFLE", infinite: false, startAmmo: 120, maxAmmo: 320, packAmmo: 70, packCost: 90, baseCost: 60,
         reqParts: 3, unlockBpCost: 1800,
-        fireRate: 0.105, damage: 55, speed: 48, spread: 0.03, pellets: 1,
-        stun: 0.32, knockback: 0.95, weakMult: 1.5,
+        fireRate: 0.105, damage: 55, speed: 50, spread: 0.025, pellets: 1,
+        stun: 0.38, knockback: 1.15, weakMult: 1.65,
+        pierceBase: 1, heavyImpact: true,
         color: 0x4ade80, sound: "rifle", unlockedAtStart: false,
         tier1Name: "고폭 균열탄 (피격 시 반경 2m 파편 폭발)",
         awakenName: "철갑 파편탄 (반경 3.8m 폭발 + 장갑무시)",
-        roleDesc: "고화력 주력 소총 · 탄약 드랍 1.2% & 탄약팩 획득량 증가"
+        roleDesc: "중원거리 철갑 관통 (기본 1체 관통) · 고저지력 제압 사격 · 원거리 치명타+35%"
       },
       {
         id: 4, key: "5", name: "유탄발사기", eng: "Grenade Launcher",
@@ -314,11 +316,18 @@
     }
 
     // =========================================================================
-    // [v3.2] 2b. 전술 슈트 · 외골격 · 의료 · 기동력 강화 시스템 (9종) 및 잉여 부품 활용
+    // [v3.3] 2b. 전술 슈트 · 외골격 · 의료 · 기동력 강화 시스템 (3대 성질별 카테고리화)
     // =========================================================================
+    const SUIT_CATEGORIES = [
+      { id: "SURVIVAL", name: "💖 생존 & 방호 외골격", desc: "체력 증강 및 피격 피해 영구 경감", color: "rose" },
+      { id: "MEDICAL", name: "🩹 의무 & 응급 보급", desc: "구급키트/스팀팩 소지 한도 및 나노 주사기", color: "amber" },
+      { id: "MOBILITY", name: "🏃 기동성 & 전술 기구", desc: "스태미너 용량/충전 및 점프/패링 기구", color: "sky" }
+    ];
+
     const SUIT_UPGRADE_DEFS = {
       maxHp: {
         key: "maxHp",
+        category: "SURVIVAL",
         icon: "❤️",
         name: "생체 나노 심장",
         desc: "최대 체력 +25 증가 (기본 100 ➔ 최대 225 HP)",
@@ -329,6 +338,7 @@
       },
       armorPlating: {
         key: "armorPlating",
+        category: "SURVIVAL",
         icon: "🛡️",
         name: "케블라 방탄 외골격",
         desc: "받는 모든 피해 -6% 영구 경감 (최대 -30% 방어막)",
@@ -339,6 +349,7 @@
       },
       medkitCap: {
         key: "medkitCap",
+        category: "MEDICAL",
         icon: "🩹",
         name: "구급상자 파우치",
         desc: "구급키트[Q] 최대 소지 +1 (최대 4개 · 즉시 +1 보충)",
@@ -349,6 +360,7 @@
       },
       stimCap: {
         key: "stimCap",
+        category: "MEDICAL",
         icon: "⚡",
         name: "스팀팩 벨트",
         desc: "스팀팩[E] 최대 소지 +1 (최대 4개 · 즉시 +1 보충)",
@@ -357,8 +369,21 @@
         costs: [2500, 14000, 52000],
         partsCosts: [0, 1, 1]
       },
+      syringe: {
+        key: "syringe",
+        category: "MEDICAL",
+        icon: "💉",
+        name: "나노 의료 주사기",
+        desc: "[5섹터+] 자가치료 0.6초(무감속)·아군치료 0.4초·+80HP",
+        maxLv: 1,
+        reqRooms: [4],
+        costs: [38000],
+        partsCosts: [2],
+        isSpecial: true
+      },
       maxStamina: {
         key: "maxStamina",
+        category: "MOBILITY",
         icon: "🫁",
         name: "최대 스태미너",
         desc: "최대 스태미너 +25 증가 (기본 50 ➔ 최대 150 ST)",
@@ -369,6 +394,7 @@
       },
       staminaRegen: {
         key: "staminaRegen",
+        category: "MOBILITY",
         icon: "🔋",
         name: "스태미너 회복력",
         desc: "초당 스태미너 회복 +6.5/s (기본 10/s ➔ 최대 36/s)",
@@ -379,6 +405,7 @@
       },
       dashCd: {
         key: "dashCd",
+        category: "MOBILITY",
         icon: "🚀",
         name: "점프 스태미너 절감",
         desc: "[Space] 점프 소모량 -5 ST 감소 (35 ST ➔ 15 ST)",
@@ -389,6 +416,7 @@
       },
       bashCd: {
         key: "bashCd",
+        category: "MOBILITY",
         icon: "👊",
         name: "기절 밀치기 강화",
         desc: "[V] 기절기 쿨타임 -0.4초 단축 & 충격 반경 증가",
@@ -396,17 +424,6 @@
         reqRooms: [0, 2, 5, 7],
         costs: [1200, 4800, 18000, 48000],
         partsCosts: [0, 0, 1, 1]
-      },
-      syringe: {
-        key: "syringe",
-        icon: "💉",
-        name: "나노 의료 주사기",
-        desc: "[5섹터+] 자가치료 0.6초(무감속)·아군치료 0.4초·+80HP",
-        maxLv: 1,
-        reqRooms: [4],
-        costs: [38000],
-        partsCosts: [2],
-        isSpecial: true
       }
     };
 

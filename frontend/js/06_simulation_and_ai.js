@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.2 — Frontend Module: 06_simulation_and_ai.js
+ * BOXHEAD: THE CORE v3.3 — Frontend Module: 06_simulation_and_ai.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -482,7 +482,8 @@
               const beamA = game.laserAngle + (l * Math.PI) / 2;
               const diff = Math.abs(Math.atan2(Math.sin(pAngle - beamA), Math.cos(pAngle - beamA)));
               if (diff < 0.085) {
-                damagePlayer(p, 35 * dt, false, false);
+                // [v3.3] 보스 고출력 회전 레이저 피격 시 감전 상태이상(causesShock = true) 부여!
+                damagePlayer(p, 35 * dt, false, false, true, false);
               }
             }
           }
@@ -697,6 +698,19 @@
       if (!room) return;
       room.completedStage = Math.max(room.completedStage || 0, completedStep);
       room.waitingForWaveDefense = true;
+      // [v3.3 멀티플레이 미션 동기화] 클라이언트의 F키 상호작용 완료가 호스트 8Hz 스냅샷에 덮어씌워지지 않도록 즉각 전파!
+      if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+        try {
+          wsClient.send(JSON.stringify({
+            type: "MISSION_ACTION",
+            slotId: mySlotIndex,
+            roomIdx: room.index,
+            action: "ADVANCE_STAGE",
+            completedStep,
+            progress: room.progress
+          }));
+        } catch (e) {}
+      }
       // 미션 요소를 완료했으므로 다음 웨이브가 곧바로 몰려와 템포가 늘어지지 않게 함
       if (game.wavePhase === "CALM" && game.waveTimer > 4.0) {
         game.waveTimer = 4.0;
@@ -879,7 +893,8 @@
           }
         } else if (n.kind === "DECON_VALVE") {
           if (n.wheel) n.wheel.rotation.z += dt * (n.holdTime > 0 ? 12.0 : (n.done ? 0 : 0.6));
-          if (!n.done && Math.random() < 0.22) {
+          const mePlayer = game.players[mySlotIndex] || game.players[0];
+          if (!n.done && mePlayer && Math.hypot(mePlayer.x - n.x, mePlayer.z - n.z) < 18.0 && Math.random() < 0.12) {
             spawnBloodParticles(n.x, 2.7, n.z, 0x10b981, 1);
           }
         }
@@ -949,8 +964,20 @@
             if (Math.abs(pl.x - curRoom.wx) >= (curRoom.hw || curRoom.half) || Math.abs(pl.z - curRoom.wz) >= (curRoom.hd || curRoom.half)) {
               pl.x = mePlayer.x + (idx - 1.5) * 1.5;
               pl.z = mePlayer.z + 1.2;
+              if (pl.visual && pl.visual.group) pl.visual.group.position.set(pl.x, 0, pl.z);
             }
           });
+          // [v3.3 멀티플레이 격벽 고립 방지] 원격 클라이언트 및 후방 잔류 대원을 위한 섹터 진입 강제 동기화
+          if (wsClient && wsClient.readyState === WebSocket.OPEN && !isRemoteClient) {
+            try {
+              wsClient.send(JSON.stringify({
+                type: "SECTOR_LOCK_TELEPORT",
+                roomIdx: curRoom.index,
+                destX: curRoom.wx,
+                destZ: curRoom.wz
+              }));
+            } catch (e) {}
+          }
           for (let zi = game.zombies.length - 1; zi >= 0; zi--) {
             if (game.zombies[zi].roomIndex < curRoom.index) {
               entitiesGroup.remove(game.zombies[zi].group);
@@ -1192,6 +1219,10 @@
         }
         if (!p.downed && curRoom && curRoom.envType === "TOXIC_FOG" && !curRoom.envCleared && !curRoom.cleared) {
           damagePlayer(p, 1.45 * dt, false, false);
+        }
+        // [v3.3] 냉각 가스 누출(CRYO_LEAK) 섹터 환경피해 및 동상(causesFrost = true) 부여
+        if (!p.downed && curRoom && curRoom.envType === "CRYO_LEAK" && !curRoom.envCleared && !curRoom.cleared) {
+          damagePlayer(p, 1.2 * dt, false, false, false, true);
         }
         p.dashActiveTimer = Math.max(0, p.dashActiveTimer - dt);
         p.stimBuffTimer = Math.max(0, p.stimBuffTimer - dt);
@@ -2073,6 +2104,7 @@
               if (p.shockTimer > 0) moveSpeed *= 0.55;
               if (p.frostTimer > 0) moveSpeed *= 0.65;
             }
+            if (p.currentWeapon === 2 && !p.downed && !p.carryingPayload) moveSpeed *= 1.16; // [v3.3 UZI CQC 런앤건 기동 특화 +16%]
             if (p.isSprinting) moveSpeed *= 1.42;
 
             if (isMoving) {
@@ -2155,6 +2187,9 @@
 
         if (isGone || (sym.roomIndex !== game.currentRoomIndex && !ref.isPickup && ref.kind !== "CORE" && ref.kind !== "PART" && ref.kind !== "AMMO_PACK")) {
           sym.el.style.display = "none";
+          if (isGone && sym.el && sym.el.parentNode) {
+            sym.el.remove();
+          }
           return;
         }
         if (me && Math.hypot(sym.x - me.x, sym.z - me.z) > 44) {
@@ -2262,7 +2297,8 @@
       const goalZ = anchorZ + Math.sin(angle) * 4.2;
       const distGoal = Math.hypot(goalX - ai.x, goalZ - ai.z);
 
-      const moveSpeed = ai.downed ? 2.2 : 8.2;
+      let moveSpeed = ai.downed ? 2.2 : 8.2;
+      if (ai.currentWeapon === 2 && !ai.downed) moveSpeed *= 1.16;
       if (distGoal > 18.0 && !ai.downed) {
         // 벽 뒤에 완전히 고립된 경우 리더 근처로 전술 합류
         ai.x = anchorX + Math.cos(angle) * 2.5;
@@ -2725,7 +2761,8 @@
                 if (pl.dashActiveTimer > 0) {
                   pl.stamina = Math.min(getPlayerMaxStamina(pl), (pl.stamina || 0) + 25);
                 } else {
-                  damagePlayer(pl, 24, false, !isSummoner);
+                  // [v3.3] 서모너 방출 파동은 감전(causesShock = true), 스피터 자폭은 산성 부식 부여!
+                  damagePlayer(pl, 24, false, !isSummoner, isSummoner, false);
                 }
               }
             });
@@ -3107,7 +3144,18 @@
                       });
                     }
                   }
-                  damageZombie(zIdx, Math.round(b.damage * armorMult), b.vx * 0.04 * b.knockback, b.vz * 0.04 * b.knockback, b.stun, b.wIdx);
+                  let hitDmg = Math.round(b.damage * armorMult);
+                  let hitKnock = b.knockback;
+                  let hitStun = b.stun;
+                  if (b.heavyImpact) {
+                    const distFromOrigin = Math.hypot(b.x - (b.originX || b.x), b.z - (b.originZ || b.z));
+                    if (distFromOrigin >= 9.0) {
+                      hitDmg = Math.round(hitDmg * 1.35); // [v3.3 중화기 소총 9m 이상 원거리 타격 +35% 관통 보너스]
+                      hitKnock *= 1.45;
+                      hitStun = Math.max(hitStun, 0.45);
+                    }
+                  }
+                  damageZombie(zIdx, hitDmg, b.vx * 0.04 * hitKnock, b.vz * 0.04 * hitKnock, hitStun, b.wIdx);
 
                   if (b.wIdx === 2 && (b.tier1Special || b.awakened) && game.zombies.length > 1) {
                     let chains = 0;
@@ -3176,7 +3224,12 @@
               if (b.explosiveRadius > 0) {
                 triggerExplosion(b.x, b.z, b.explosiveRadius, b.damage, b.ownerId, b.awakened);
               } else {
-                damageBoss(Math.round(b.damage * (b.weakMult || 1.2)));
+                let bossDmg = Math.round(b.damage * (b.weakMult || 1.2));
+                if (b.heavyImpact) {
+                  const distFromOrigin = Math.hypot(b.x - (b.originX || b.x), b.z - (b.originZ || b.z));
+                  if (distFromOrigin >= 9.0) bossDmg = Math.round(bossDmg * 1.35);
+                }
+                damageBoss(bossDmg);
               }
               removeBullet = true;
             }
@@ -3238,28 +3291,40 @@
             else if (pk.kind === "PART") game.weaponParts = (game.weaponParts || 0) + 1;
             else {
               if (pk.wIdx !== undefined && tp.inventory[pk.wIdx]) {
-                // 특정 무기 전용 탄약팩 습득: 해당 무기만 보충 (상단 배너 표시 제거 — 하단 탄약 HUD로만 직관적 갱신)
+                // 특정 무기 전용 탄약팩 습득: 해당 무기만 보충
                 const targetW = pk.wIdx;
                 const inv = tp.inventory[targetW];
                 const maxA = getWeaponMaxAmmo(tp, targetW);
                 const packRatio = (targetW === 2 || targetW === 3) ? 0.75 : 0.6;
-                const gained = Math.ceil(WEAPONS[targetW].packAmmo * packRatio);
-                inv.ammo = Math.min(maxA, inv.ammo + gained);
+                const bonus = (targetW === 2 ? (WEAPONS[2].ammoRefillBonus || 1.5) : 1.0);
+                const gained = Math.ceil(WEAPONS[targetW].packAmmo * packRatio * bonus);
+                if (inv.ammo >= maxA) {
+                  // [v3.3] 만석 시 바닥에 라벨이 방치되는 현상 원천 해결: 20 BP로 자동 환전 흡수!
+                  game.bioPoints = (game.bioPoints || 0) + 20;
+                } else {
+                  inv.ammo = Math.min(maxA, inv.ammo + gained);
+                }
               } else {
                 // 범용 탄약팩 (보급상자/콤보 달성 시 전 총기 보충)
+                let anyRefilled = false;
                 tp.inventory.forEach((inv, wIdx) => {
                   if (inv.unlocked && !WEAPONS[wIdx].infinite) {
                     const maxA = getWeaponMaxAmmo(tp, wIdx);
+                    if (inv.ammo < maxA) anyRefilled = true;
                     const packRatio = (wIdx === 2 || wIdx === 3) ? 0.75 : 0.5;
-                    inv.ammo = Math.min(maxA, inv.ammo + Math.ceil(WEAPONS[wIdx].packAmmo * packRatio));
+                    const bonus = (wIdx === 2 ? (WEAPONS[2].ammoRefillBonus || 1.5) : 1.0);
+                    inv.ammo = Math.min(maxA, inv.ammo + Math.ceil(WEAPONS[wIdx].packAmmo * packRatio * bonus));
                   }
                 });
+                if (!anyRefilled) {
+                  game.bioPoints = (game.bioPoints || 0) + 40;
+                }
               }
             }
           }
           pk.done = true;
-          if (pk.sym && pk.sym.el) {
-            pk.sym.el.remove();
+          if (pk.sym) {
+            if (pk.sym.el) pk.sym.el.remove();
             const sIdx = game.worldSymbols.indexOf(pk.sym);
             if (sIdx !== -1) game.worldSymbols.splice(sIdx, 1);
           }
@@ -3300,7 +3365,17 @@
         if (Math.abs(x - ob.x) < ob.hw + r && Math.abs(z - ob.z) < ob.hd + r) return true;
       }
       for (const d of game.doors) {
-        if (!d.open && Math.abs(x - d.x) < d.w / 2 + r && Math.abs(z - d.z) < d.d / 2 + r) return true;
+        if (!d.open && Math.abs(x - d.x) < d.w / 2 + r && Math.abs(z - d.z) < d.d / 2 + r) {
+          // [v3.3 문 끼임/고립 방지] 후방 격벽이 잠겼을 때 아직 이전 방에 있는 플레이어의 전진 이동은 통과 허용!
+          const curRoom = game.rooms[game.currentRoomIndex];
+          if (curRoom && d.toRoom === curRoom.index && d.lockedPermanently) {
+            const me = game.players[mySlotIndex];
+            if (me && (Math.abs(me.x - curRoom.wx) > (curRoom.hw || curRoom.half) || Math.abs(me.z - curRoom.wz) > (curRoom.hd || curRoom.half))) {
+              continue;
+            }
+          }
+          return true;
+        }
       }
       if (!ignoreBarricades) {
         for (const bar of game.barricades) {

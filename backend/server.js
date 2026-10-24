@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — Hamachi Local Co-op Server (backend/server.js)
+ * BOXHEAD: THE CORE v3.3 — Hamachi Local Co-op Server (backend/server.js)
  * - Serves `frontend/` static files over HTTP on port 3000
  * - Hosts 4-Player WebSocket server on port 3000
  * - Works with `express` + `ws` (via `npm install`) AND includes a built-in
@@ -220,7 +220,7 @@ function getNetworkAddresses() {
 server.listen(PORT, HOST, () => {
   const addrs = getNetworkAddresses();
   console.log("===================================================================");
-  console.log(" 🚀 BOXHEAD: THE CORE v3.1 — HAMACHI 4-PLAYER CO-OP SERVER READY");
+  console.log(" 🚀 BOXHEAD: THE CORE v3.3 — HAMACHI 4-PLAYER CO-OP SERVER READY");
   console.log("===================================================================");
   console.log(` • WebSocket Engine : ${attachedWsLibrary ? "ws (Node Package)" : "Native RFC-6455 Built-in Engine"}`);
   console.log(` • Host (방장 접속) : http://localhost:${PORT}`);

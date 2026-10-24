@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>BOXHEAD: THE CORE v3.2 — 밸런스 총괄 개편 · 슈트 강화 & 부품 환전소 · 스팀팩 만능정화 · 신규 미션 에디션</title>
+  <title>BOXHEAD: THE CORE v3.3 — 우지/소총 차별화 · 슈트 카테고리화 & 시각 피드백 · 멀티플레이 동기화 완결판</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
@@ -354,10 +354,10 @@
         <!-- Tactical Suit, Stamina, Cooldown & Nano-Syringe Upgrades -->
         <div class="bg-slate-950/85 rounded-2xl p-3 border border-cyan-500/35">
           <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <span class="text-xs sm:text-sm font-black text-cyan-300">🧬 전술 신체 · 의료 · 기동 강화 (구급상자·스팀팩 확장 / 스태미너 / 쿨감 / 주사기 개조)</span>
-            <span class="text-[11px] font-mono-code text-slate-400">섹터 조건 충족 및 무기고 근처에서 강화 가능</span>
+            <span class="text-xs sm:text-sm font-black text-cyan-300">🧬 3대 전술 신체 · 의무 · 기동 외골격 강화 (생존 & 방호 / 의무 & 응급 / 기동성 & 전술)</span>
+            <span class="text-[11px] font-mono-code text-slate-400">카테고리별 섹터 해금 조건 충족 시 무기고 근처에서 강화 가능</span>
           </div>
-          <div id="upgrade-suit-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2"></div>
+          <div id="upgrade-suit-grid" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
         </div>
 
         <!-- 2-Column Weapon Upgrade Cards Grid -->
@@ -380,7 +380,7 @@
         <div>
           <div class="flex items-center gap-2">
             <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white uppercase">4-PLAYER CO-OP</span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">v3.2 TACTICAL OVERHAUL · 밸런스총괄개편 · 슈트강화&부품환전 · 스팀팩만능정화</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">v3.3 OVERHAUL · 우지/소총전술특화 · 슈트범주화 & 테두리발광 · 멀티동기화완결</span>
           </div>
           <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
             BOXHEAD : <span class="text-red-500">THE CORE</span>
@@ -690,7 +690,7 @@
   </div>
 
   <!-- ==================== MAIN GAME ENGINE SCRIPT (v2.0) ==================== -->
-  <!-- ==================== MODULAR GAME ENGINE SCRIPTS (v3.2) ==================== -->
+  <!-- ==================== MODULAR GAME ENGINE SCRIPTS (v3.3) ==================== -->
   <script src="js/01_audio_and_weapons.js"></script>
   <script src="js/02_lobby_and_scene.js"></script>
   <script src="js/03_dungeon_and_world.js"></script>

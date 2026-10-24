@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.2 — Frontend Module: 04_entities_and_boss.js
+ * BOXHEAD: THE CORE v3.3 — Frontend Module: 04_entities_and_boss.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -83,7 +83,10 @@
 
       entitiesGroup.add(bossGroup);
 
-      const maxHp = game.pacing === "marathon" ? 90000 : (game.pacing === "blitz" ? 28000 : 55000);
+      const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
+      const bossSquadScale = Math.max(1.0, 1.0 + (activeSquadCount - 1) * 0.52);
+      const baseBossHp = game.pacing === "marathon" ? 110000 : (game.pacing === "blitz" ? 38000 : 75000);
+      const maxHp = Math.round(baseBossHp * bossSquadScale);
       game.boss = {
         x: bx, z: bz,
         radius: 4.5,
@@ -438,8 +441,11 @@
       group.position.set(x, 0, z);
       entitiesGroup.add(group);
 
-      // [v3.1] 섹터별 강화 한계치(Lv.5->Lv.50)에 맞춘 정밀 스펙 스케일링: 체력 1.27^섹터, 공격력 +12%/섹터
-      const hpScale = spec.isMidBoss ? (1 + roomIndex * 0.16) : Math.pow(1.27, roomIndex);
+      // [v3.3] 섹터별 강화 한계치(Lv.5->Lv.50)에 맞춘 정밀 스펙 스케일링:
+      // 중간보스는 후반 플레이어 화력 인플레이션(x45배)에 맞춰 지수 스케일링(1.34^섹터) 및 스쿼드 인원수 연동!
+      const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
+      const squadMult = Math.max(1.0, 1.0 + (activeSquadCount - 1) * 0.45);
+      const hpScale = spec.isMidBoss ? (Math.pow(1.34, roomIndex) * squadMult) : Math.pow(1.27, roomIndex);
       const dmgScale = 1 + roomIndex * 0.12;
       const zObj = {
         typeKey,
@@ -798,19 +804,21 @@
       const isCryoBarrel = Boolean(tier1Special || awakened);
 
       // 기본 상태는 적색 고폭 드럼통, 15Lv/30Lv 코어 개조 시에만 극저온 냉각 배럴 외형 적용!
+      // [v3.3 Z-Fighting 완벽 해결] openEnded: true로 원통 상하단 캡을 제거하여 덮개(lidMesh)와의 깜빡임 원천 차단!
       const bodyColor = awakened ? 0x0284c7 : (tier1Special ? 0x0ea5e9 : 0xdc2626);
       const tankBody = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.58, 0.58, 1.40, 18),
+        new THREE.CylinderGeometry(0.58, 0.58, 1.40, 18, 1, true),
         new THREE.MeshStandardMaterial({
           color: bodyColor,
           roughness: isCryoBarrel ? 0.25 : 0.45,
-          metalness: isCryoBarrel ? 0.35 : 0.25
+          metalness: isCryoBarrel ? 0.35 : 0.25,
+          side: THREE.DoubleSide
         })
       );
       tankBody.position.y = 0.72;
       group.add(tankBody);
 
-      // 상하단 강화 림 (Z-fighting 방지를 위해 평면 캡이 없는 토러스 링 구조로 정밀 성형)
+      // 상하단 강화 림 (Z-fighting 방지를 위해 토러스 링 구조로 정밀 성형)
       const rimMat = new THREE.MeshStandardMaterial({
         color: isCryoBarrel ? 0xe0f2fe : 0x1e293b,
         roughness: 0.45,
@@ -818,16 +826,16 @@
       });
       const topRim = new THREE.Mesh(new THREE.TorusGeometry(0.59, 0.045, 8, 20), rimMat);
       topRim.rotation.x = Math.PI / 2;
-      topRim.position.y = 1.38;
+      topRim.position.y = 1.40;
 
       const btmRim = new THREE.Mesh(new THREE.TorusGeometry(0.59, 0.045, 8, 20), rimMat);
       btmRim.rotation.x = Math.PI / 2;
       btmRim.position.y = 0.08;
       group.add(topRim, btmRim);
 
-      // 상단 오목 금속 덮개 (상단면 높이를 1.422로 분리하여 몸통 상단면과의 Z-Fighting 완벽 차단)
-      const lidMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.54, 0.02, 16), rimMat);
-      lidMesh.position.y = 1.422;
+      // 상단 오목 금속 덮개 (openEnded 원통 상단에 단독 배치되어 깜빡임 0% 보장)
+      const lidMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.04, 18), rimMat);
+      lidMesh.position.y = 1.41;
       group.add(lidMesh);
 
       // 중앙 경고/발광 밴드

@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — WebSocket Multiplayer Protocol (backend/protocol.js)
+ * BOXHEAD: THE CORE v3.3 — WebSocket Multiplayer Protocol (backend/protocol.js)
  * =========================================================================
  */
 "use strict";

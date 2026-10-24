@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.2 — Frontend Module: 05_combat_and_upgrades.js
+ * BOXHEAD: THE CORE v3.3 — Frontend Module: 05_combat_and_upgrades.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -120,9 +120,11 @@
         const num = parseInt(code.replace("Digit", ""), 10);
         if (num >= 1 && num <= 8) selectWeaponSlot(me, num - 1);
       } else if (code === "KeyQ") {
+        if (e.repeat) return;
         // [v3.2 조작 획일화] Q키 전담: 구급키트 / 나노 주사기
         startSelfBandaging(me);
       } else if (code === "KeyE") {
+        if (e.repeat) return;
         // [v3.2 조작 획일화] E키 전담: 아드레날린 스팀팩 (중복 R/G키 제거)
         useAdrenalineStim(me);
       } else if (code === "Space") {
@@ -183,6 +185,7 @@
     // [E] 아드레날린 스팀팩 즉시 투여 (+50 임시보호막 + 10.0초 폭주 + 모든 상태이상 완벽 정화 & 군중제어 면역)
     function useAdrenalineStim(player) {
       if (player.downed || player.stims <= 0) return;
+      if (player.stimBuffTimer > 8.5) return; // [v3.3] 스팀팩 중복 투여 낭비 방지 (지속시간 충분 시 연타 무시)
       player.stims--;
       player.tempHp = Math.min(80, (player.tempHp || 0) + 50);
       player.stimBuffTimer = 10.0; // [v3.2] 지속 시간 대폭 상향 (기존 6.5s -> 10.0s)
@@ -321,6 +324,41 @@
       }
     }
 
+    // [v3.3 강화 및 구매 시각 피드백 시스템]
+    // 무기 개별 스탯, 슈트 강화 카드, 보급 버튼 구매 시 1.4초간 눈부신 테두리 발광(Glow) 효과 적용
+    let upgradeHighlight = {
+      type: null, // "stat" | "weapon" | "suit" | "supply"
+      weaponIndex: -1,
+      statKey: null,
+      suitKey: null,
+      supplyKey: null,
+      expireTime: 0
+    };
+
+    function triggerUpgradeHighlight(type, opts = {}) {
+      upgradeHighlight = {
+        type,
+        weaponIndex: opts.weaponIndex !== undefined ? opts.weaponIndex : -1,
+        statKey: opts.statKey || null,
+        suitKey: opts.suitKey || null,
+        supplyKey: opts.supplyKey || null,
+        expireTime: Date.now() + 1400
+      };
+      setTimeout(() => {
+        if (Date.now() >= upgradeHighlight.expireTime) {
+          const upgModal = document.getElementById("upgrade-modal");
+          if (upgModal && !upgModal.classList.contains("hidden")) {
+            renderUpgradeModal();
+          }
+        }
+      }, 1450);
+    }
+
+    function areAllWeaponsUnlocked(player) {
+      if (!player || !player.inventory) return false;
+      return player.inventory.length >= WEAPONS.length && player.inventory.every(inv => inv && inv.unlocked);
+    }
+
     function isLimitBreakStep(totalLv) {
       return false; // 기본 스탯 강화(Lv.1~50)는 변이 코어 없이 오직 BP만으로 자유롭게 가능!
     }
@@ -371,6 +409,7 @@
       const addLv = isJackpot ? 2 : 1;
       inv.stats[chosen.key] += addLv;
       inv.totalLv += addLv;
+      triggerUpgradeHighlight("stat", { weaponIndex: wIdx, statKey: chosen.key });
 
       SoundFX.play("upgrade");
       if (toastEl) {
@@ -483,6 +522,7 @@
       game.bioPoints -= info.cost;
       game.shopCoresBought = (game.shopCoresBought || 0) + 1;
       game.coreSamples = (game.coreSamples || 0) + 1;
+      triggerUpgradeHighlight("supply", { supplyKey: "btn-buy-core" });
       SoundFX.play("revive");
       if (toastEl) {
         toastEl.textContent = `🛒 [변이 코어] 구매 완료! (-${info.cost} BP · 보유 코어: ${game.coreSamples}개)`;
@@ -509,6 +549,7 @@
       game.coreSamples--;
       game.coresSoldCount = (game.coresSoldCount || 0) + 1;
       game.bioPoints += refund;
+      triggerUpgradeHighlight("supply", { supplyKey: "btn-sell-core" });
       SoundFX.play("upgrade");
       if (toastEl) {
         toastEl.textContent = `🧬 변이 코어 분해 판매 완료! 즉시 +${refund} BP 환급! (비코어 순수 스탯 강화 자금 확보)`;
@@ -576,6 +617,11 @@
         if (toastEl) toastEl.textContent = "⛔ [🔧무기고] 반경 안에서만 무기 부품 합성이 가능합니다!";
         return;
       }
+      // [v3.3 무한 BP 차익 악용 원천 차단 1단계]
+      if (areAllWeaponsUnlocked(player)) {
+        if (toastEl) toastEl.textContent = "🔒 모든 무기(8종)가 이미 완벽 해금되었습니다! (부품 합성이 더 이상 필요하지 않습니다)";
+        return;
+      }
       const cost = getPartCraftCost();
       if (game.bioPoints < cost) {
         if (toastEl) toastEl.textContent = `⚠️ BP가 부족합니다! (⚙️ 무기 부품 1개 합성 필요: ${cost.toLocaleString()} BP)`;
@@ -584,6 +630,7 @@
       game.bioPoints -= cost;
       game.partsCrafted = (game.partsCrafted || 0) + 1;
       game.weaponParts = (game.weaponParts || 0) + 1;
+      triggerUpgradeHighlight("supply", { supplyKey: "btn-craft-part" });
       SoundFX.play("upgrade");
       if (toastEl) {
         toastEl.textContent = `⚙️ [무기 부품 합성] +1개 제작 완료! (-${cost.toLocaleString()} BP · 현재 보유 부품: ${game.weaponParts}개)`;
@@ -592,18 +639,22 @@
       updateWeaponSlotsHUD();
     }
 
-    // [v3.2 잉여 부품 분해 연구 자금 환전 모델]
-    // 무기 및 슈트 해금 후 남는 부품을 현재 섹터 가치에 맞춰 대량의 BP로 환전할 수 있습니다!
+    // [v3.3 잉여 부품 분해 연구 자금 환전 모델 & 차익 방지 이중 락]
+    // 8종 무기 전체 해금 완료 후에만 잉여 부품 환전이 가능하며, 환급액은 합성 비용의 75%로 책정되어 차익 거래 0% 보장!
     function getPartScrapRefundBp() {
-      const s = Math.max(0, game.currentRoomIndex || 0);
-      const table = [3000, 3500, 4500, 7000, 10000, 14000, 19000, 25000, 32000, 42000];
-      return table[Math.min(table.length - 1, s)];
+      const craftCost = getPartCraftCost();
+      return Math.round(craftCost * 0.75);
     }
 
     function scrapWeaponPartForBp(player) {
       const toastEl = document.getElementById("upg-roll-toast");
       if (!isPlayerNearArmory(player)) {
         if (toastEl) toastEl.textContent = "⛔ [🔧무기고] 반경 안에서만 잉여 부품 분해 환전이 가능합니다!";
+        return;
+      }
+      // [v3.3 무한 BP 차익 악용 원천 차단 2단계]
+      if (!areAllWeaponsUnlocked(player)) {
+        if (toastEl) toastEl.textContent = "🔒 8종 무기 전체 해금 완료 전에는 부품을 분해할 수 없습니다! (먼저 무기를 모두 해금하세요)";
         return;
       }
       if ((game.weaponParts || 0) < 1) {
@@ -613,6 +664,7 @@
       const refund = getPartScrapRefundBp();
       game.weaponParts--;
       game.bioPoints += refund;
+      triggerUpgradeHighlight("supply", { supplyKey: "btn-scrap-part" });
       SoundFX.play("upgrade");
       if (toastEl) {
         toastEl.textContent = `⚙️ [잉여 부품 분해 환전] +${refund.toLocaleString()} BP 획득! (현재 부품: ${game.weaponParts}개)`;
@@ -671,6 +723,7 @@
         player.medkits = getPlayerMaxMedkits(player);
       }
 
+      triggerUpgradeHighlight("suit", { suitKey: key });
       SoundFX.play(key === "syringe" ? "revive" : "upgrade");
       if (toastEl) {
         toastEl.textContent = key === "syringe"
@@ -712,6 +765,7 @@
           refilledCount++;
         }
       });
+      triggerUpgradeHighlight("supply", { supplyKey: "btn-buy-all-ammo" });
       SoundFX.play("pickup");
       if (toastEl) toastEl.textContent = `📦 전 총기(+1팩) 및 설치물(방벽+5·폭통+4) 일괄 보충 완료! (-${scaledCost.toLocaleString()} BP)`;
       renderUpgradeModal();
@@ -726,10 +780,12 @@
       const btn = document.getElementById(btnId);
       if (!btn) return;
       btn.disabled = !canBuy;
+      const isSupplyHighlighted = (upgradeHighlight.type === "supply" && upgradeHighlight.supplyKey === btnId && Date.now() < upgradeHighlight.expireTime);
+      const glowClass = isSupplyHighlighted ? "ring-4 ring-amber-400 border-amber-300 shadow-[0_0_22px_rgba(251,191,36,0.95)] animate-pulse" : "";
       if (canBuy) {
-        btn.className = `p-2 rounded-xl ${activeClasses} text-left transition flex flex-col justify-between h-14 cursor-pointer`;
+        btn.className = `p-2 rounded-xl ${activeClasses} text-left transition flex flex-col justify-between h-14 cursor-pointer ${glowClass}`;
       } else {
-        btn.className = "p-2 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-500 text-left transition flex flex-col justify-between h-14 opacity-60 cursor-not-allowed";
+        btn.className = `p-2 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-500 text-left transition flex flex-col justify-between h-14 opacity-60 cursor-not-allowed ${glowClass}`;
       }
     }
 
@@ -814,69 +870,104 @@
       const canSellCore = nearArmory && (game.coreSamples || 0) >= 1 && (game.shopCoresBought || 0) === 0;
       setSupplyBtnVisualState("btn-sell-core", canSellCore, "bg-cyan-950/85 hover:bg-cyan-900 border border-cyan-400/70");
 
-      // ==================== 1) 9종 전술 신체 · 외골격 · 의료 · 기동 강화 그리드 렌더링 ====================
+      // ==================== 1) 9종 전술 신체 · 외골격 · 의료 · 기동 강화 (3대 전술 카테고리별 그룹화 렌더링) ====================
       const suitGrid = document.getElementById("upgrade-suit-grid");
       if (suitGrid) {
         suitGrid.innerHTML = "";
         if (!me.suitUpgrades) {
           me.suitUpgrades = { maxHp: 0, armorPlating: 0, medkitCap: 0, stimCap: 0, maxStamina: 0, staminaRegen: 0, dashCd: 0, bashCd: 0, syringe: 0 };
         }
-        Object.keys(SUIT_UPGRADE_DEFS).forEach(sKey => {
-          const def = SUIT_UPGRADE_DEFS[sKey];
-          const curLv = me.suitUpgrades[sKey] || 0;
-          const isMax = curLv >= def.maxLv;
-          const reqRoom = isMax ? 0 : (def.reqRooms[curLv] || 0);
-          const isRoomLocked = !isMax && game.currentRoomIndex < reqRoom;
-          const cost = isMax ? 0 : (def.costs[curLv] || 1000);
-          const partCost = isMax ? 0 : ((def.partsCosts && def.partsCosts[curLv]) || 0);
-          const canUpg = nearArmory && !isMax && !isRoomLocked && game.bioPoints >= cost && (game.weaponParts || 0) >= partCost;
 
-          let statNowText = "";
-          if (sKey === "maxHp") statNowText = `최대 ${getPlayerMaxHp(me)} HP`;
-          else if (sKey === "armorPlating") statNowText = `피해 ${Math.round(getPlayerDmgReduction(me) * 100)}% 경감`;
-          else if (sKey === "medkitCap") statNowText = `최대 ${getPlayerMaxMedkits(me)}개 소지`;
-          else if (sKey === "stimCap") statNowText = `최대 ${getPlayerMaxStims(me)}개 소지`;
-          else if (sKey === "maxStamina") statNowText = `최대 ${getPlayerMaxStamina(me)} ST`;
-          else if (sKey === "staminaRegen") statNowText = `초당 +${getPlayerStaminaRegen(me)}/s`;
-          else if (sKey === "dashCd") statNowText = `점프 소모 ${getPlayerJumpStaminaCost(me)} ST`;
-          else if (sKey === "bashCd") statNowText = `쿨 ${getPlayerBashCooldownMax(me).toFixed(2)}s · 반경 ${getPlayerBashRadius(me).toFixed(1)}m`;
-          else if (sKey === "syringe") statNowText = curLv > 0 ? "자가0.6s(무감속)·아군0.4s" : "기본: 자가2.8s·아군1.8s";
+        const categoryGroups = [
+          { groupDef: SUIT_CATEGORIES.SURVIVAL, keys: ["maxHp", "armorPlating"] },
+          { groupDef: SUIT_CATEGORIES.MEDICAL,  keys: ["medkitCap", "stimCap", "syringe"] },
+          { groupDef: SUIT_CATEGORIES.MOBILITY, keys: ["maxStamina", "staminaRegen", "dashCd", "bashCd"] }
+        ];
 
-          const costText = `${cost.toLocaleString()}BP${partCost > 0 ? ` + ⚙️${partCost}개` : ""}`;
-          const btnLabel = isMax
-            ? `✔ MAX (Lv.${curLv}/${def.maxLv})`
-            : isRoomLocked
-              ? `🔒 ${reqRoom + 1}섹터 해금 (${costText})`
-              : `강화 (${costText})`;
+        categoryGroups.forEach(cg => {
+          const cat = cg.groupDef;
+          const colEl = document.createElement("div");
+          colEl.className = `rounded-2xl p-2.5 border ${cat.border} bg-slate-950/70 flex flex-col gap-2`;
 
-          const btnColorClass = canUpg
-            ? (sKey === "syringe"
-                ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-300 shadow-md cursor-pointer"
-                : "bg-cyan-500 hover:bg-cyan-400 text-slate-950 border-cyan-300 shadow-md cursor-pointer")
-            : "bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-60";
-
-          const sCard = document.createElement("div");
-          sCard.className = `rounded-xl p-2.5 border ${
-            isMax ? "border-emerald-500/60 bg-emerald-950/25" :
-            sKey === "syringe" ? "border-teal-400/50 bg-slate-900/95 lg:col-span-2" :
-            "border-slate-800 bg-slate-900/90"
-          } flex flex-col justify-between gap-1.5`;
-
-          sCard.innerHTML = `
-            <div>
-              <div class="flex items-center justify-between gap-1">
-                <span class="text-xs font-black text-white">${def.icon} ${def.name}</span>
-                <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono-code font-bold text-cyan-300 shrink-0">Lv.${curLv}/${def.maxLv}</span>
-              </div>
-              <div class="text-[11px] font-mono-code text-amber-300 font-bold mt-0.5">${statNowText}</div>
-              <div class="text-[10px] text-slate-300 mt-0.5 leading-snug break-keep">${def.desc}</div>
+          const headerEl = document.createElement("div");
+          headerEl.className = "flex items-center justify-between pb-1.5 border-b border-slate-800/80";
+          headerEl.innerHTML = `
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-sm shrink-0">${cat.icon}</span>
+              <span class="text-xs font-black text-white truncate">${cat.name}</span>
             </div>
-            <button type="button" data-suit-upg="${sKey}" ${!canUpg ? "disabled" : ""}
-                    class="w-full py-1.5 px-2 rounded-lg border text-xs font-extrabold transition ${btnColorClass}">
-              ${btnLabel}
-            </button>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${cat.badge} shrink-0">${cat.desc}</span>
           `;
-          suitGrid.appendChild(sCard);
+          colEl.appendChild(headerEl);
+
+          const listEl = document.createElement("div");
+          listEl.className = "flex flex-col gap-2";
+
+          cg.keys.forEach(sKey => {
+            const def = SUIT_UPGRADE_DEFS[sKey];
+            const curLv = me.suitUpgrades[sKey] || 0;
+            const isMax = curLv >= def.maxLv;
+            const reqRoom = isMax ? 0 : (def.reqRooms[curLv] || 0);
+            const isRoomLocked = !isMax && game.currentRoomIndex < reqRoom;
+            const cost = isMax ? 0 : (def.costs[curLv] || 1000);
+            const partCost = isMax ? 0 : ((def.partsCosts && def.partsCosts[curLv]) || 0);
+            const canUpg = nearArmory && !isMax && !isRoomLocked && game.bioPoints >= cost && (game.weaponParts || 0) >= partCost;
+
+            let statNowText = "";
+            if (sKey === "maxHp") statNowText = `최대 ${getPlayerMaxHp(me)} HP`;
+            else if (sKey === "armorPlating") statNowText = `피해 ${Math.round(getPlayerDmgReduction(me) * 100)}% 경감`;
+            else if (sKey === "medkitCap") statNowText = `최대 ${getPlayerMaxMedkits(me)}개 소지`;
+            else if (sKey === "stimCap") statNowText = `최대 ${getPlayerMaxStims(me)}개 소지`;
+            else if (sKey === "maxStamina") statNowText = `최대 ${getPlayerMaxStamina(me)} ST`;
+            else if (sKey === "staminaRegen") statNowText = `초당 +${getPlayerStaminaRegen(me)}/s`;
+            else if (sKey === "dashCd") statNowText = `점프 소모 ${getPlayerJumpStaminaCost(me)} ST`;
+            else if (sKey === "bashCd") statNowText = `쿨 ${getPlayerBashCooldownMax(me).toFixed(2)}s · 반경 ${getPlayerBashRadius(me).toFixed(1)}m`;
+            else if (sKey === "syringe") statNowText = curLv > 0 ? "자가0.6s(무감속)·아군0.4s" : "기본: 자가2.8s·아군1.8s";
+
+            const costText = `${cost.toLocaleString()}BP${partCost > 0 ? ` + ⚙️${partCost}개` : ""}`;
+            const btnLabel = isMax
+              ? `✔ MAX (Lv.${curLv}/${def.maxLv})`
+              : isRoomLocked
+                ? `🔒 ${reqRoom + 1}섹터 해금 (${costText})`
+                : `강화 (${costText})`;
+
+            const btnColorClass = canUpg
+              ? (sKey === "syringe"
+                  ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-300 shadow-md cursor-pointer"
+                  : "bg-cyan-500 hover:bg-cyan-400 text-slate-950 border-cyan-300 shadow-md cursor-pointer")
+              : "bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-60";
+
+            const isSuitHighlighted = (upgradeHighlight.type === "suit" && upgradeHighlight.suitKey === sKey && Date.now() < upgradeHighlight.expireTime);
+            const suitHighlightClass = isSuitHighlighted
+              ? "ring-4 ring-cyan-400 border-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.95)] animate-pulse scale-[1.02] z-10"
+              : "";
+
+            const sCard = document.createElement("div");
+            sCard.className = `rounded-xl p-2.5 border ${
+              isMax ? "border-emerald-500/60 bg-emerald-950/25" :
+              sKey === "syringe" ? "border-teal-400/50 bg-slate-900/95" :
+              "border-slate-800 bg-slate-900/90"
+            } flex flex-col justify-between gap-1.5 transition ${suitHighlightClass}`;
+
+            sCard.innerHTML = `
+              <div>
+                <div class="flex items-center justify-between gap-1">
+                  <span class="text-xs font-black text-white">${def.icon} ${def.name}</span>
+                  <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono-code font-bold text-cyan-300 shrink-0">Lv.${curLv}/${def.maxLv}</span>
+                </div>
+                <div class="text-[11px] font-mono-code text-amber-300 font-bold mt-0.5">${statNowText}</div>
+                <div class="text-[10px] text-slate-300 mt-0.5 leading-snug break-keep">${def.desc}</div>
+              </div>
+              <button type="button" data-suit-upg="${sKey}" ${!canUpg ? "disabled" : ""}
+                      class="w-full py-1.5 px-2 rounded-lg border text-xs font-extrabold transition ${btnColorClass}">
+                ${btnLabel}
+              </button>
+            `;
+            listEl.appendChild(sCard);
+          });
+
+          colEl.appendChild(listEl);
+          suitGrid.appendChild(colEl);
         });
 
         suitGrid.querySelectorAll("[data-suit-upg]").forEach(btn => {
@@ -902,12 +993,17 @@
         const maxA = getWeaponMaxAmmo(me, wIdx);
         const canRollStat = nearArmory && inv.unlocked && !isAllMax && !isSectorCapped && game.bioPoints >= rollCost;
 
+        const isWeaponHighlighted = (upgradeHighlight.type === "weapon" && upgradeHighlight.weaponIndex === wIdx && Date.now() < upgradeHighlight.expireTime);
+        const weaponHighlightClass = isWeaponHighlighted
+          ? "ring-4 ring-indigo-400 border-indigo-300 shadow-[0_0_24px_rgba(129,140,248,0.95)] animate-pulse scale-[1.01]"
+          : "";
+
         const card = document.createElement("div");
         card.className = `rounded-2xl p-3.5 border ${
           inv.awakened ? "border-cyan-400/80 bg-slate-900/95" :
           inv.tier1Special ? "border-fuchsia-400/75 bg-slate-900/95" :
           inv.unlocked ? "border-slate-700/90 bg-slate-900/90" : "border-slate-800 bg-slate-950/75 opacity-85"
-        } flex flex-col justify-between gap-2.5`;
+        } flex flex-col justify-between gap-2.5 transition ${weaponHighlightClass}`;
 
         let headerRight = "";
         if (!inv.unlocked) {
@@ -1022,13 +1118,17 @@
             const isSecLocked = Boolean(st.reqSector && (game.currentRoomIndex || 0) < st.reqSector);
             const isStatMax = curLv >= 10;
             const canClickStat = canRollStat && !isStatMax && !isSecLocked;
+            const isStatHighlighted = (upgradeHighlight.type === "stat" && upgradeHighlight.weaponIndex === wIdx && upgradeHighlight.statKey === st.key && Date.now() < upgradeHighlight.expireTime);
+            const statHighlightClass = isStatHighlighted
+              ? "ring-4 ring-amber-400 border-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.95)] animate-pulse scale-105 z-10"
+              : "";
             const statBoxClass = canClickStat
               ? "border-amber-400/70 bg-slate-900 hover:bg-amber-950/40 text-slate-100 cursor-pointer"
               : "border-slate-700 bg-slate-800/80 text-slate-500 cursor-not-allowed opacity-65";
             const lvText = isSecLocked ? `🔒${st.reqSector + 1}섹터` : `Lv.${curLv}/10`;
             return `
               <button type="button" data-upg-w="${wIdx}" title="${st.desc}" ${!canClickStat ? "disabled" : ""}
-                      class="p-1.5 rounded-xl border text-center transition ${statBoxClass}">
+                      class="p-1.5 rounded-xl border text-center transition ${statBoxClass} ${statHighlightClass}">
                 <div class="text-[11px] font-bold ${canClickStat ? 'text-slate-100' : 'text-slate-400'} leading-tight">${st.label}</div>
                 <div class="text-[9px] ${canClickStat ? 'text-amber-300' : 'text-slate-500'} leading-tight mt-0.5">${st.desc}</div>
                 <div class="text-xs font-mono-code font-black ${isSecLocked ? 'text-rose-400' : (canClickStat ? 'text-cyan-300' : 'text-slate-400')} mt-0.5">${lvText}</div>
@@ -1078,6 +1178,7 @@
           game.weaponParts -= reqP;
           game.bioPoints -= reqBp;
           inv.unlocked = true;
+          triggerUpgradeHighlight("weapon", { weaponIndex: wIdx });
           SoundFX.play("upgrade");
           if (toastEl) {
             toastEl.textContent = `🔓 [${w.name}] 설계도 해금 완료! (-⚙️부품 ${reqP}개, -${reqBp.toLocaleString()} BP)`;
@@ -1195,7 +1296,7 @@
       const rangeMult = isPierceInArea ? 1.15 : (1 + effAreaLv * 0.22);
       const stunDur = isDownedPistol ? 0.15 : ((wDef.stun + effStunLv * 0.22) * (player.swapOverchargeTimer > 0 ? 1.35 : 1.0));
       const knockVal = isDownedPistol ? 0.35 : (wDef.knockback * (1 + effStunLv * 0.28));
-      const pierceCount = isDownedPistol ? 1 : ((wDef.piercing ? 99 : 1) + (isPierceInArea ? effAreaLv : 0) + (wIdx === 0 && effTier1 ? 1 : 0) + (wIdx === 0 && effAwakened ? 2 : 0) + (pureBonus.extraPierce || 0));
+      const pierceCount = isDownedPistol ? 1 : ((wDef.piercing ? 99 : 1) + (wDef.pierceBase || 0) + (isPierceInArea ? effAreaLv : 0) + (wIdx === 0 && effTier1 ? 1 : 0) + (wIdx === 0 && effAwakened ? 2 : 0) + (pureBonus.extraPierce || 0));
       const areaMult = isPierceInArea ? 1.05 : rangeMult;
 
       player.fireCooldown = Math.max(0.035, wDef.fireRate / spdMult);
@@ -1277,6 +1378,9 @@
           isZombieProjectile: false,
           x: bulletMesh.position.x,
           z: bulletMesh.position.z,
+          originX: player.x,
+          originZ: player.z,
+          heavyImpact: !!wDef.heavyImpact,
           vx, vz,
           damage: finalDamage,
           weakMult: isDownedPistol ? 1.0 : ((wDef.weakMult || 1.2) + (pureBonus.weakBonus || 0) + (wIdx === 0 ? effKnockLv * 0.28 + (effTier1 ? 0.6 : 0) : 0)),

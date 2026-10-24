@@ -1,7 +1,7 @@
 {
   "name": "boxhead-the-core",
-  "version": "3.1.0",
-  "description": "BOXHEAD: THE CORE v3.1 — 4-Player Co-op Tactical Survival Game (Modular Engine + Node.js HTTP/WebSocket Server)",
+  "version": "3.3.0",
+  "description": "BOXHEAD: THE CORE v3.3 — 4-Player Co-op Tactical Survival Game (Modular Engine + Node.js HTTP/WebSocket Server)",
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",

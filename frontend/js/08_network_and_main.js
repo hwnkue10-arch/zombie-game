@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.2 — Frontend Module: 08_network_and_main.js
+ * BOXHEAD: THE CORE v3.3 — Frontend Module: 08_network_and_main.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -464,6 +464,25 @@
                   triggerTacticalDash(p, true);
                 }
               }
+            } else if (msg.type === "MISSION_ACTION" && game.running) {
+              const r = game.rooms[msg.roomIdx];
+              if (r) {
+                if (msg.action === "ADVANCE_STAGE") {
+                  r.completedStage = Math.max(r.completedStage || 0, msg.completedStep);
+                  r.waitingForWaveDefense = true;
+                  if (game.wavePhase === "CALM" && game.waveTimer > 4.0) {
+                    game.waveTimer = 4.0;
+                  }
+                }
+              }
+            } else if (msg.type === "SECTOR_LOCK_TELEPORT" && game.running) {
+              const me = game.players[mySlotIndex];
+              const targetR = game.rooms[msg.roomIdx];
+              if (me && targetR && (Math.abs(me.x - targetR.wx) >= (targetR.hw || targetR.half) || Math.abs(me.z - targetR.wz) >= (targetR.hd || targetR.half))) {
+                me.x = msg.destX + (mySlotIndex - 1.5) * 1.5;
+                me.z = msg.destZ + 1.2;
+                if (me.visual && me.visual.group) me.visual.group.position.set(me.x, 0, me.z);
+              }
             } else if (msg.type === "WORLD_SNAPSHOT" && game.running && isRemoteClient) {
               // 호스트(P1) 권위 월드·좀비·웨이브·미션·격벽(Door) 스냅샷 동기화 -> 친구가 다음 섹터로 이동할 때 벽에 막히는 버그 100% 해결!
               game.wavePhase = msg.wavePhase || game.wavePhase;
@@ -836,6 +855,7 @@
       if (game.bioPoints >= cost) {
         game.bioPoints -= cost;
         me.medkits++;
+        triggerUpgradeHighlight("supply", { supplyKey: "btn-buy-medkit" });
         SoundFX.play("pickup");
         renderUpgradeModal();
       }
@@ -856,6 +876,7 @@
       if (game.bioPoints >= cost) {
         game.bioPoints -= cost;
         me.stims++;
+        triggerUpgradeHighlight("supply", { supplyKey: "btn-buy-stim" });
         SoundFX.play("pickup");
         renderUpgradeModal();
       }
