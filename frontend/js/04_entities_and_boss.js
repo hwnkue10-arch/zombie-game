@@ -874,6 +874,7 @@
         tier1Special: !!tier1Special,
         awakened: !!awakened,
         areaLv: st.area || 0,
+        fireLv: st.spd || 0,
         dmgMult: 1 + (st.atk || 0) * 0.35,
         stunBonus: (st.stun || 0) * 0.40,
         group

@@ -275,7 +275,7 @@
       // 7: 고폭 폭약통
       [
         { key: "atk", label: "기폭화력", desc: "폭발딜+35%" },
-        { key: "spd", label: "설치속도", desc: "설치공속↑" },
+        { key: "spd", label: "소이화염", desc: "잔류장판·지속딜↑" },
         { key: "area", label: "폭발반경", desc: "범위+1.1m" },
         { key: "stun", label: "충격저지", desc: "기절·빙결↑" },
         { key: "knock", label: "설치효율", desc: "무소모+6.5%" }

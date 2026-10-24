@@ -146,8 +146,8 @@
           door.thermiteLedMesh = ledMesh;
           door.thermiteCanMat = canMat;
 
-          // 4) 바닥 폭발 위험 반경(6.2m) 고시인성 경고 장판 (방 내부 방향으로 정확히 정렬)
-          const blastRadius = 6.2;
+          // 4) 바닥 폭발 위험 반경(6.0m) 고시인성 경고 장판 (방 내부 방향으로 정확히 정렬)
+          const blastRadius = 6.0;
           const hX = door.x + (door.inNormX || 0) * 1.5;
           const hZ = door.z + (door.inNormZ || 0) * 1.5;
 
@@ -239,82 +239,84 @@
 
       SoundFX.play("explosion");
 
-      // 1. 다중 레이어 초대형 테르밋 화염구 & 섬광 VFX
+      // 1. 다중 레이어 테르밋 화염구 & 섬광 VFX (위험 구역 중심 hX, hZ 및 경계 bRad 이내로 정확히 한정)
+      const hX = door.hazardCenterX !== undefined ? door.hazardCenterX : (door.x + (door.inNormX || 0) * 1.5);
+      const hZ = door.hazardCenterZ !== undefined ? door.hazardCenterZ : (door.z + (door.inNormZ || 0) * 1.5);
+      const bRad = door.blastRadius || 6.0;
+
       const coreFlash = new THREE.Mesh(
-        new THREE.SphereGeometry(4.8, 18, 18),
+        new THREE.SphereGeometry(2.0, 16, 16),
         new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 })
       );
-      coreFlash.position.set(door.x, 2.0, door.z);
+      coreFlash.position.set(hX, 1.8, hZ);
       effectsGroup.add(coreFlash);
-      game.particles.push({ mesh: coreFlash, life: 0.28, maxLife: 0.28, expand: 1.85 });
+      game.particles.push({ mesh: coreFlash, life: 0.22, maxLife: 0.22, expand: 1.45 });
 
       const fireball = new THREE.Mesh(
-        new THREE.SphereGeometry(8.5, 22, 22),
-        new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.88 })
+        new THREE.SphereGeometry(3.5, 20, 20),
+        new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.85 })
       );
-      fireball.position.set(door.x, 1.8, door.z);
+      fireball.position.set(hX, 1.6, hZ);
       effectsGroup.add(fireball);
-      game.particles.push({ mesh: fireball, life: 0.52, maxLife: 0.52, expand: 1.55 });
+      game.particles.push({ mesh: fireball, life: 0.42, maxLife: 0.42, expand: 1.55 }); // 최대 반경 3.5 * 1.55 = 5.4m (장판 6.0m 안쪽에 완벽히 제한)
 
-      // 이중 바닥 충격파 링
+      // 이중 바닥 충격파 링 (장판 경계 6.0m 이내로 엄격히 제한)
       const wave1 = new THREE.Mesh(
-        new THREE.RingGeometry(0.8, 9.2, 36),
-        new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
+        new THREE.RingGeometry(0.5, 4.3, 32),
+        new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.88, side: THREE.DoubleSide })
       );
       wave1.rotation.x = -Math.PI / 2;
-      wave1.position.set(door.x, 0.12, door.z);
+      wave1.position.set(hX, 0.12, hZ);
       effectsGroup.add(wave1);
-      game.particles.push({ mesh: wave1, life: 0.55, maxLife: 0.55, expand: 1.45 });
+      game.particles.push({ mesh: wave1, life: 0.45, maxLife: 0.45, expand: 1.35 }); // 최대 4.3 * 1.35 = 5.8m
 
       const wave2 = new THREE.Mesh(
-        new THREE.RingGeometry(0.5, 6.2, 32),
+        new THREE.RingGeometry(0.3, 3.2, 28),
         new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
       );
       wave2.rotation.x = -Math.PI / 2;
-      wave2.position.set(door.x, 0.16, door.z);
+      wave2.position.set(hX, 0.16, hZ);
       effectsGroup.add(wave2);
-      game.particles.push({ mesh: wave2, life: 0.42, maxLife: 0.42, expand: 1.65 });
+      game.particles.push({ mesh: wave2, life: 0.35, maxLife: 0.35, expand: 1.45 });
 
-      // 28개의 고열 방화벽 철제 파편 및 용융 불덩이 방사
-      for (let p = 0; p < 28; p++) {
-        const ang = (p / 28) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
-        const spd = 7.5 + Math.random() * 11.5;
-        const sz = 0.32 + Math.random() * 0.28;
+      // 20개의 고열 방화벽 철제 파편 및 용융 불덩이 방사 (장판 반경 내로 비산 제한)
+      for (let p = 0; p < 20; p++) {
+        const ang = (p / 20) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+        const spd = 4.5 + Math.random() * 5.5;
+        const sz = 0.25 + Math.random() * 0.2;
         const pColor = p % 3 === 0 ? 0xf97316 : (p % 3 === 1 ? 0xfacc15 : 0x475569);
         const pMesh = new THREE.Mesh(
           new THREE.BoxGeometry(sz, sz, sz),
           new THREE.MeshBasicMaterial({ color: pColor })
         );
-        pMesh.position.set(door.x, 1.2 + Math.random() * 1.6, door.z);
+        pMesh.position.set(hX, 1.2 + Math.random() * 1.0, hZ);
         effectsGroup.add(pMesh);
         game.particles.push({
           mesh: pMesh,
-          life: 0.75,
-          maxLife: 0.75,
+          life: 0.52,
+          maxLife: 0.52,
           vx: Math.cos(ang) * spd,
-          vy: 4.5 + Math.random() * 6.0,
+          vy: 3.2 + Math.random() * 4.0,
           vz: Math.sin(ang) * spd
         });
       }
 
-      // 2. 바닥 위험 장판(6.2m) 내 플레이어에게만 적정 폭발 피해(최대 38 HP, 출혈 없음) & 넉백 부여
-      const hX = door.hazardCenterX !== undefined ? door.hazardCenterX : (door.x + (door.inNormX || 0) * 1.5);
-      const hZ = door.hazardCenterZ !== undefined ? door.hazardCenterZ : (door.z + (door.inNormZ || 0) * 1.5);
-      const playerBlastRadius = door.blastRadius || 6.2;
+      // 2. 바닥 위험 장판 내 플레이어 판정: 장판 외곽 안전 버퍼(0.5m) 적용 — 경계선 밖은 100% 안전 보장!
+      const playerBlastRadius = Math.max(3.0, (door.blastRadius || 6.0) - 0.5);
       let localHitDmg = 0;
       game.players.forEach(p => {
         if (p.downed) return;
         const dist = Math.hypot(p.x - hX, p.z - hZ);
         if (dist <= playerBlastRadius) {
           const falloff = 1 - (dist / playerBlastRadius) * 0.5; // 중심부 100%, 외곽 50%
-          const blastDmg = Math.round(38 * falloff);
+          const blastDmg = Math.round(30 * falloff);
           damagePlayer(p, blastDmg, false, false); // 출혈(Bleed) 없이 즉발 피해만 부여하여 급사 차단!
           if (p.id === mySlotIndex) localHitDmg = blastDmg;
 
           // 폭발 충격파 넉백 (장판 중심에서 외곽으로)
           const nx = (p.x - hX) / (dist || 1);
           const nz = (p.z - hZ) / (dist || 1);
-          const kbDist = 4.2 * falloff;
+          const kbDist = 3.6 * falloff;
           const tx = p.x + nx * kbDist;
           const tz = p.z + nz * kbDist;
           if (!isPointBlockedByWall(tx, tz, 0.75)) {
@@ -838,17 +840,17 @@
             }
           }
 
-          // 5) 바닥 위험 반경 장판 고속 점멸 및 간결한 카운트다운 라벨
-          const pulseSpeed = 3.5 + ratio * 8.5;
-          const pulseAlpha = 0.22 + Math.abs(Math.sin(game.elapsedTime * pulseSpeed)) * 0.35;
+          // 5) 바닥 위험 반경 장판 눈이 편안한 천천히 숨쉬는 펄스 (고속 깜빡임 완벽 제거)
+          const pulseSpeed = remSec <= 4.0 ? 2.6 : 1.6;
+          const pulseAlpha = 0.5 + 0.5 * Math.sin(game.elapsedTime * pulseSpeed);
           if (curExitDoor.dangerDiscMat) {
-            curExitDoor.dangerDiscMat.opacity = remSec <= 4.0 ? (pulseAlpha + 0.25) : pulseAlpha;
+            curExitDoor.dangerDiscMat.opacity = 0.16 + pulseAlpha * 0.18;
           }
           if (curExitDoor.dangerOuterMat) {
-            curExitDoor.dangerOuterMat.opacity = remSec <= 4.0 ? (Math.sin(game.elapsedTime * 14.0) > 0 ? 1.0 : 0.3) : 0.9;
+            curExitDoor.dangerOuterMat.opacity = 0.60 + pulseAlpha * 0.35;
           }
           if (curExitDoor.dangerMidMat) {
-            curExitDoor.dangerMidMat.opacity = remSec <= 4.0 ? 0.95 : 0.65;
+            curExitDoor.dangerMidMat.opacity = 0.35 + pulseAlpha * 0.25;
           }
           if (curExitDoor.thermiteBombSym && curExitDoor.thermiteBombSym.el) {
             curExitDoor.thermiteBombSym.el.textContent = remSec <= 4.0

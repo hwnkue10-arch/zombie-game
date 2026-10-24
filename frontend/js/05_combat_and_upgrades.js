@@ -116,7 +116,17 @@
         return;
       }
 
-      if (code.startsWith("Digit")) {
+      if (code === "KeyZ") {
+        if (e.repeat) return;
+        // [v3.4 퀵스왑] Z키: 이전 무기 순차 전환
+        cycleWeapon(me, -1);
+        return;
+      } else if (code === "KeyX") {
+        if (e.repeat) return;
+        // [v3.4 퀵스왑] X키: 다음 무기 순차 전환
+        cycleWeapon(me, 1);
+        return;
+      } else if (code.startsWith("Digit")) {
         const num = parseInt(code.replace("Digit", ""), 10);
         if (num >= 1 && num <= 8) selectWeaponSlot(me, num - 1);
       } else if (code === "KeyQ") {
@@ -1639,9 +1649,11 @@
         }
       }
 
-      // 5. 영구동토 냉각 장판 생성 — 오직 30Lv 코어 각성(awakened) 시에만 생성! (적정 기본 반경 5.2m)
+      // 5. 영구동토 냉각 장판 및 [v3.4 신규] 소이화염 잔류 장판 생성
       if (hasCryoField) {
         const cRad = 5.2 + (barrel.areaLv || 0) * 0.6;
+        const cryoDps = Math.round((165 + (barrel.fireLv || 0) * 35) * secScale * (barrel.dmgMult || 1));
+        const cryoLife = 7.5 + (barrel.fireLv || 0) * 0.5;
         const cMesh = new THREE.Mesh(
           new THREE.CircleGeometry(cRad, 24),
           new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.58 })
@@ -1653,11 +1665,33 @@
           x: barrel.x,
           z: barrel.z,
           radius: cRad,
-          dps: Math.round(165 * secScale * (barrel.dmgMult || 1)),
-          life: 7.5,
+          dps: cryoDps,
+          life: cryoLife,
           isCryo: true,
           wIdx: 7,
           mesh: cMesh
+        });
+      } else if ((barrel.fireLv || 0) > 0) {
+        // [v3.4 소이화염 개조] 폭약통 폭발 지점에 강력한 잔류 화염 장판 생성 (설치속도 대체)
+        const fRad = 3.6 + (barrel.fireLv * 0.35) + (barrel.areaLv || 0) * 0.3;
+        const fDps = Math.round((120 + barrel.fireLv * 40) * secScale * (barrel.dmgMult || 1));
+        const fLife = 3.8 + barrel.fireLv * 0.55;
+        const fMesh = new THREE.Mesh(
+          new THREE.CircleGeometry(fRad, 24),
+          new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.62 })
+        );
+        fMesh.rotation.x = -Math.PI / 2;
+        fMesh.position.set(barrel.x, 0.06, barrel.z);
+        effectsGroup.add(fMesh);
+        game.flamePools.push({
+          x: barrel.x,
+          z: barrel.z,
+          radius: fRad,
+          dps: fDps,
+          life: fLife,
+          isCryo: false,
+          wIdx: 7,
+          mesh: fMesh
         });
       }
 
