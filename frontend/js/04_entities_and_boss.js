@@ -84,9 +84,9 @@
       entitiesGroup.add(bossGroup);
 
       const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
-      // [v3.5 4인 레이드 밸런스] 4인 집중 화력에 대응하는 정밀 스쿼드 체력 곡선 (1P 1.0x, 2P 1.82x, 3P 2.64x, 4P 3.46x)
-      const bossSquadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.82;
-      const baseBossHp = game.pacing === "marathon" ? 118000 : (game.pacing === "blitz" ? 44000 : 82000);
+      // [v3.5 최종보스 위엄 확립] 3차 중간보스(S9 25.1만)의 2배 이상 규모(S10 53.6만)로 최종보스가 확실한 최대 체력을 보유하도록 조정!
+      const bossSquadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.75;
+      const baseBossHp = game.pacing === "marathon" ? 235000 : (game.pacing === "blitz" ? 85000 : 165000);
       const maxHp = Math.round(baseBossHp * bossSquadScale);
       game.boss = {
         x: bx, z: bz,
@@ -448,13 +448,13 @@
       group.position.set(x, 0, z);
       entitiesGroup.add(group);
 
-      // [v3.5] 섹터별 강화 한계치(Lv.5->Lv.50) 및 4인 협동 집결 화력에 맞춘 정밀 스펙 스케일링:
-      // 중간보스는 4인 집중포화에도 패턴을 모두 선보일 수 있도록 스쿼드 계수(1P 1.0x ~ 4P 3.31x) 및 1.36^섹터 지수 스케일링 적용!
+      // [v3.5] 섹터별 스펙 스케일링:
+      // 중간보스는 1.20^섹터 지수 스케일링으로 Sector 9(3차 중간보스)가 최종보스 체력을 역전하지 않도록 정상화 (S3: 8.4만 -> S6: 14.5만 -> S9: 25.1만 < 최종보스 53.6만)
       const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
-      const midBossSquadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.77;
+      const midBossSquadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.72;
       const hostSquadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.65;
       const hpScale = spec.isMidBoss
-        ? (Math.pow(1.36, roomIndex) * midBossSquadScale)
+        ? (Math.pow(1.20, roomIndex) * midBossSquadScale)
         : (spec.isNutrientHost ? Math.pow(1.27, roomIndex) * hostSquadScale : Math.pow(1.27, roomIndex));
       const dmgScale = 1 + roomIndex * 0.12;
       const zObj = {
