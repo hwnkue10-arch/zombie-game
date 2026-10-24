@@ -7,8 +7,323 @@
 "use strict";
 
     // =========================================================================
-    // 14. ROOM PROGRESSION & PROBABILISTIC COLLAPSE
+    // 14. ROOM PROGRESSION, MISSION CINEMATICS & THERMITE DETONATION
     // =========================================================================
+    function spawnMissionStageVFX(x, z, colorHex, maxRadius, particleCount, withSkyBeam) {
+      // 1. 바닥 에너지 충격파 링
+      const ringGeo = new THREE.RingGeometry(0.45, maxRadius || 5.0, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 0.88,
+        side: THREE.DoubleSide
+      });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.rotation.x = -Math.PI / 2;
+      ringMesh.position.set(x, 0.1, z);
+      effectsGroup.add(ringMesh);
+      game.particles.push({ mesh: ringMesh, life: 0.48, maxLife: 0.48, expand: 1.45 });
+
+      // 2. 입체 스파크/에너지 파편 방출
+      const count = particleCount || 14;
+      for (let i = 0; i < count; i++) {
+        const ang = (i / count) * Math.PI * 2 + Math.random() * 0.35;
+        const spd = 4.0 + Math.random() * 6.5;
+        const pMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(0.28, 0.28, 0.28),
+          new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? colorHex : 0xffffff })
+        );
+        pMesh.position.set(x, 0.8 + Math.random() * 0.8, z);
+        effectsGroup.add(pMesh);
+        game.particles.push({
+          mesh: pMesh,
+          life: 0.55,
+          maxLife: 0.55,
+          vx: Math.cos(ang) * spd,
+          vy: 3.5 + Math.random() * 4.5,
+          vz: Math.sin(ang) * spd
+        });
+      }
+
+      // 3. 위성 업로드 또는 합성 완료 시 하늘로 치솟는 코어 광선 기둥
+      if (withSkyBeam) {
+        const beamMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.55, 0.55, 26, 16),
+          new THREE.MeshBasicMaterial({
+            color: colorHex,
+            transparent: true,
+            opacity: 0.85
+          })
+        );
+        beamMesh.position.set(x, 13.0, z);
+        effectsGroup.add(beamMesh);
+        game.particles.push({ mesh: beamMesh, life: 0.9, maxLife: 0.9, expand: 1.15 });
+      }
+    }
+
+    // 테르밋 합성 완료(subStage=1) 및 방화벽 폭약 부착(subStage=2) 3D 비주얼 생성·관리
+    function ensureThermiteDoorVisuals(room, door) {
+      if (!room || !door || room.condType !== "THERMITE") return;
+
+      // [Stage 1] 테르밋 합성 완료 후 방화벽 앞 부착 유도 마커 생성
+      if (room.subStage === 1 && !room.cleared) {
+        if (!door.targetMarkerGroup) {
+          const tGroup = new THREE.Group();
+          const tRing = new THREE.Mesh(
+            new THREE.RingGeometry(1.3, 1.8, 28),
+            new THREE.MeshBasicMaterial({
+              color: 0xf97316,
+              transparent: true,
+              opacity: 0.85,
+              side: THREE.DoubleSide
+            })
+          );
+          tRing.rotation.x = -Math.PI / 2;
+          tRing.position.y = 0.09;
+          tGroup.add(tRing);
+          const offX = (door.inNormX || 0) * 2.1;
+          const offZ = (door.inNormZ || 0) * 2.1;
+          tGroup.position.set(door.x + offX, 0, door.z + offZ);
+          entitiesGroup.add(tGroup);
+          door.targetMarkerGroup = tGroup;
+          door.targetRingMesh = tRing;
+
+          const markerRef = { done: false, roomIndex: room.index };
+          door.thermiteMarkerRef = markerRef;
+          door.thermiteMarkerSym = registerWorldSymbol(
+            door.x + offX, 3.2, door.z + offZ,
+            "🎯[목표] 방화벽에 테르밋 폭약 부착 [F]",
+            "bg-orange-950/95 border-orange-400 text-orange-200",
+            markerRef, room.index
+          );
+        }
+      } else if (door.targetMarkerGroup) {
+        entitiesGroup.remove(door.targetMarkerGroup);
+        door.targetMarkerGroup = null;
+        if (door.thermiteMarkerRef) door.thermiteMarkerRef.done = true;
+      }
+
+      // [Stage 2] 방화벽에 실제 3D 테르밋 폭탄 팩 부착 + 바닥 8.5m 위험 반경 경고 링 생성
+      if (room.subStage === 2 && !room.cleared && !room.thermiteDetonated) {
+        if (!door.thermiteBombGroup) {
+          const bGroup = new THREE.Group();
+
+          // 1) 중장갑 C4/테르밋 폭약 본체 케이스
+          const chassis = new THREE.Mesh(
+            new THREE.BoxGeometry(2.3, 1.35, 0.9),
+            new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.7, roughness: 0.3 })
+          );
+          bGroup.add(chassis);
+
+          // 2) 고열 테르밋 소이 실린더 2기
+          const canGeo = new THREE.CylinderGeometry(0.34, 0.34, 2.05, 12);
+          const canMat = new THREE.MeshStandardMaterial({
+            color: 0xf97316,
+            emissive: 0xea580c,
+            emissiveIntensity: 1.15
+          });
+          const can1 = new THREE.Mesh(canGeo, canMat);
+          can1.rotation.z = Math.PI / 2;
+          can1.position.set(0, 0.32, 0.35);
+          const can2 = new THREE.Mesh(canGeo, canMat);
+          can2.rotation.z = Math.PI / 2;
+          can2.position.set(0, -0.32, 0.35);
+          bGroup.add(can1, can2);
+
+          // 3) 중앙 점멸 기폭 LED 비콘
+          const ledMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+          const ledMesh = new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 14), ledMat);
+          ledMesh.position.set(0, 0, 0.55);
+          bGroup.add(ledMesh);
+
+          const offX = (door.inNormX || 0) * 1.05;
+          const offZ = (door.inNormZ || 0) * 1.05;
+          bGroup.position.set(door.x + offX, 2.0, door.z + offZ);
+          if (door.rotY) bGroup.rotation.y = door.rotY;
+          entitiesGroup.add(bGroup);
+
+          door.thermiteBombGroup = bGroup;
+          door.thermiteLedMesh = ledMesh;
+          door.thermiteCanMat = canMat;
+
+          // 4) 바닥 폭발 위험 반경(8.5m) 경고 링 & 반투명 위험 구역 원판
+          const dzGroup = new THREE.Group();
+          const outerRing = new THREE.Mesh(
+            new THREE.RingGeometry(8.15, 8.55, 40),
+            new THREE.MeshBasicMaterial({
+              color: 0xef4444,
+              transparent: true,
+              opacity: 0.85,
+              side: THREE.DoubleSide
+            })
+          );
+          outerRing.rotation.x = -Math.PI / 2;
+          outerRing.position.y = 0.08;
+          dzGroup.add(outerRing);
+
+          const innerDiscMat = new THREE.MeshBasicMaterial({
+            color: 0xef4444,
+            transparent: true,
+            opacity: 0.16,
+            side: THREE.DoubleSide
+          });
+          const innerDisc = new THREE.Mesh(new THREE.CircleGeometry(8.5, 40), innerDiscMat);
+          innerDisc.rotation.x = -Math.PI / 2;
+          innerDisc.position.y = 0.06;
+          dzGroup.add(innerDisc);
+
+          dzGroup.position.set(door.x, 0, door.z);
+          effectsGroup.add(dzGroup);
+          door.dangerZoneGroup = dzGroup;
+          door.dangerDiscMat = innerDiscMat;
+
+          const bombRef = { done: false, roomIndex: room.index };
+          door.thermiteBombRef = bombRef;
+          door.thermiteBombSym = registerWorldSymbol(
+            door.x + offX, 3.6, door.z + offZ,
+            "🧨 테르밋 용융 폭파 중 · ⚠️반경 8.5m 폭발 위험!",
+            "bg-rose-950/95 border-rose-500 text-rose-200",
+            bombRef, room.index
+          );
+        }
+      }
+    }
+
+    // 테르밋 용융 완료 시 방화벽 대폭발 애니메이션 및 근접 플레이어/좀비 심각한 폭발 데미지 판정!
+    function detonateThermiteDoor(room, door) {
+      if (!room || !door || room.thermiteDetonated) return;
+      room.thermiteDetonated = true;
+
+      // 부착된 폭탄 및 위험 반경 링 제거
+      if (door.thermiteBombGroup) {
+        entitiesGroup.remove(door.thermiteBombGroup);
+        door.thermiteBombGroup = null;
+      }
+      if (door.dangerZoneGroup) {
+        effectsGroup.remove(door.dangerZoneGroup);
+        door.dangerZoneGroup = null;
+      }
+      if (door.targetMarkerGroup) {
+        entitiesGroup.remove(door.targetMarkerGroup);
+        door.targetMarkerGroup = null;
+      }
+      if (door.thermiteBombRef) door.thermiteBombRef.done = true;
+      if (door.thermiteMarkerRef) door.thermiteMarkerRef.done = true;
+
+      SoundFX.play("explosion");
+
+      // 1. 다중 레이어 초대형 테르밋 화염구 & 섬광 VFX
+      const coreFlash = new THREE.Mesh(
+        new THREE.SphereGeometry(4.8, 18, 18),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 })
+      );
+      coreFlash.position.set(door.x, 2.0, door.z);
+      effectsGroup.add(coreFlash);
+      game.particles.push({ mesh: coreFlash, life: 0.28, maxLife: 0.28, expand: 1.85 });
+
+      const fireball = new THREE.Mesh(
+        new THREE.SphereGeometry(8.5, 22, 22),
+        new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.88 })
+      );
+      fireball.position.set(door.x, 1.8, door.z);
+      effectsGroup.add(fireball);
+      game.particles.push({ mesh: fireball, life: 0.52, maxLife: 0.52, expand: 1.55 });
+
+      // 이중 바닥 충격파 링
+      const wave1 = new THREE.Mesh(
+        new THREE.RingGeometry(0.8, 9.2, 36),
+        new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
+      );
+      wave1.rotation.x = -Math.PI / 2;
+      wave1.position.set(door.x, 0.12, door.z);
+      effectsGroup.add(wave1);
+      game.particles.push({ mesh: wave1, life: 0.55, maxLife: 0.55, expand: 1.45 });
+
+      const wave2 = new THREE.Mesh(
+        new THREE.RingGeometry(0.5, 6.2, 32),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
+      );
+      wave2.rotation.x = -Math.PI / 2;
+      wave2.position.set(door.x, 0.16, door.z);
+      effectsGroup.add(wave2);
+      game.particles.push({ mesh: wave2, life: 0.42, maxLife: 0.42, expand: 1.65 });
+
+      // 28개의 고열 방화벽 철제 파편 및 용융 불덩이 방사
+      for (let p = 0; p < 28; p++) {
+        const ang = (p / 28) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+        const spd = 7.5 + Math.random() * 11.5;
+        const sz = 0.32 + Math.random() * 0.28;
+        const pColor = p % 3 === 0 ? 0xf97316 : (p % 3 === 1 ? 0xfacc15 : 0x475569);
+        const pMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(sz, sz, sz),
+          new THREE.MeshBasicMaterial({ color: pColor })
+        );
+        pMesh.position.set(door.x, 1.2 + Math.random() * 1.6, door.z);
+        effectsGroup.add(pMesh);
+        game.particles.push({
+          mesh: pMesh,
+          life: 0.75,
+          maxLife: 0.75,
+          vx: Math.cos(ang) * spd,
+          vy: 4.5 + Math.random() * 6.0,
+          vz: Math.sin(ang) * spd
+        });
+      }
+
+      // 2. 폭발 반경(8.5m) 내 근접 플레이어에게 심각한 폭발 데미지(최대 85 HP) + 화상 출혈 + 강한 넉백 부여!
+      const playerBlastRadius = 8.5;
+      let localHitDmg = 0;
+      game.players.forEach(p => {
+        if (p.downed) return;
+        const dist = Math.hypot(p.x - door.x, p.z - door.z);
+        if (dist <= playerBlastRadius) {
+          const falloff = 1 - (dist / playerBlastRadius) * 0.55; // 중심부 100%, 외곽 45%
+          const blastDmg = Math.round(85 * falloff);
+          damagePlayer(p, blastDmg, true, false);
+          if (p.id === mySlotIndex) localHitDmg = blastDmg;
+
+          // 폭발 충격파 넉백
+          const nx = (p.x - door.x) / (dist || 1);
+          const nz = (p.z - door.z) / (dist || 1);
+          const kbDist = 5.5 * falloff;
+          const tx = p.x + nx * kbDist;
+          const tz = p.z + nz * kbDist;
+          if (!isPointBlockedByWall(tx, tz, 0.75)) {
+            p.x = tx;
+            p.z = tz;
+          }
+        }
+      });
+
+      if (localHitDmg > 0) {
+        const collapseBanner = document.getElementById("hud-collapse-banner");
+        if (collapseBanner) {
+          document.getElementById("hud-collapse-msg").textContent =
+            `💥 테르밋 폭발 반경에 휘말려 심각한 화상 피해를 입었습니다! (-${localHitDmg} HP)`;
+          collapseBanner.classList.remove("hidden");
+          setTimeout(() => {
+            if (!game.collapseState.active) collapseBanner.classList.add("hidden");
+          }, 4200);
+        }
+      }
+
+      // 3. 폭발 반경(11.5m) 내 감염체 전원 폭사 데미지(2,800) 및 넉백!
+      const zombieBlastRadius = 11.5;
+      for (let i = game.zombies.length - 1; i >= 0; i--) {
+        const zmb = game.zombies[i];
+        const dist = Math.hypot(zmb.x - door.x, zmb.z - door.z);
+        if (dist <= zombieBlastRadius) {
+          damageZombie(i, 2800, (zmb.x - door.x) * 3.2, (zmb.z - door.z) * 3.2, 2.5, 7);
+        }
+      }
+
+      // 방화벽 그을림 색상 적용
+      if (door.mesh && door.mesh.material) {
+        door.mesh.material.color.setHex(0x451a03);
+        door.mesh.material.emissive.setHex(0x1c1917);
+      }
+    }
+
     function checkRoomClear(room) {
       if (room.cleared || room.isBossRoom) return;
       if (room.progress < room.targetVal) return;
@@ -36,8 +351,12 @@
       const nextIdx = room.index + 1;
       const door = game.doors.find(d => d.fromRoom === room.index && d.toRoom === nextIdx);
       if (door) {
+        if (room.condType === "THERMITE") {
+          detonateThermiteDoor(room, door);
+        } else {
+          spawnMissionStageVFX(door.x, door.z, 0x10b981, 6.0, 18, false);
+        }
         door.open = true;
-        door.mesh.position.y = -4.2;
       }
 
       if (game.rooms[nextIdx]) {
@@ -404,6 +723,173 @@
 
       game.armoryVaults.forEach(v => {
         if (v.holoGun) v.holoGun.rotation.y += dt * 1.8;
+      });
+
+      // [v3.2 미션 오브젝트 · 방화벽 테르밋 용융 · 게이트 개폐 입체 애니메이션 업데이트]
+      const curExitDoor = curRoom ? game.doors.find(d => d.fromRoom === curRoom.index) : null;
+      if (curRoom && curExitDoor && curRoom.condType === "THERMITE") {
+        ensureThermiteDoorVisuals(curRoom, curExitDoor);
+        if (curRoom.subStage === 1 && curExitDoor.targetRingMesh) {
+          curExitDoor.targetRingMesh.rotation.z += dt * 2.5;
+          const pulse = 1.0 + Math.sin(game.elapsedTime * 5.0) * 0.08;
+          curExitDoor.targetRingMesh.scale.set(pulse, pulse, 1);
+        } else if (curRoom.subStage === 2 && !curRoom.cleared) {
+          const ratio = Math.min(1.0, (curRoom.progress || 0) / (curRoom.targetVal || 20));
+          const remSec = Math.max(0, (curRoom.targetVal || 20) - (curRoom.progress || 0));
+
+          // 1) 기폭 LED 고속 점멸 & 폭탄 진동
+          const blinkFreq = 4.5 + ratio * 24.0;
+          const blinkOn = Math.sin(game.elapsedTime * blinkFreq) > 0;
+          if (curExitDoor.thermiteLedMesh) {
+            curExitDoor.thermiteLedMesh.material.color.setHex(blinkOn ? 0xffffff : 0xff0000);
+            curExitDoor.thermiteLedMesh.scale.setScalar(blinkOn ? 1.35 : 0.85);
+          }
+          if (curExitDoor.thermiteBombGroup) {
+            const shake = ratio * 0.06;
+            curExitDoor.thermiteBombGroup.position.y = 2.0 + (Math.random() - 0.5) * shake;
+          }
+
+          // 2) 폭발 임박(5초 이하) 경고 비프음
+          if (remSec <= 5.5 && remSec > 0.1) {
+            curRoom.thermiteBeepTimer = (curRoom.thermiteBeepTimer || 0) - dt;
+            if (curRoom.thermiteBeepTimer <= 0) {
+              curRoom.thermiteBeepTimer = Math.max(0.16, remSec * 0.11);
+              SoundFX.play("empty");
+            }
+          }
+
+          // 3) 방화벽 철판 고열 적열(Red-Hot Melting) 색상 변화
+          if (curExitDoor.mesh && curExitDoor.mesh.material) {
+            curExitDoor.mesh.material.emissive.setRGB(0.45 + ratio * 0.55, 0.12 + ratio * 0.28, 0.02);
+            curExitDoor.mesh.material.emissiveIntensity = 0.45 + ratio * 1.45;
+          }
+
+          // 4) 테르밋 용융 불꽃 스파크 폭포 방출
+          curRoom.thermiteSparkTimer = (curRoom.thermiteSparkTimer || 0) - dt;
+          if (curRoom.thermiteSparkTimer <= 0) {
+            curRoom.thermiteSparkTimer = 0.07;
+            const offX = (curExitDoor.inNormX || 0) * 1.15;
+            const offZ = (curExitDoor.inNormZ || 0) * 1.15;
+            for (let s = 0; s < 2; s++) {
+              const spMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.16, 0.16, 0.16),
+                new THREE.MeshBasicMaterial({ color: Math.random() < 0.5 ? 0xfef08a : 0xf97316 })
+              );
+              spMesh.position.set(
+                curExitDoor.x + offX + (Math.random() - 0.5) * 1.6,
+                1.9 + (Math.random() - 0.5) * 0.5,
+                curExitDoor.z + offZ + (Math.random() - 0.5) * 1.6
+              );
+              effectsGroup.add(spMesh);
+              game.particles.push({
+                mesh: spMesh,
+                life: 0.38,
+                maxLife: 0.38,
+                vx: (Math.random() - 0.5) * 4.5 + offX * 2.2,
+                vy: 1.5 + Math.random() * 3.5,
+                vz: (Math.random() - 0.5) * 4.5 + offZ * 2.2
+              });
+            }
+          }
+
+          // 5) 바닥 8.5m 위험 반경 경고 링 점멸 및 카운트다운 라벨 갱신
+          if (curExitDoor.dangerDiscMat) {
+            curExitDoor.dangerDiscMat.opacity = 0.11 + Math.abs(Math.sin(game.elapsedTime * (3.5 + ratio * 8.5))) * 0.22;
+          }
+          if (curExitDoor.thermiteBombSym && curExitDoor.thermiteBombSym.el) {
+            curExitDoor.thermiteBombSym.el.textContent = remSec <= 5.0
+              ? `🚨 폭발 임박 [${remSec.toFixed(1)}s] · 즉시 8.5m 밖으로 대피!`
+              : `🧨 테르밋 용융 중 [${remSec.toFixed(1)}s] · ⚠️반경 8.5m 폭발 위험!`;
+          }
+        }
+      }
+
+      // 방화벽(Doors) 유압식 개폐 애니메이션 및 스파크 연출
+      game.doors.forEach(d => {
+        if (!d.mesh) return;
+        const targetY = d.open ? -4.2 : (d.closedY || 2.0);
+        const diffY = targetY - d.mesh.position.y;
+        if (Math.abs(diffY) > 0.02) {
+          const speed = d.lockedPermanently ? 16.0 : 3.8;
+          const step = Math.sign(diffY) * Math.min(Math.abs(diffY), dt * speed);
+          d.mesh.position.y += step;
+          if (Math.random() < 0.35) {
+            const sp = new THREE.Mesh(
+              new THREE.BoxGeometry(0.18, 0.18, 0.18),
+              new THREE.MeshBasicMaterial({ color: d.lockedPermanently ? 0xef4444 : 0xfacc15 })
+            );
+            sp.position.set(d.x + (Math.random() - 0.5) * 3.2, 0.18, d.z + (Math.random() - 0.5) * 3.2);
+            effectsGroup.add(sp);
+            game.particles.push({
+              mesh: sp,
+              life: 0.32,
+              maxLife: 0.32,
+              vx: (Math.random() - 0.5) * 3.5,
+              vy: 2.0 + Math.random() * 2.5,
+              vz: (Math.random() - 0.5) * 3.5
+            });
+          }
+        }
+      });
+
+      // 전 미션 노드(원료·합성대·발전기·블랙박스·중계기·송신기·환기밸브) 상시 3D 회전/부유 애니메이션
+      game.missionNodes.forEach((n, idx) => {
+        if (n.kind === "CHEM_PART" && !n.done) {
+          if (n.cap) {
+            n.cap.rotation.z += dt * 2.5;
+            n.cap.position.y = 0.25 + Math.sin(game.elapsedTime * 3.5 + idx) * 0.12;
+          }
+          if (n.tank) n.tank.rotation.y += dt * 1.2;
+        } else if (n.kind === "SYNTH_TABLE" && !n.done) {
+          const boost = n.holdTime > 0 ? 7.5 : 1.0;
+          if (n.holo) n.holo.rotation.z += dt * 2.2 * boost;
+          if (n.coreCone) {
+            n.coreCone.rotation.y += dt * 2.8 * boost;
+            n.coreCone.rotation.x += dt * 1.4 * boost;
+            n.coreCone.position.y = 2.0 + Math.sin(game.elapsedTime * 4.0) * 0.14 + (n.holdTime / 3.0) * 0.45;
+          }
+        } else if (n.kind === "GENERATOR") {
+          const spinSpd = n.done ? 7.5 : (n.holdTime > 0 ? 2.5 + n.holdTime * 4.5 : 0.6);
+          if (n.coilRing) {
+            n.coilRing.rotation.z += dt * spinSpd;
+            n.coilRing.position.y = 2.65 + (n.done ? Math.sin(game.elapsedTime * 8.0 + idx) * 0.08 : 0);
+          }
+          if (n.turbine && n.done) n.turbine.rotation.y += dt * 3.2;
+        } else if (n.kind === "BLACKBOX" && !n.done && n.crystal) {
+          n.crystal.rotation.y += dt * 2.4;
+          n.crystal.position.y = 1.55 + Math.sin(game.elapsedTime * 3.5) * 0.18;
+        } else if (n.kind === "SECURITY_RELAY" && !n.done && n.relay) {
+          n.relay.rotation.y += dt * (n.holdTime > 0 ? 6.5 : 1.2);
+        } else if (n.kind === "UPLOAD_TERMINAL" && !n.done && n.dish) {
+          n.dish.rotation.z += dt * (n.holdTime > 0 ? 9.0 : 2.2);
+        } else if (n.kind === "ENV_CONTROL" && !n.done && n.wheelMesh) {
+          n.wheelMesh.rotation.z += dt * (n.holdTime > 0 ? 10.0 : 0.8);
+        }
+      });
+
+      // 생체 신경절(HIVE_NODES) 및 군락 증폭기(EXTERMINATE) 심장 박동 맥동 애니메이션
+      game.cystPods.forEach((pod, idx) => {
+        if (pod.coreMesh) {
+          pod.coreMesh.rotation.y += dt * 1.5;
+          pod.coreMesh.rotation.x += dt * 0.8;
+          const pulse = 1.0 + Math.sin(game.elapsedTime * 5.2 + idx) * 0.11;
+          pod.coreMesh.scale.set(pulse, pulse, pulse);
+        }
+        if (pod.bioRing) pod.bioRing.rotation.z -= dt * 2.4;
+      });
+
+      // 플레이어 등 뒤 3D 미션 장비(블랙박스 / 테르밋 폭약 팩) 장착 시각화
+      game.players.forEach(p => {
+        if (!p.visual) return;
+        if (p.visual.payloadPack) {
+          p.visual.payloadPack.visible = Boolean(p.carryingPayload && !p.downed);
+          if (p.carryingPayload && p.visual.pbCrystal) p.visual.pbCrystal.rotation.y += dt * 4.0;
+        }
+        if (p.visual.thermitePack) {
+          p.visual.thermitePack.visible = Boolean(
+            curRoom && curRoom.condType === "THERMITE" && curRoom.subStage === 1 && !p.downed
+          );
+        }
       });
 
       // 1. Update Thermite Defense Timer if active
@@ -1063,7 +1549,7 @@
                 : `🔒 먼저 [${reqStep - 1}단계 목표] 완료 후 웨이브를 방어해야 개방됩니다!`;
               interactBar.style.width = "0%";
             } else if (nearMissionNode.kind === "ENV_CONTROL") {
-              interactTitle.textContent = nearMissionNode.envType === "TOXIC_FOG" ? "☣️ [F] 환기밸브" : "💡 [F] 비상조명";
+              interactTitle.textContent = nearMissionNode.envType === "TOXIC_FOG" ? "☣️ [F 홀드] 환기밸브 개방" : "💡 [F 홀드] 비상조명 가동";
               if (holdingF) {
                 nearMissionNode.holdTime += dt;
                 interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 1.5) * 100) + "%";
@@ -1071,6 +1557,14 @@
                   nearMissionNode.done = true;
                   curRoom.envCleared = true;
                   entitiesGroup.remove(nearMissionNode.mesh);
+                  spawnMissionStageVFX(
+                    nearMissionNode.x,
+                    nearMissionNode.z,
+                    nearMissionNode.envType === "TOXIC_FOG" ? 0x84cc16 : 0xfacc15,
+                    7.5,
+                    18,
+                    false
+                  );
                   SoundFX.play("upgrade");
                 }
               } else {
@@ -1083,6 +1577,7 @@
                 nearMissionNode.done = true;
                 entitiesGroup.remove(nearMissionNode.mesh);
                 game.thermiteParts++;
+                spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0xf59e0b, 4.2, 14, false);
                 SoundFX.play("pickup");
                 advanceRoomMissionStage(
                   curRoom,
@@ -1093,28 +1588,49 @@
                 );
               }
             } else if (nearMissionNode.kind === "SYNTH_TABLE") {
-              interactTitle.textContent = game.thermiteParts >= 2 ? "🔬 [F] 테르밋 합성" : `🧪 원료 2개 필요 (${game.thermiteParts}/2)`;
+              interactTitle.textContent = game.thermiteParts >= 2 ? "🔬 [F 홀드] 고열 테르밋 합성" : `🧪 원료 2개 필요 (${game.thermiteParts}/2)`;
               if (holdingF && game.thermiteParts >= 2) {
                 nearMissionNode.holdTime += dt;
                 interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 3.0) * 100) + "%";
+                if (Math.random() < 0.4) {
+                  spawnBloodParticles(nearMissionNode.x, 1.8, nearMissionNode.z, 0xf97316, 1);
+                }
                 if (nearMissionNode.holdTime >= 3.0) {
                   nearMissionNode.done = true;
                   curRoom.subStage = 1;
                   curRoom.completedStage = 3;
+                  spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0xf97316, 6.5, 22, true);
                   SoundFX.play("upgrade");
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      "🔥 고열 테르밋 폭약 합성 완료! 출구 방화벽에 폭약을 부착하세요!";
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+                  }
                 }
               } else {
                 interactBar.style.width = "0%";
               }
             } else if (nearMissionNode.kind === "GENERATOR") {
-              interactTitle.textContent = `⚡ [F] 발전기 #${nearMissionNode.genIndex || 1} 점화`;
+              interactTitle.textContent = `⚡ [F 홀드] 발전기 #${nearMissionNode.genIndex || 1} 점화`;
               if (holdingF) {
                 nearMissionNode.holdTime += dt;
                 interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 2.5) * 100) + "%";
+                if (Math.random() < 0.38) {
+                  spawnBloodParticles(nearMissionNode.x, 2.2, nearMissionNode.z, 0x38bdf8, 1);
+                }
                 if (nearMissionNode.holdTime >= 2.5) {
                   nearMissionNode.done = true;
                   if (nearMissionNode.coreMat) nearMissionNode.coreMat.color.setHex(0x38bdf8);
                   curRoom.progress++;
+                  spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x38bdf8, 6.8, 20, false);
+                  // 발전기 점화 EMP 충격파: 반경 6.5m 내 좀비 2초 감전 스턴!
+                  game.zombies.forEach(zmb => {
+                    if (Math.hypot(zmb.x - nearMissionNode.x, zmb.z - nearMissionNode.z) <= 6.5) {
+                      zmb.stunTimer = Math.max(zmb.stunTimer || 0, 2.0);
+                    }
+                  });
                   SoundFX.play("upgrade");
                   if (curRoom.progress < curRoom.targetVal) {
                     advanceRoomMissionStage(
@@ -1129,13 +1645,14 @@
                 interactBar.style.width = "0%";
               }
             } else if (nearMissionNode.kind === "BLACKBOX" && !p.carryingPayload) {
-              interactTitle.textContent = "📦 [F] 블랙박스 회수";
+              interactTitle.textContent = "📦 [F] 블랙박스 회수 (등 뒤 장착)";
               interactBar.style.width = "100%";
               if (holdingF) {
                 p.carryingPayload = true;
                 p.currentWeapon = 0;
                 nearMissionNode.done = true;
                 entitiesGroup.remove(nearMissionNode.mesh);
+                spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x38bdf8, 4.5, 14, false);
                 SoundFX.play("pickup");
                 advanceRoomMissionStage(
                   curRoom,
@@ -1147,13 +1664,17 @@
                 updateWeaponSlotsHUD();
               }
             } else if (nearMissionNode.kind === "SECURITY_RELAY") {
-              interactTitle.textContent = "🔐 [F] 보안중계기 암호 해독";
+              interactTitle.textContent = "🔐 [F 홀드] 보안중계기 암호 해독";
               if (holdingF) {
                 nearMissionNode.holdTime = (nearMissionNode.holdTime || 0) + dt;
                 interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 2.2) * 100) + "%";
+                if (Math.random() < 0.35) {
+                  spawnBloodParticles(nearMissionNode.x, 1.8, nearMissionNode.z, 0x6366f1, 1);
+                }
                 if (nearMissionNode.holdTime >= 2.2) {
                   nearMissionNode.done = true;
                   entitiesGroup.remove(nearMissionNode.mesh);
+                  spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x6366f1, 5.8, 18, false);
                   SoundFX.play("upgrade");
                   advanceRoomMissionStage(
                     curRoom,
@@ -1168,11 +1689,31 @@
             }
           } else if (nearThermiteDoor) {
             showPrompt = true;
-            interactTitle.textContent = "🔥 [F] 테르밋 폭약 부착";
-            interactBar.style.width = "100%";
+            interactTitle.textContent = "🧨 [F 홀드] 방화벽에 테르밋 폭약 부착";
             if (holdingF) {
-              curRoom.subStage = 2;
-              SoundFX.play("alarm");
+              curRoom.thermiteAttachHold = (curRoom.thermiteAttachHold || 0) + dt;
+              interactBar.style.width = Math.min(100, (curRoom.thermiteAttachHold / 1.4) * 100) + "%";
+              if (Math.random() < 0.45 && nextDoor) {
+                spawnBloodParticles(nextDoor.x, 1.8, nextDoor.z, 0xf97316, 1);
+              }
+              if (curRoom.thermiteAttachHold >= 1.4) {
+                curRoom.subStage = 2;
+                if (nextDoor) {
+                  ensureThermiteDoorVisuals(curRoom, nextDoor);
+                  spawnMissionStageVFX(nextDoor.x, nextDoor.z, 0xf97316, 5.0, 16, false);
+                }
+                SoundFX.play("alarm");
+                const safeBanner = document.getElementById("hud-safe-banner");
+                if (safeBanner) {
+                  document.getElementById("hud-safe-banner-text").textContent =
+                    "🧨 방화벽에 테르밋 폭약 부착 완료! 폭발 시 반경 8.5m 이내에 있으면 심각한 화상 피해를 입습니다!";
+                  safeBanner.classList.remove("hidden");
+                  setTimeout(() => safeBanner.classList.add("hidden"), 5000);
+                }
+              }
+            } else {
+              curRoom.thermiteAttachHold = 0;
+              interactBar.style.width = "0%";
             }
           } else if (nearPayloadExit) {
             showPrompt = true;
@@ -1180,17 +1721,29 @@
               interactTitle.textContent = `🔒 현재 웨이브를 방어해야 업로드 송신기가 출현합니다!`;
               interactBar.style.width = "0%";
             } else {
-              interactTitle.textContent = "🛰️ [F] 블랙박스 데이터 업로드";
-              interactBar.style.width = "100%";
+              interactTitle.textContent = "🛰️ [F 홀드] 블랙박스 위성 데이터 업로드";
               if (holdingF) {
-                p.carryingPayload = false;
-                if (uploadTerm) {
-                  uploadTerm.done = true;
-                  entitiesGroup.remove(uploadTerm.mesh);
+                curRoom.payloadUploadHold = (curRoom.payloadUploadHold || 0) + dt;
+                interactBar.style.width = Math.min(100, (curRoom.payloadUploadHold / 1.5) * 100) + "%";
+                if (uploadTerm && Math.random() < 0.4) {
+                  spawnBloodParticles(uploadTerm.x, 2.2, uploadTerm.z, 0x38bdf8, 1);
                 }
-                curRoom.progress = 1;
-                curRoom.completedStage = 2;
-                checkRoomClear(curRoom);
+                if (curRoom.payloadUploadHold >= 1.5) {
+                  p.carryingPayload = false;
+                  const upX = uploadTerm ? uploadTerm.x : p.x;
+                  const upZ = uploadTerm ? uploadTerm.z : p.z;
+                  if (uploadTerm) {
+                    uploadTerm.done = true;
+                    entitiesGroup.remove(uploadTerm.mesh);
+                  }
+                  spawnMissionStageVFX(upX, upZ, 0x38bdf8, 7.5, 24, true);
+                  curRoom.progress = 1;
+                  curRoom.completedStage = 2;
+                  checkRoomClear(curRoom);
+                }
+              } else {
+                curRoom.payloadUploadHold = 0;
+                interactBar.style.width = "0%";
               }
             }
           } else if (nearVault) {
@@ -2134,7 +2687,9 @@
         pod.timer -= dt;
         if (pod.hp <= 0) {
           entitiesGroup.remove(pod.mesh);
-          spawnBloodParticles(pod.x, 1.0, pod.z, 0xa3e635, 4);
+          spawnBloodParticles(pod.x, 1.0, pod.z, 0xa3e635, 6);
+          spawnMissionStageVFX(pod.x, pod.z, 0xf43f5e, 5.8, 18, false);
+          SoundFX.play("explosion");
           if (pod.isMissionHive) {
             const r = game.rooms[pod.roomIndex];
             if (r && (r.condType === "HIVE_NODES" || r.condType === "EXTERMINATE")) {

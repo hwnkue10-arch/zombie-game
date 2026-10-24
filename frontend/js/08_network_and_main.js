@@ -491,15 +491,21 @@
                   const shouldOpen = !!ds[0];
                   const shouldLock = !!ds[1];
                   if (d.open !== shouldOpen || d.lockedPermanently !== shouldLock) {
+                    const wasOpen = d.open;
                     d.open = shouldOpen;
                     d.lockedPermanently = shouldLock;
                     needVisUpdate = true;
-                    if (d.mesh) {
-                      d.mesh.position.y = d.open ? -4.2 : 2.0;
-                      if (d.lockedPermanently && d.mesh.material) {
-                        d.mesh.material.color.setHex(0x991b1b);
-                        if (d.mesh.material.emissive) d.mesh.material.emissive.setHex(0x450a0a);
+                    if (!wasOpen && shouldOpen) {
+                      const fRoom = game.rooms[d.fromRoom];
+                      if (fRoom && fRoom.condType === "THERMITE") {
+                        detonateThermiteDoor(fRoom, d);
+                      } else {
+                        spawnMissionStageVFX(d.x, d.z, 0x10b981, 6.0, 18, false);
                       }
+                    }
+                    if (d.mesh && d.lockedPermanently && d.mesh.material) {
+                      d.mesh.material.color.setHex(0x991b1b);
+                      if (d.mesh.material.emissive) d.mesh.material.emissive.setHex(0x450a0a);
                     }
                   }
                 });
@@ -512,7 +518,6 @@
                 game.doors.forEach(d => {
                   if (d.toRoom <= msg.roomIdx && !d.lockedPermanently) {
                     d.open = true;
-                    if (d.mesh) d.mesh.position.y = -4.2;
                   }
                 });
                 needVisUpdate = true;
@@ -525,6 +530,7 @@
               const cr = game.rooms[game.currentRoomIndex];
               if (cr && msg.roomState) {
                 cr.progress = msg.roomState.progress;
+                if (msg.roomState.subStage !== undefined) cr.subStage = msg.roomState.subStage;
                 cr.unlockStage = msg.roomState.unlockStage;
                 cr.completedStage = msg.roomState.completedStage;
                 cr.waitingForWaveDefense = msg.roomState.waitingForWaveDefense;
@@ -641,6 +647,7 @@
           roomsGas: (game.rooms || []).map(r => [r.gasWaveActive ? 1 : 0, Math.round((r.gasWaveProgress || 0) * 1000) / 1000]),
           roomState: cr ? {
             progress: cr.progress,
+            subStage: cr.subStage,
             unlockStage: cr.unlockStage,
             completedStage: cr.completedStage,
             waitingForWaveDefense: cr.waitingForWaveDefense,

@@ -582,6 +582,10 @@
             x: doorX, z: doorZ,
             w: side.rotY === 0 ? doorWidth : 2.0,
             d: side.rotY === 0 ? 2.0 : doorWidth,
+            rotY: side.rotY,
+            inNormX: side.inNormX,
+            inNormZ: side.inNormZ,
+            closedY: wallHeight / 2,
             open: false,
             lockedPermanently: false,
             mesh: doorMesh,
@@ -687,7 +691,8 @@
             x: room.wx, z: room.wz - 13,
             done: false,
             holdTime: 0,
-            mesh: vGroup
+            mesh: vGroup,
+            wheelMesh
           };
           game.missionNodes.push(envNode);
           registerWorldSymbol(
@@ -929,6 +934,7 @@
       if (room.condType === "THERMITE") {
         const isTable = (stepOrder === 3);
         const mGroup = new THREE.Group();
+        let holo = null, coreCone = null, tank = null, cap = null;
         if (isTable) {
           const desk = new THREE.Mesh(
             new THREE.BoxGeometry(3.2, 1.2, 2.2),
@@ -936,27 +942,27 @@
           );
           desk.position.y = 0.6;
           mGroup.add(desk);
-          const holo = new THREE.Mesh(
+          holo = new THREE.Mesh(
             new THREE.TorusGeometry(1.1, 0.14, 8, 24),
             new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
           );
           holo.rotation.x = Math.PI / 2;
           holo.position.y = 1.65;
           mGroup.add(holo);
-          const coreCone = new THREE.Mesh(
+          coreCone = new THREE.Mesh(
             new THREE.OctahedronGeometry(0.65, 0),
             new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.9 })
           );
           coreCone.position.y = 2.0;
           mGroup.add(coreCone);
         } else {
-          const tank = new THREE.Mesh(
+          tank = new THREE.Mesh(
             new THREE.CylinderGeometry(0.8, 0.8, 2.1, 14),
             new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xb45309, emissiveIntensity: 0.7 })
           );
           tank.position.y = 1.05;
           mGroup.add(tank);
-          const cap = new THREE.Mesh(
+          cap = new THREE.Mesh(
             new THREE.TorusGeometry(0.95, 0.14, 8, 18),
             new THREE.MeshBasicMaterial({ color: 0xfef08a })
           );
@@ -973,7 +979,11 @@
           x: pos.x, z: pos.z,
           done: false,
           holdTime: 0,
-          mesh: mGroup
+          mesh: mGroup,
+          holo,
+          coreCone,
+          tank,
+          cap
         };
         game.missionNodes.push(nodeObj);
         nodeObj.sym = registerWorldSymbol(
@@ -1015,6 +1025,8 @@
           done: false,
           holdTime: 0,
           mesh: gGroup,
+          turbine,
+          coilRing,
           coreMat: turbine.material
         };
         game.missionNodes.push(genNode);
@@ -1048,7 +1060,8 @@
             x: pos.x, z: pos.z,
             carrierId: null,
             done: false,
-            mesh: bGroup
+            mesh: bGroup,
+            crystal
           };
           game.missionNodes.push(bbNode);
           bbNode.sym = registerWorldSymbol(
@@ -1074,7 +1087,8 @@
             x: pos.x, z: pos.z,
             done: false,
             holdTime: 0,
-            mesh: bGroup
+            mesh: bGroup,
+            relay
           };
           game.missionNodes.push(relNode);
           relNode.sym = registerWorldSymbol(
@@ -1107,7 +1121,9 @@
             x: pos.x, z: pos.z,
             done: false,
             holdTime: 0,
-            mesh: bGroup
+            mesh: bGroup,
+            tower,
+            dish
           };
           game.missionNodes.push(upNode);
           upNode.sym = registerWorldSymbol(
@@ -1149,7 +1165,9 @@
           isMissionHive: true,
           roomIndex: room.index,
           timer: 9999,
-          mesh: hGroup
+          mesh: hGroup,
+          coreMesh: core,
+          bioRing
         };
         game.cystPods.push(podObj);
         podObj.sym = registerWorldSymbol(

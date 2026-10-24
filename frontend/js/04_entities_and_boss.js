@@ -174,7 +174,39 @@
       sosRing.position.y = 0.06;
       group.add(sosRing);
 
-      return { group, body, head, leftLeg, rightLeg, gunMesh, ringMat, flashLight, flashCone };
+      // [v3.2 미션 연출] 캐릭터 등 뒤에 장착되는 3D 블랙박스 운반 팩 & 테르밋 폭약 팩
+      const payloadPack = new THREE.Group();
+      const pbCase = new THREE.Mesh(
+        new THREE.BoxGeometry(0.65, 0.75, 0.38),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6 })
+      );
+      const pbCrystal = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.32, 0),
+        new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 1.1 })
+      );
+      pbCrystal.position.set(0, 0, -0.22);
+      payloadPack.add(pbCase, pbCrystal);
+      payloadPack.position.set(0, 1.25, -0.48);
+      payloadPack.visible = false;
+      group.add(payloadPack);
+
+      const thermitePack = new THREE.Group();
+      const thBase = new THREE.Mesh(
+        new THREE.BoxGeometry(0.68, 0.55, 0.34),
+        new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4 })
+      );
+      const thCanGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.72, 10);
+      const thCanMat = new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0xea580c, emissiveIntensity: 0.9 });
+      const thCan1 = new THREE.Mesh(thCanGeo, thCanMat);
+      thCan1.position.set(-0.18, 0, -0.16);
+      const thCan2 = new THREE.Mesh(thCanGeo, thCanMat);
+      thCan2.position.set(0.18, 0, -0.16);
+      thermitePack.add(thBase, thCan1, thCan2);
+      thermitePack.position.set(0, 1.25, -0.48);
+      thermitePack.visible = false;
+      group.add(thermitePack);
+
+      return { group, body, head, leftLeg, rightLeg, gunMesh, ringMat, flashLight, flashCone, payloadPack, pbCrystal, thermitePack };
     }
 
     function spawnSquadPlayers() {
