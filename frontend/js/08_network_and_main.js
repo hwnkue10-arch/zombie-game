@@ -536,6 +536,15 @@
                 cr.gasWaveProgress = msg.roomState.gasWaveProgress;
               }
 
+              if (Array.isArray(msg.roomsGas)) {
+                msg.roomsGas.forEach((rg, idx) => {
+                  if (game.rooms[idx]) {
+                    game.rooms[idx].gasWaveActive = (rg[0] === 1);
+                    game.rooms[idx].gasWaveProgress = rg[1];
+                  }
+                });
+              }
+
               // 후방 격벽이 봉쇄(lockedBehind)되었을 때 원격 플레이어가 아직 이전 방에 남아있다면 현재 섹터 안으로 자동 합류!
               const meP = game.players[mySlotIndex];
               if (cr && cr.lockedBehind && meP) {
@@ -565,6 +574,16 @@
                   zObj.hp = zs[3];
                   zObj.maxHp = zs[4];
                   zObj.group.position.set(zObj.x, 0, zObj.z);
+                  if (cr && cr.berserkActive && !zObj.berserkEnraged && !zObj.spec.isNutrientHost) {
+                    zObj.berserkEnraged = true;
+                    if (zObj.skinMat) {
+                      zObj.skinMat.emissive.setHex(0xef4444);
+                      zObj.skinMat.emissiveIntensity = 0.85;
+                    }
+                    if (zObj.group) {
+                      zObj.group.scale.multiplyScalar(1.15);
+                    }
+                  }
                 });
               }
             }
@@ -619,6 +638,7 @@
           waveTimer: Math.round(game.waveTimer * 10) / 10,
           doorsState: (game.doors || []).map(d => [d.open ? 1 : 0, d.lockedPermanently ? 1 : 0]),
           roomsState: (game.rooms || []).map(r => [r.unlocked ? 1 : 0, r.cleared ? 1 : 0, r.lockedBehind ? 1 : 0]),
+          roomsGas: (game.rooms || []).map(r => [r.gasWaveActive ? 1 : 0, Math.round((r.gasWaveProgress || 0) * 1000) / 1000]),
           roomState: cr ? {
             progress: cr.progress,
             unlockStage: cr.unlockStage,
@@ -779,53 +799,20 @@
     }
     setInterval(pollLobbyStatus, 2000);
 
-    // Armory-Only Supply & Per-Weapon Ammo Buttons (Fixed Non-Inflating Prices!)
-    document.getElementById("btn-buy-light").addEventListener("click", () => {
-      const me = game.players[mySlotIndex];
-      if (!me) return;
-      const wIdx = me.currentWeapon === 0 ? 1 : me.currentWeapon;
-      buyWeaponAmmo(me, wIdx);
-    });
-    document.getElementById("btn-buy-heavy").addEventListener("click", () => {
-      const me = game.players[mySlotIndex];
-      const toastEl = document.getElementById("upg-roll-toast");
-      if (!me || !isPlayerNearArmory(me)) {
-        if (toastEl) toastEl.textContent = "⛔ 무기고 반경 안에서만 탄약 보충이 가능합니다!";
-        return;
-      }
-      const cost = getSectorSupplyCost(220);
-      if (game.bioPoints >= cost) {
-        game.bioPoints -= cost;
-        for (let i = 1; i <= 5; i++) {
-          if (me.inventory[i].unlocked) {
-            const maxA = getWeaponMaxAmmo(me, i);
-            me.inventory[i].ammo = Math.min(maxA, me.inventory[i].ammo + WEAPONS[i].packAmmo);
-          }
-        }
-        SoundFX.play("pickup");
-        if (toastEl) toastEl.textContent = `🔫 해금된 모든 총기에 전용 탄약 +1팩 일괄 보충 완료! (-${cost.toLocaleString()} BP)`;
-        renderUpgradeModal();
-        updateWeaponSlotsHUD();
-      }
-    });
-    document.getElementById("btn-buy-energy").addEventListener("click", () => {
-      const me = game.players[mySlotIndex];
-      const toastEl = document.getElementById("upg-roll-toast");
-      if (!me || !isPlayerNearArmory(me)) {
-        if (toastEl) toastEl.textContent = "⛔ 무기고 반경 안에서만 바리케이드·폭약통 보충이 가능합니다!";
-        return;
-      }
-      const cost = getSectorSupplyCost(120);
-      if (game.bioPoints >= cost) {
-        game.bioPoints -= cost;
-        me.inventory[6].ammo = Math.min(getWeaponMaxAmmo(me, 6), me.inventory[6].ammo + 5);
-        me.inventory[7].ammo = Math.min(getWeaponMaxAmmo(me, 7), me.inventory[7].ammo + 4);
-        SoundFX.play("pickup");
-        if (toastEl) toastEl.textContent = `🧱 전술 바리케이드(+5) & ❄️빙결 배럴(+4) 보충 완료! (-${cost.toLocaleString()} BP)`;
-        renderUpgradeModal();
-        updateWeaponSlotsHUD();
-      }
-    });
+    // Armory-Only Supply Buttons: 전 총기 + 바리케이드 + 폭약통 일괄 보급 (buyAllAmmo)
+    const btnBuyAllAmmo = document.getElementById("btn-buy-all-ammo");
+    if (btnBuyAllAmmo) {
+      btnBuyAllAmmo.addEventListener("click", () => {
+        const me = game.players[mySlotIndex];
+        if (me) buyAllAmmo(me);
+      });
+    }
+    const btnBuyLight = document.getElementById("btn-buy-light");
+    if (btnBuyLight) btnBuyLight.addEventListener("click", () => { const me = game.players[mySlotIndex]; if (me) buyAllAmmo(me); });
+    const btnBuyHeavy = document.getElementById("btn-buy-heavy");
+    if (btnBuyHeavy) btnBuyHeavy.addEventListener("click", () => { const me = game.players[mySlotIndex]; if (me) buyAllAmmo(me); });
+    const btnBuyEnergy = document.getElementById("btn-buy-energy");
+    if (btnBuyEnergy) btnBuyEnergy.addEventListener("click", () => { const me = game.players[mySlotIndex]; if (me) buyAllAmmo(me); });
     document.getElementById("btn-buy-medkit").addEventListener("click", () => {
       const me = game.players[mySlotIndex];
       const toastEl = document.getElementById("upg-roll-toast");

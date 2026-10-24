@@ -420,6 +420,10 @@
 
         if (allHumansInside || meInsideAndCollapsed) {
           curRoom.lockedBehind = true;
+          if (prevRoom) {
+            prevRoom.gasWaveActive = false;
+            if (prevRoom.gasMesh) prevRoom.gasMesh.visible = false;
+          }
           const backDoor = game.doors.find(d => d.fromRoom === prevIdx && d.toRoom === curRoom.index);
           if (backDoor) {
             backDoor.open = false;
@@ -455,7 +459,7 @@
         }
       }
 
-      // 1c. 섹터 제한시간(260~440초) 초과 시 [🚨 호드 광폭화(기존+신규 좀비 전원 폭주) + 출구 반대편 외벽 ➔ 출구 방향 지향성 독가스 확산]!
+      // 1c. 섹터 제한시간(260~440초) 초과 시 [🚨 호드 광폭화(체력+75%·이속+35%·공격력+35%) + 탈출로 즉시 강제개방 + 신경 독가스 100% 전역 살포]!
       if (curRoom && !curRoom.cleared && !curRoom.isBossRoom) {
         curRoom.sectorTimer = Math.max(0, (curRoom.sectorTimer || 260) - dt);
         if (curRoom.sectorTimer <= 0) {
@@ -467,11 +471,28 @@
             while ((curRoom.spawnHoles || []).some(h => !h.active)) {
               activateAdditionalSpawnHole(curRoom);
             }
-            // 현재 살아있는 모든 감염체도 즉시 광폭화(이속 +35%, 공격력 +35%, 핏빛 발광) 적용!
+            // 🚨 탈출로(다음 섹터 통로 문) 즉시 비상 개방하여 탈출 가능하도록 조치!
+            const nextIdx = curRoom.index + 1;
+            const door = game.doors.find(d => d.fromRoom === curRoom.index && d.toRoom === nextIdx);
+            if (door) {
+              door.open = true;
+              door.mesh.position.y = -4.2;
+            }
+            if (game.rooms[nextIdx]) {
+              game.rooms[nextIdx].unlocked = true;
+            }
+
+            // 현재 살아있는 모든 감염체도 즉시 광폭화(체력 +75%, 공격력 +35%, 이속 +35%, 핏빛 발광, 15% 벌크업) 적용!
             game.zombies.forEach(z => {
               if (!z.berserkEnraged && !z.spec.isNutrientHost) {
                 z.berserkEnraged = true;
+                const hpMult = 1.75;
+                z.maxHp = Math.round(z.maxHp * hpMult);
+                z.hp = Math.round(z.hp * hpMult);
                 z.speed *= 1.35;
+                if (z.group) {
+                  z.group.scale.multiplyScalar(1.15);
+                }
                 if (z.skinMat) {
                   z.skinMat.emissive.setHex(0xef4444);
                   z.skinMat.emissiveIntensity = 0.85;
@@ -493,56 +514,72 @@
             collapseTimerEl.textContent = "";
           }
         }
-
-        // [v3.1] 출구(nextDir) 반대편 외벽에서 시작하여 출구 문 쪽으로 서서히 전진하는 지향성 독가스 업데이트 (최대 100% 맵 전체 잠식!)
-        if (curRoom.gasWaveActive) {
-          curRoom.gasWaveProgress = Math.min(1.0, (curRoom.gasWaveProgress || 0) + dt * 0.016);
-          const prog = curRoom.gasWaveProgress;
-          const rw = curRoom.w || curRoom.size;
-          const rd = curRoom.d || curRoom.size;
-          const hw = curRoom.hw || curRoom.half;
-          const hd = curRoom.hd || curRoom.half;
-          const exitKey = (curRoom.nextDir && curRoom.nextDir.key) || "N";
-
-          if (curRoom.gasMesh) {
-            curRoom.gasMesh.visible = true;
-            if (exitKey === "N") {
-              // 남쪽(S) 외벽에서 북쪽(N) 출구로 전진
-              const gasLen = rd * prog;
-              curRoom.gasMesh.scale.set(1, 1, Math.max(0.02, prog));
-              curRoom.gasMesh.position.set(curRoom.wx, 1.8, curRoom.wz + hd - gasLen / 2);
-            } else if (exitKey === "S") {
-              // 북쪽(N) 외벽에서 남쪽(S) 출구로 전진
-              const gasLen = rd * prog;
-              curRoom.gasMesh.scale.set(1, 1, Math.max(0.02, prog));
-              curRoom.gasMesh.position.set(curRoom.wx, 1.8, curRoom.wz - hd + gasLen / 2);
-            } else if (exitKey === "E") {
-              // 서쪽(W) 외벽에서 동쪽(E) 출구로 전진
-              const gasLen = rw * prog;
-              curRoom.gasMesh.scale.set(Math.max(0.02, prog), 1, 1);
-              curRoom.gasMesh.position.set(curRoom.wx - hw + gasLen / 2, 1.8, curRoom.wz);
-            } else {
-              // 동쪽(E) 외벽에서 서쪽(W) 출구로 전진
-              const gasLen = rw * prog;
-              curRoom.gasMesh.scale.set(Math.max(0.02, prog), 1, 1);
-              curRoom.gasMesh.position.set(curRoom.wx + hw - gasLen / 2, 1.8, curRoom.wz);
-            }
-          }
-
-          // 독가스 구역 내 플레이어 지속 중독 피해
-          game.players.forEach(p => {
-            if (p.downed) return;
-            let inGas = false;
-            if (exitKey === "N" && p.z > curRoom.wz + hd - rd * prog) inGas = true;
-            else if (exitKey === "S" && p.z < curRoom.wz - hd + rd * prog) inGas = true;
-            else if (exitKey === "E" && p.x < curRoom.wx - hw + rw * prog) inGas = true;
-            else if (exitKey === "W" && p.x > curRoom.wx + hw - rw * prog) inGas = true;
-            if (inGas) {
-              damagePlayer(p, 7.5 * dt, false, true);
-            }
-          });
-        }
       }
+
+      // [v3.1] 출구(nextDir) 반대편 외벽에서 시작하여 출구 문 쪽으로 멈추지 않고 끝까지 전진하는 지향성 독가스 (100% 맵 전체 잠식!)
+      // 섹터 클리어 여부나 currentRoomIndex 변경과 무관하게, 독가스가 활성화된 모든 방에서 100%까지 끝까지 쾌속 확산!
+      game.rooms.forEach(r => {
+        if (!r.gasWaveActive || r.collapsed) return;
+
+        // 멈추지 않고 1.0 (100%)까지 전진 (진행 속도: dt * 0.038, 약 26초 만에 맵 100% 완전 잠식)
+        if (isHost || !network.connected) {
+          r.gasWaveProgress = Math.min(1.0, (r.gasWaveProgress || 0) + dt * 0.038);
+        }
+        const prog = r.gasWaveProgress || 0;
+        const rw = r.w || r.size;
+        const rd = r.d || r.size;
+        const hw = r.hw || r.half;
+        const hd = r.hd || r.half;
+        const exitKey = (r.nextDir && r.nextDir.key) || "N";
+
+        if (r.gasMesh) {
+          r.gasMesh.visible = true;
+          if (exitKey === "N") {
+            // 남쪽(S) 외벽에서 북쪽(N) 출구로 전진 (prog=1.0이면 전체 덮음)
+            const gasLen = rd * prog;
+            r.gasMesh.scale.set(1, 1, Math.max(0.02, prog));
+            r.gasMesh.position.set(r.wx, 1.8, r.wz + hd - gasLen / 2);
+          } else if (exitKey === "S") {
+            // 북쪽(N) 외벽에서 남쪽(S) 출구로 전진
+            const gasLen = rd * prog;
+            r.gasMesh.scale.set(1, 1, Math.max(0.02, prog));
+            r.gasMesh.position.set(r.wx, 1.8, r.wz - hd + gasLen / 2);
+          } else if (exitKey === "E") {
+            // 서쪽(W) 외벽에서 동쪽(E) 출구로 전진
+            const gasLen = rw * prog;
+            r.gasMesh.scale.set(Math.max(0.02, prog), 1, 1);
+            r.gasMesh.position.set(r.wx - hw + gasLen / 2, 1.8, r.wz);
+          } else {
+            // 동쪽(E) 외벽에서 서쪽(W) 출구로 전진
+            const gasLen = rw * prog;
+            r.gasMesh.scale.set(Math.max(0.02, prog), 1, 1);
+            r.gasMesh.position.set(r.wx + hw - gasLen / 2, 1.8, r.wz);
+          }
+        }
+
+        // 독가스 구역 내 플레이어 지속 중독 피해 (prog >= 0.98이면 방 안의 전체 플레이어가 피해)
+        game.players.forEach(p => {
+          if (p.downed) return;
+          // 플레이어가 이 방 범위 내에 있는지 확인
+          if (Math.abs(p.x - r.wx) > hw || Math.abs(p.z - r.wz) > hd) return;
+
+          let inGas = false;
+          if (prog >= 0.98) {
+            inGas = true;
+          } else if (exitKey === "N" && p.z > r.wz + hd - rd * prog) {
+            inGas = true;
+          } else if (exitKey === "S" && p.z < r.wz - hd + rd * prog) {
+            inGas = true;
+          } else if (exitKey === "E" && p.x < r.wx - hw + rw * prog) {
+            inGas = true;
+          } else if (exitKey === "W" && p.x > r.wx + hw - rw * prog) {
+            inGas = true;
+          }
+          if (inGas) {
+            damagePlayer(p, 9.5 * dt, false, true);
+          }
+        });
+      });
 
       // 2. Room Collapse Countdown
       if (game.collapseState.active) {
@@ -815,7 +852,13 @@
                 const zSpawned = spawnZombie(zType, zx, zz, curRoom.index);
                 if (curRoom.berserkActive && zSpawned) {
                   zSpawned.berserkEnraged = true;
+                  const hpMult = 1.75;
+                  zSpawned.maxHp = Math.round(zSpawned.maxHp * hpMult);
+                  zSpawned.hp = zSpawned.maxHp;
                   zSpawned.speed *= 1.35;
+                  if (zSpawned.group) {
+                    zSpawned.group.scale.multiplyScalar(1.15);
+                  }
                   if (zSpawned.skinMat) {
                     zSpawned.skinMat.emissive.setHex(0xef4444);
                     zSpawned.skinMat.emissiveIntensity = 0.85;

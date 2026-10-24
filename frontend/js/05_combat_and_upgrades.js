@@ -615,31 +615,45 @@
       updateWeaponSlotsHUD();
     }
 
-    function buyWeaponAmmo(player, wIdx) {
+    function buyAllAmmo(player) {
       const toastEl = document.getElementById("upg-roll-toast");
       if (!isPlayerNearArmory(player)) {
-        if (toastEl) toastEl.textContent = "⛔ 탄약 및 보급품 구매는 소강기 [🔧무기고] 반경 안에서만 가능합니다!";
+        if (toastEl) toastEl.textContent = "⛔ 탄약 일괄 보급은 [🔧상시무기고] 반경 안에서만 가능합니다!";
         return;
       }
-      const w = WEAPONS[wIdx];
-      const inv = player.inventory[wIdx];
-      if (!w || w.infinite || !inv || !inv.unlocked) return;
-      const maxA = getWeaponMaxAmmo(player, wIdx);
-      if (inv.ammo >= maxA) {
-        if (toastEl) toastEl.textContent = `ℹ️ [${w.name}] 탄약이 이미 가득 찼습니다 (${inv.ammo}/${maxA}).`;
+      // 해금된 총기(1~5), 바리케이드(6), 폭약통(7) 중 탄약 보충이 필요한 항목이 있는지 확인
+      const needsAmmo = player.inventory.some((inv, idx) => {
+        if (!inv.unlocked || WEAPONS[idx].infinite) return false;
+        return inv.ammo < getWeaponMaxAmmo(player, idx);
+      });
+      if (!needsAmmo) {
+        if (toastEl) toastEl.textContent = "ℹ️ 모든 총기 및 설치물의 탄약이 이미 최대 적재량에 도달했습니다.";
         return;
       }
-      const scaledCost = getSectorSupplyCost(w.packCost);
+      const scaledCost = getSectorSupplyCost(220);
       if (game.bioPoints < scaledCost) {
-        if (toastEl) toastEl.textContent = `⚠️ BP가 부족합니다! (${w.name} 탄약 보충: ${scaledCost.toLocaleString()} BP)`;
+        if (toastEl) toastEl.textContent = `⚠️ BP가 부족합니다! (전 탄약 일괄 보급: ${scaledCost.toLocaleString()} BP)`;
         return;
       }
       game.bioPoints -= scaledCost;
-      inv.ammo = Math.min(maxA, inv.ammo + w.packAmmo);
+      let refilledCount = 0;
+      player.inventory.forEach((inv, idx) => {
+        if (!inv.unlocked || WEAPONS[idx].infinite) return;
+        const maxA = getWeaponMaxAmmo(player, idx);
+        if (inv.ammo < maxA) {
+          const pack = (idx === 6) ? 5 : ((idx === 7) ? 4 : (WEAPONS[idx].packAmmo || 20));
+          inv.ammo = Math.min(maxA, inv.ammo + pack);
+          refilledCount++;
+        }
+      });
       SoundFX.play("pickup");
-      if (toastEl) toastEl.textContent = `🔫 [${w.name}] 전용 탄약 +${w.packAmmo}발 보충 완료! (-${scaledCost.toLocaleString()} BP · ${inv.ammo}/${maxA})`;
+      if (toastEl) toastEl.textContent = `📦 전 총기(+1팩) 및 설치물(방벽+5·폭통+4) 일괄 보충 완료! (-${scaledCost.toLocaleString()} BP)`;
       renderUpgradeModal();
       updateWeaponSlotsHUD();
+    }
+
+    function buyWeaponAmmo(player, wIdx) {
+      buyAllAmmo(player);
     }
 
     function setSupplyBtnVisualState(btnId, canBuy, activeClasses) {
@@ -695,29 +709,14 @@
       document.getElementById("upg-resonance-info").textContent =
         `무기공명: ${resCount}개 · 순수시너지: ${pure15Count}개 (전체화력 +${resPct}%)`;
 
-      // 상단 8개 보급/합성/코어 버튼 가격 및 활성(컬러)/비활성(회색) 상태 동기화
-      const curW = WEAPONS[me.currentWeapon];
-      const curInv = me.inventory[me.currentWeapon];
-      const curMaxA = getWeaponMaxAmmo(me, me.currentWeapon);
-      const curAmmoCost = (curW && !curW.infinite) ? getSectorSupplyCost(curW.packCost) : 0;
-      const canBuyLight = nearArmory && curW && !curW.infinite && curInv && curInv.unlocked && curInv.ammo < curMaxA && game.bioPoints >= curAmmoCost;
-      const buyLightLbl = document.getElementById("upg-buy-light-label");
-      if (buyLightLbl) {
-        buyLightLbl.textContent = (curW && !curW.infinite) ? `${curAmmoCost.toLocaleString()} BP [${curInv.ammo}/${curMaxA}]` : "∞ 무한탄 장착중";
+      // 상단 6개 보급/합성/코어 버튼 가격 및 활성(컬러)/비활성(회색) 상태 동기화
+      const allAmmoCost = getSectorSupplyCost(220);
+      const anyNeedsAmmo = me.inventory.some((inv, idx) => inv.unlocked && !WEAPONS[idx].infinite && inv.ammo < getWeaponMaxAmmo(me, idx));
+      const buyAllAmmoLbl = document.getElementById("upg-buy-all-ammo-label");
+      if (buyAllAmmoLbl) {
+        buyAllAmmoLbl.textContent = anyNeedsAmmo ? `${allAmmoCost.toLocaleString()} BP (전 총기·설치물)` : "모든 탄약 만석 (100%)";
       }
-      setSupplyBtnVisualState("btn-buy-light", canBuyLight, "bg-slate-900 hover:bg-sky-950/80 border border-sky-400/60");
-
-      const heavyCost = getSectorSupplyCost(220);
-      const anyGunNeedsAmmo = me.inventory.some((inv, idx) => inv.unlocked && !WEAPONS[idx].infinite && idx <= 5 && inv.ammo < getWeaponMaxAmmo(me, idx));
-      const btnHeavyPrice = document.querySelector("#btn-buy-heavy div:last-child");
-      if (btnHeavyPrice) btnHeavyPrice.textContent = `${heavyCost.toLocaleString()} BP`;
-      setSupplyBtnVisualState("btn-buy-heavy", nearArmory && anyGunNeedsAmmo && game.bioPoints >= heavyCost, "bg-slate-900 hover:bg-emerald-950/80 border border-emerald-400/60");
-
-      const energyCost = getSectorSupplyCost(120);
-      const needsTac = (me.inventory[6].ammo < getWeaponMaxAmmo(me, 6)) || (me.inventory[7].ammo < getWeaponMaxAmmo(me, 7));
-      const btnEnergyPrice = document.querySelector("#btn-buy-energy div:last-child");
-      if (btnEnergyPrice) btnEnergyPrice.textContent = `${energyCost.toLocaleString()} BP`;
-      setSupplyBtnVisualState("btn-buy-energy", nearArmory && needsTac && game.bioPoints >= energyCost, "bg-slate-900 hover:bg-rose-950/80 border border-rose-400/60");
+      setSupplyBtnVisualState("btn-buy-all-ammo", nearArmory && anyNeedsAmmo && game.bioPoints >= allAmmoCost, "bg-slate-900 hover:bg-emerald-950/80 border border-emerald-400/60");
 
       const medCost = getSectorSupplyCost(110);
       const maxMed = getPlayerMaxMedkits(me);
@@ -850,17 +849,11 @@
             </button>
           `;
         } else {
-          const ammoCost = getSectorSupplyCost(w.packCost);
-          const canBuyThisAmmo = nearArmory && !w.infinite && inv.ammo < maxA && game.bioPoints >= ammoCost;
-          const ammoBtnClass = canBuyThisAmmo
-            ? "bg-sky-600 hover:bg-sky-500 text-white border-sky-400 cursor-pointer"
-            : "bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-60";
-
           const ammoBtn = w.infinite
             ? `<span class="px-2.5 py-1 rounded-lg bg-slate-800 text-xs font-mono-code font-bold text-amber-300">∞ 무한탄</span>`
-            : `<button type="button" data-buy-ammo="${wIdx}" ${!canBuyThisAmmo ? "disabled" : ""}
-                       class="px-2.5 py-1 rounded-lg border text-xs font-mono-code font-extrabold transition ${ammoBtnClass}">
-                 +탄약(${ammoCost.toLocaleString()}BP) [${inv.ammo}/${maxA}]
+            : `<button type="button" data-buy-ammo="${wIdx}" title="클릭 시 전 탄약 일괄 보급"
+                       class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-emerald-400 text-xs font-mono-code font-extrabold text-slate-300 hover:text-emerald-300 transition cursor-pointer">
+                 탄약: ${inv.ammo}/${maxA}
                </button>`;
 
           const btnLabel = isAllMax
@@ -1021,8 +1014,7 @@
 
       grid.querySelectorAll("[data-buy-ammo]").forEach(btn => {
         btn.addEventListener("click", () => {
-          const wIdx = parseInt(btn.getAttribute("data-buy-ammo"), 10);
-          buyWeaponAmmo(me, wIdx);
+          buyAllAmmo(me);
         });
       });
 

@@ -317,19 +317,11 @@
         </div>
       </div>
 
-      <!-- Quick Supply, Per-Weapon Ammo Refill & Core/Part Shop Strip -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 bg-slate-950/90 p-2.5 rounded-2xl border border-slate-800 shrink-0">
-        <button id="btn-buy-light" type="button" aria-label="장착무기 탄약 보충" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-sky-500/35 text-left transition flex flex-col justify-between h-14">
-          <div class="text-xs font-extrabold text-sky-300 truncate">장착무기 탄약</div>
-          <div id="upg-buy-light-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">개별 정가 보충</div>
-        </button>
-        <button id="btn-buy-heavy" type="button" aria-label="전 총기 +1팩 220 BP" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/35 text-left transition flex flex-col justify-between h-14">
-          <div class="text-xs font-extrabold text-emerald-300 truncate">전 총기 +1팩</div>
-          <div class="text-[11px] font-mono-code text-amber-300 font-bold truncate">220 BP</div>
-        </button>
-        <button id="btn-buy-energy" type="button" aria-label="방벽+5 폭통+4 120 BP" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-rose-500/35 text-left transition flex flex-col justify-between h-14">
-          <div class="text-xs font-extrabold text-rose-300 truncate">방벽+5·폭통+4</div>
-          <div class="text-[11px] font-mono-code text-amber-300 font-bold truncate">120 BP</div>
+      <!-- Quick Supply Strip (전 탄약 일괄 보급 + 의료품 + 부품 + 변이 코어) -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-slate-950/90 p-2.5 rounded-2xl border border-slate-800 shrink-0">
+        <button id="btn-buy-all-ammo" type="button" aria-label="전 탄약 일괄 보급 (전 총기 + 설치물)" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/35 text-left transition flex flex-col justify-between h-14">
+          <div class="text-xs font-extrabold text-emerald-300 truncate">📦 전 탄약 일괄 보급</div>
+          <div id="upg-buy-all-ammo-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">220 BP (전 총기·설치물)</div>
         </button>
         <button id="btn-buy-medkit" type="button" aria-label="구급키트 (+1) 110 BP" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-teal-500/35 text-left transition flex flex-col justify-between h-14">
           <div id="upg-buy-medkit-title" class="text-xs font-extrabold text-teal-300 truncate">구급키트 (+1)</div>
