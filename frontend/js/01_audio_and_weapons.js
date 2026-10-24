@@ -318,11 +318,11 @@
     // =========================================================================
     // [v3.3] 2b. 전술 슈트 · 외골격 · 의료 · 기동력 강화 시스템 (3대 성질별 카테고리화)
     // =========================================================================
-    const SUIT_CATEGORIES = [
-      { id: "SURVIVAL", name: "💖 생존 & 방호 외골격", desc: "체력 증강 및 피격 피해 영구 경감", color: "rose" },
-      { id: "MEDICAL", name: "🩹 의무 & 응급 보급", desc: "구급키트/스팀팩 소지 한도 및 나노 주사기", color: "amber" },
-      { id: "MOBILITY", name: "🏃 기동성 & 전술 기구", desc: "스태미너 용량/충전 및 점프/패링 기구", color: "sky" }
-    ];
+    const SUIT_CATEGORIES = {
+      SURVIVAL: { id: "SURVIVAL", name: "💖 생존 & 방호 외골격", icon: "💖", desc: "체력 증강 및 피격 피해 감쇄", border: "border-rose-500/50", badge: "bg-rose-950/80 text-rose-300 border-rose-400/50" },
+      MEDICAL:  { id: "MEDICAL",  name: "🩹 의무 & 응급 보급",   icon: "🩹", desc: "구급키트/스팀팩 및 나노 주사기", border: "border-emerald-500/50", badge: "bg-emerald-950/80 text-emerald-300 border-emerald-400/50" },
+      MOBILITY: { id: "MOBILITY", name: "🏃 기동성 & 전술 기구", icon: "🏃", desc: "스태미너 및 점프/패링 특화", border: "border-cyan-500/50", badge: "bg-cyan-950/80 text-cyan-300 border-cyan-400/50" }
+    };
 
     const SUIT_UPGRADE_DEFS = {
       maxHp: {

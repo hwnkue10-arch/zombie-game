@@ -100,7 +100,7 @@
       const me = game.players[mySlotIndex];
       if (!me) return;
 
-      if (code === "KeyT" || code === "KeyU" || code === "KeyB") {
+      if (code === "KeyR" || code === "KeyB" || code === "KeyU" || code === "KeyT") {
         toggleUpgradeModal();
         return;
       }
@@ -315,10 +315,15 @@
     // =========================================================================
     function toggleUpgradeModal() {
       const modal = document.getElementById("upgrade-modal");
+      if (!modal) return;
       const isHidden = modal.classList.contains("hidden");
       if (isHidden) {
-        renderUpgradeModal();
         modal.classList.remove("hidden");
+        try {
+          renderUpgradeModal();
+        } catch (e) {
+          console.error("renderUpgradeModal error:", e);
+        }
       } else {
         modal.classList.add("hidden");
       }
@@ -801,10 +806,10 @@
       if (armoryBanner) {
         if (nearArmory) {
           armoryBanner.className = "h-9 px-3 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-xs font-bold text-emerald-200 flex items-center truncate";
-          armoryBanner.textContent = `🟢 상시 무기고 연결됨 — 현재 섹터(${game.currentRoomIndex + 1}섹터) 총 레벨 상한: Lv.${maxTotalHere}/50 (각 스탯 최대 Lv.10까지 자유 강화)`;
+          armoryBanner.textContent = `🟢 상시 무기고 연결됨 [R] — 현재 섹터(${game.currentRoomIndex + 1}섹터) 총 레벨 상한: Lv.${maxTotalHere}/50 (각 스탯 최대 Lv.10까지 자유 강화)`;
         } else {
           armoryBanner.className = "h-9 px-3 rounded-xl bg-rose-950/90 border border-rose-400/50 text-xs font-bold text-rose-200 flex items-center truncate";
-          armoryBanner.textContent = `🔴 무기고 반경 밖 — 외벽 [🔧상시무기고] 앞(6.8m)에서 언제든 강화·구매 가능 (현재 상한 Lv.${maxTotalHere}/50)`;
+          armoryBanner.textContent = `🔴 무기고 반경 밖 — 외벽 [🔧상시무기고] 앞(6.8m)에서 언제든 강화·구매 가능 [R] (현재 상한 Lv.${maxTotalHere}/50)`;
         }
       }
 
@@ -878,10 +883,14 @@
           me.suitUpgrades = { maxHp: 0, armorPlating: 0, medkitCap: 0, stimCap: 0, maxStamina: 0, staminaRegen: 0, dashCd: 0, bashCd: 0, syringe: 0 };
         }
 
+        const catSurvival = (typeof SUIT_CATEGORIES === "object" && SUIT_CATEGORIES.SURVIVAL) || { name: "💖 생존 & 방호 외골격", icon: "💖", desc: "체력 증강 및 피격 피해 감쇄", border: "border-rose-500/50", badge: "bg-rose-950/80 text-rose-300 border-rose-400/50" };
+        const catMedical  = (typeof SUIT_CATEGORIES === "object" && SUIT_CATEGORIES.MEDICAL)  || { name: "🩹 의무 & 응급 보급",   icon: "🩹", desc: "구급키트/스팀팩 및 나노 주사기", border: "border-emerald-500/50", badge: "bg-emerald-950/80 text-emerald-300 border-emerald-400/50" };
+        const catMobility = (typeof SUIT_CATEGORIES === "object" && SUIT_CATEGORIES.MOBILITY) || { name: "🏃 기동성 & 전술 기구", icon: "🏃", desc: "스태미너 및 점프/패링 특화", border: "border-cyan-500/50", badge: "bg-cyan-950/80 text-cyan-300 border-cyan-400/50" };
+
         const categoryGroups = [
-          { groupDef: SUIT_CATEGORIES.SURVIVAL, keys: ["maxHp", "armorPlating"] },
-          { groupDef: SUIT_CATEGORIES.MEDICAL,  keys: ["medkitCap", "stimCap", "syringe"] },
-          { groupDef: SUIT_CATEGORIES.MOBILITY, keys: ["maxStamina", "staminaRegen", "dashCd", "bashCd"] }
+          { groupDef: catSurvival, keys: ["maxHp", "armorPlating"] },
+          { groupDef: catMedical,  keys: ["medkitCap", "stimCap", "syringe"] },
+          { groupDef: catMobility, keys: ["maxStamina", "staminaRegen", "dashCd", "bashCd"] }
         ];
 
         categoryGroups.forEach(cg => {
