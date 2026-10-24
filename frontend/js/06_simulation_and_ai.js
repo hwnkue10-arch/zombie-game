@@ -2357,14 +2357,33 @@
             else if (pk.kind === "STIM") tp.stims = Math.min(getPlayerMaxStims(tp), tp.stims + 1);
             else if (pk.kind === "PART") game.weaponParts = (game.weaponParts || 0) + 1;
             else {
-              tp.inventory.forEach((inv, wIdx) => {
-                if (inv.unlocked && !WEAPONS[wIdx].infinite) {
-                  const maxA = getWeaponMaxAmmo(tp, wIdx);
-                  // 연발 총기(UZI id:2 / 돌격소총 id:3)는 탄약팩 습득 시 75% 회복(기타 총기 50%)으로 탄 수급 대폭 개선!
-                  const packRatio = (wIdx === 2 || wIdx === 3) ? 0.75 : 0.5;
-                  inv.ammo = Math.min(maxA, inv.ammo + Math.ceil(WEAPONS[wIdx].packAmmo * packRatio));
+              if (pk.wIdx !== undefined && tp.inventory[pk.wIdx]) {
+                // 특정 무기 전용 탄약팩 습득: 해당 무기만 보충
+                const targetW = pk.wIdx;
+                const inv = tp.inventory[targetW];
+                const maxA = getWeaponMaxAmmo(tp, targetW);
+                const packRatio = (targetW === 2 || targetW === 3) ? 0.75 : 0.6;
+                const gained = Math.ceil(WEAPONS[targetW].packAmmo * packRatio);
+                inv.ammo = Math.min(maxA, inv.ammo + gained);
+                if (tp.id === mySlotIndex) {
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      `🔫 [${WEAPONS[targetW].name}] 전용 탄약 +${gained}발 보급 완료! (${inv.ammo}/${maxA})`;
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 2500);
+                  }
                 }
-              });
+              } else {
+                // 범용 탄약팩 (보급상자/콤보 달성 시 전 총기 보충)
+                tp.inventory.forEach((inv, wIdx) => {
+                  if (inv.unlocked && !WEAPONS[wIdx].infinite) {
+                    const maxA = getWeaponMaxAmmo(tp, wIdx);
+                    const packRatio = (wIdx === 2 || wIdx === 3) ? 0.75 : 0.5;
+                    inv.ammo = Math.min(maxA, inv.ammo + Math.ceil(WEAPONS[wIdx].packAmmo * packRatio));
+                  }
+                });
+              }
             }
           }
           entitiesGroup.remove(pk.mesh);

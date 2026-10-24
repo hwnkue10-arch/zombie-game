@@ -459,7 +459,7 @@
       );
     }
 
-    function spawnPickup(x, z, kind) {
+    function spawnPickup(x, z, kind, weaponIdx) {
       if (kind === "CORE") {
         // 바닥에 드랍되는 🧬변이 코어 — 플레이어가 직접 걸어가서 먹어야 획득됨!
         const cGroup = new THREE.Group();
@@ -507,20 +507,33 @@
         MEDKIT: 0x10b981,
         STIM: 0xeab308
       };
-      const c = colorMap[kind] || 0xfacc15;
+      let c = colorMap[kind] || 0xfacc15;
+      const targetW = (weaponIdx !== undefined && WEAPONS && WEAPONS[weaponIdx]) ? WEAPONS[weaponIdx] : null;
+      if (kind === "AMMO_PACK" && targetW) {
+        c = targetW.color;
+      }
+
       const mesh = new THREE.Mesh(
         kind === "PART" ? new THREE.OctahedronGeometry(0.65, 0) : new THREE.BoxGeometry(0.9, 0.7, 0.9),
         new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.65 })
       );
       mesh.position.set(x, 0.55, z);
       entitiesGroup.add(mesh);
-      const pkObj = { x, z, kind, mesh };
+      const pkObj = { x, z, kind, wIdx: weaponIdx, mesh };
       game.pickups.push(pkObj);
+
       if (kind === "PART") {
         registerWorldSymbol(
           x, 2.0, z,
           "⚙️무기부품[획득]",
           "bg-amber-950/95 border-amber-400 text-amber-200",
+          pkObj, game.currentRoomIndex
+        );
+      } else if (kind === "AMMO_PACK" && targetW) {
+        registerWorldSymbol(
+          x, 1.85, z,
+          `📦${targetW.name}탄약`,
+          "bg-slate-900/90 border-sky-400/80 text-sky-200",
           pkObj, game.currentRoomIndex
         );
       }

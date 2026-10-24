@@ -204,11 +204,11 @@
         ammoType: "BARREL", infinite: false, startAmmo: 6, maxAmmo: 18, packAmmo: 4, packCost: 75, baseCost: 48,
         reqParts: 0, unlockBpCost: 0,
         fireRate: 0.42, damage: 680, speed: 0, spread: 0, pellets: 1,
-        stun: 1.4, knockback: 4.5, placeType: "barrel", explosiveRadius: 7.5,
+        stun: 1.4, knockback: 4.5, placeType: "barrel", explosiveRadius: 8.0,
         color: 0xef4444, sound: "pickup", unlockedAtStart: true,
-        tier1Name: "냉각 폭약통 (반경 8.8m 5.5초 완전 빙결 + 쇄빙)",
-        awakenName: "절대영도 냉각장판 (10.5m 빙결 + 7.5초 냉각장판)",
-        roleDesc: "고폭 드럼통 설치 (15Lv 코어: 빙결 / 30Lv 코어: 냉각장판)"
+        tier1Name: "냉각 폭약통 (반경 12.5m 6초 광역 빙결 + 쇄빙)",
+        awakenName: "절대영도 냉각장판 (반경 15m 빙결 + 7.5초 냉각장판)",
+        roleDesc: "고폭 드럼통 설치 (15Lv 코어: 광역빙결 / 30Lv 코어: 냉각장판)"
       }
     ];
 

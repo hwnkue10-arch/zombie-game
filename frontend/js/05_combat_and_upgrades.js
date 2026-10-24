@@ -1368,8 +1368,9 @@
       const finalDmg = Math.round(baseDmg * (barrel.dmgMult || 1));
       const hasFreeze = Boolean(barrel.tier1Special || barrel.awakened);
       const hasCryoField = Boolean(barrel.awakened);
-      const expRadius = (barrel.awakened ? 10.5 : (barrel.tier1Special ? 8.8 : 7.5)) + (barrel.areaLv || 0) * 1.1;
-      const freezeSec = (barrel.awakened ? 7.5 : 5.5) + (barrel.stunBonus || 0);
+      // 15Lv 냉각 폭약통 빙결 반경 대폭 상향 (12.5m = 지름 25m 초대형 결빙 폭풍)
+      const expRadius = (barrel.awakened ? 15.0 : (barrel.tier1Special ? 12.5 : 8.0)) + (barrel.areaLv || 0) * 1.2;
+      const freezeSec = (barrel.awakened ? 8.0 : 6.0) + (barrel.stunBonus || 0);
 
       SoundFX.play("explosion");
       if (hasFreeze) SoundFX.play("ice");
@@ -1460,7 +1461,7 @@
 
       // 5. 영구동토 냉각 장판 생성 — 오직 30Lv 코어 각성(awakened) 시에만 생성!
       if (hasCryoField) {
-        const cRad = 5.5 + (barrel.areaLv || 0) * 0.65;
+        const cRad = 6.8 + (barrel.areaLv || 0) * 0.8;
         const cMesh = new THREE.Mesh(
           new THREE.CircleGeometry(cRad, 24),
           new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.58 })
@@ -1725,24 +1726,33 @@
         }
 
         const mePlayer = game.players[mySlotIndex];
+        const unlockedWeapons = [];
+        if (mePlayer && mePlayer.inventory) {
+          for (let w = 1; w < WEAPONS.length; w++) {
+            if (mePlayer.inventory[w] && mePlayer.inventory[w].unlocked) {
+              unlockedWeapons.push(w);
+            }
+          }
+        }
+        const getDropWeapon = () => (unlockedWeapons.length > 0) ? unlockedWeapons[Math.floor(Math.random() * unlockedWeapons.length)] : undefined;
+
         const pistolExecLv = (mePlayer && !mePlayer.downed && mePlayer.inventory[0]) ? mePlayer.inventory[0].stats.knock : 0;
         if (weaponIdx === 0 && wasStunned && Math.random() < (0.05 + pistolExecLv * 0.025)) {
-          spawnPickup(zx, zz, "AMMO_PACK");
+          spawnPickup(zx, zz, "AMMO_PACK", getDropWeapon());
         }
 
         if (isExp) {
           triggerExplosion(zx, zz, 4.0, 58, -1, false);
         }
 
-        // 일반 좀비는 무기부품 드랍 제외 (부품 가치 보존), 오직 최상위 엘리트(골리앗/데빌)만 0.1% 희귀 드랍
-        // 연발 총기(UZI id:2 / 돌격소총 id:3) 사용 중이거나 해당 총기로 처치 시 탄약팩 드랍률 1.2% 적용!
+        // [v3.2 탄약 드랍 개편] 현재 보유(해금) 중인 무기들 중 무작위 1종 전용 탄약팩 드랍 (전체 0.8% 드랍, 획득 시 해당 무기만 보충)
         const isElite = (zmb.typeKey === "GOLIATH" || zmb.typeKey === "DEVIL");
         const partChance = isElite ? 0.001 : 0.0;
-        const holdingRapidGun = mePlayer && (mePlayer.currentWeapon === 2 || mePlayer.currentWeapon === 3);
-        const ammoDropChance = (weaponIdx === 2 || weaponIdx === 3 || holdingRapidGun) ? 0.012 : 0.0055;
+        const ammoDropChance = 0.008; // 0.8%
         const r = Math.random();
-        if (r < ammoDropChance) spawnPickup(zx, zz, "AMMO_PACK");
-        else if (r < ammoDropChance + partChance) spawnPickup(zx, zz, "PART");
+        if (r < ammoDropChance) {
+          spawnPickup(zx, zz, "AMMO_PACK", getDropWeapon());
+        } else if (r < ammoDropChance + partChance) spawnPickup(zx, zz, "PART");
         else if (r < ammoDropChance + partChance + 0.0018) spawnPickup(zx, zz, "MEDKIT");
         else if (r < ammoDropChance + partChance + 0.0032) spawnPickup(zx, zz, "STIM");
       }
