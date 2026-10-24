@@ -702,6 +702,48 @@
             envNode, room.index
           );
         }
+      } else if (room.isBossRoom) {
+        room.bossPhaseStage = 1;
+        room.coolantsDone = 0;
+        // 10섹터 3단계 레이드 1단계: 돔 좌·우 양측 보조 냉각 콘솔 2기 배치!
+        [-26, 26].forEach((cx, idx) => {
+          const cGroup = new THREE.Group();
+          const pedestal = new THREE.Mesh(
+            new THREE.BoxGeometry(2.4, 2.0, 2.0),
+            new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.8, roughness: 0.25 })
+          );
+          pedestal.position.y = 1.0;
+          cGroup.add(pedestal);
+
+          const coreCyl = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.55, 0.55, 1.4, 12),
+            new THREE.MeshStandardMaterial({ color: 0x06b6d4, emissive: 0x0891b2, emissiveIntensity: 0.85 })
+          );
+          coreCyl.position.y = 2.1;
+          cGroup.add(coreCyl);
+
+          const pos = { x: room.wx + cx, z: room.wz };
+          cGroup.position.set(pos.x, 0, pos.z);
+          entitiesGroup.add(cGroup);
+
+          const nodeObj = {
+            roomIndex: room.index,
+            kind: "BOSS_COOLANT",
+            coolantIdx: idx + 1,
+            x: pos.x,
+            z: pos.z,
+            done: false,
+            holdTime: 0,
+            mesh: cGroup
+          };
+          game.missionNodes.push(nodeObj);
+          registerWorldSymbol(
+            pos.x, 3.2, pos.z,
+            `❄️냉각콘솔${idx + 1}[F]`,
+            "bg-cyan-950/90 border-cyan-400 text-cyan-200",
+            nodeObj, room.index
+          );
+        });
       }
 
       // [v3.1] 비정형 섹터 구조물(L자 격리동, 중앙 팔각 반응로 코어, 십자 물류창고) 및 다채로운 전술 엄폐 오브젝트 생성
@@ -877,6 +919,31 @@
           group.add(fkGroup);
           addWallCollider(px, pz, 2.8, 2.0);
         }
+      });
+    }
+
+    // [v3.2] 10섹터 2단계: 중앙 보스 코어를 감싸는 생체 방어 파일런 3기 기립
+    function spawnSector10DefensePylons(room) {
+      const squadScale = (game.players.length || 1) >= 4 ? 1.6 : 1.0;
+      const pylonHp = Math.round(14000 * squadScale);
+      const angles = [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3];
+      angles.forEach((ang, idx) => {
+        const px = room.wx + Math.cos(ang) * 16.5;
+        const pz = room.wz + Math.sin(ang) * 16.5;
+        const pMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.2, 1.6, 6.2, 12),
+          new THREE.MeshStandardMaterial({ color: 0xbe123c, emissive: 0x9f1239, emissiveIntensity: 0.9 })
+        );
+        pMesh.position.set(px, 3.1, pz);
+        entitiesGroup.add(pMesh);
+        const pObj = { x: px, z: pz, hp: pylonHp, maxHp: pylonHp, mesh: pMesh, isPylon: true };
+        game.bloodPylons.push(pObj);
+        registerWorldSymbol(
+          px, 4.4, pz,
+          `🛡️방어파일런${idx + 1}[집중사격]`,
+          "bg-rose-950/90 border-rose-500 text-rose-200",
+          pObj, room.index
+        );
       });
     }
 

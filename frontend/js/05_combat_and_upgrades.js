@@ -317,24 +317,29 @@
     function rollRandomWeaponUpgrade(player, wIdx) {
       const toastEl = document.getElementById("upg-roll-toast");
       if (!isPlayerNearArmory(player)) {
-        if (toastEl) toastEl.textContent = "⛔ 무기고 반경 밖입니다! 소강기 [🔧무기고] 앞(6.2m)으로 이동해 강화하세요.";
+        if (toastEl) toastEl.textContent = "⛔ 무기고 반경 밖입니다! [🔧상시무기고] 앞(6.8m)으로 이동해 강화하세요.";
         return;
       }
       const inv = player.inventory[wIdx];
       if (!inv || !inv.unlocked) return;
       const statDefs = getWeaponStatDefs(wIdx);
-      const secCap = getSectorMaxStatLv(); // 현재 섹터에서 허용되는 스탯당 최대 레벨 (1~10)
-      const maxTotalHere = secCap * 5;
+      const secCap = getSectorMaxStatLv(); // 현재 섹터 진행도 (1~10)
+      const maxTotalHere = secCap * 5; // 한 섹터당 무기 총 레벨 상한 +5Lv씩 해금 (S1=5, S2=10, ..., S10=50)
 
-      const available = statDefs.filter(st => inv.stats[st.key] < secCap && (!st.reqSector || (game.currentRoomIndex || 0) >= st.reqSector));
+      if (inv.totalLv >= maxTotalHere) {
+        if (toastEl) {
+          toastEl.textContent = maxTotalHere >= 50
+            ? `🏆 [${WEAPONS[wIdx].name}] 모든 스탯이 최종 한계(Lv.50 MAX)에 도달했습니다!`
+            : `🔒 현재 섹터(${game.currentRoomIndex + 1}섹터) 총 레벨 상한(Lv.${maxTotalHere}/50)에 도달했습니다! 다음 섹터 진입 시 +5Lv 상한이 해금됩니다.`;
+        }
+        return;
+      }
+
+      // 각 개별 스탯은 섹터에 구애받지 않고 최대 Lv.10까지 자유롭게 강화 가능 (운 좋으면 1섹터에서도 단일스탯 5강 가능!)
+      const available = statDefs.filter(st => inv.stats[st.key] < 10 && (!st.reqSector || (game.currentRoomIndex || 0) >= st.reqSector));
       if (available.length === 0) {
         if (toastEl) {
-          const hasSectorLocked = statDefs.some(st => inv.stats[st.key] < secCap && st.reqSector && (game.currentRoomIndex || 0) < st.reqSector);
-          toastEl.textContent = secCap >= 10
-            ? `🏆 [${WEAPONS[wIdx].name}] 모든 스탯이 최종 한계(Lv.50 MAX)에 도달했습니다!`
-            : hasSectorLocked
-              ? `🔒 [${WEAPONS[wIdx].name}] 현재 해금된 스탯이 모두 상한에 도달했습니다! (반사·포탑딜은 5섹터부터 강화 가능)`
-              : `🔒 현재 섹터(${game.currentRoomIndex + 1}섹터) 강화 상한(Lv.${maxTotalHere})에 도달했습니다! 다음 섹터 진입 시 상한이 해금됩니다.`;
+          toastEl.textContent = `🏆 [${WEAPONS[wIdx].name}] 현재 해금된 모든 스탯이 최대치(Lv.10)에 도달했습니다!`;
         }
         return;
       }
@@ -349,7 +354,8 @@
 
       game.bioPoints -= cost;
       const chosen = available[Math.floor(Math.random() * available.length)];
-      const canJackpot = (inv.stats[chosen.key] + 2 <= secCap);
+      // 대성공(+2 Lv)은 섹터 총 상한(maxTotalHere)과 해당 스탯 최대치(Lv.10)를 모두 초과하지 않을 때만 발동!
+      const canJackpot = (inv.totalLv + 2 <= maxTotalHere) && (inv.stats[chosen.key] + 2 <= 10);
       const isJackpot = canJackpot && (Math.random() < 0.18);
       const addLv = isJackpot ? 2 : 1;
       inv.stats[chosen.key] += addLv;
@@ -358,8 +364,8 @@
       SoundFX.play("upgrade");
       if (toastEl) {
         let msg = isJackpot
-          ? `🎉 ★대성공! [${WEAPONS[wIdx].name}] '${chosen.label}' +2 Lv 상승! (현재 Lv.${inv.totalLv}/50 · 섹터상한 Lv.${maxTotalHere})`
-          : `🎲 [${WEAPONS[wIdx].name}] '${chosen.label}' +1 Lv 랜덤 강화 완료! (현재 Lv.${inv.totalLv}/50 · 섹터상한 Lv.${maxTotalHere})`;
+          ? `🎉 ★대성공! [${WEAPONS[wIdx].name}] '${chosen.label}' +2 Lv 상승! (현재 총 Lv.${inv.totalLv}/${maxTotalHere} · 스탯 Lv.${inv.stats[chosen.key]}/10)`
+          : `🎲 [${WEAPONS[wIdx].name}] '${chosen.label}' +1 Lv 랜덤 강화 완료! (현재 총 Lv.${inv.totalLv}/${maxTotalHere} · 스탯 Lv.${inv.stats[chosen.key]}/10)`;
         if (inv.totalLv >= 15 && !inv.tier1Special) {
           msg += " ➔ 🧬[15Lv 1차 특수개조] 가능!";
         } else if (inv.totalLv >= 30 && inv.tier1Special && !inv.awakened) {
@@ -385,13 +391,24 @@
       return { reqRoom: 99, cost: 0, label: "상점 코어 매진(3/3)" };
     }
 
-    // [v3.1 중간보스 드랍 코어 추출 판매 환급금]
-    // - 코어 전량 판매 빌드(0코어 순수 스탯 올인) 선택 시: 1차 +24,000 BP / 2차 +106,000 BP / 3차 +290,000 BP (총 +420,000 BP 환급!)
-    // - 이 환급금으로 8종 전 무기를 Lv.45~50 MAX로 도배하여 '순수 무기고 과공명(Pure Arsenal Overdrive)' 달성 가능!
+    // [v3.2 섹터 티어 연동 코어 추출 판매 환급 모델]
+    // - 판매 시점의 현재 섹터에 맞춰 해당 섹터 상한 무기 1~2자루를 즉시 풀강할 수 있는 적정 규모의 BP를 환급합니다.
+    // - 3섹터 코어를 아껴두었다가 9섹터에서 팔더라도 현재 섹터 티어(160,000 BP)로 온전히 보존되어 손해를 보지 않습니다!
     function getCoreSellRefundBp() {
-      const sold = game.coresSoldCount || 0;
-      const table = [24000, 106000, 290000];
-      return table[Math.min(2, sold)];
+      const s = Math.max(0, game.currentRoomIndex || 0);
+      const sectorCorePrices = [
+        3500,   // S1
+        4500,   // S2
+        6000,   // S3 (1차 중보 드랍 시점: 3섹터 총 15Lv 1~2자루 강화 자금)
+        11000,  // S4
+        20000,  // S5
+        35000,  // S6 (2차 중보 드랍 시점: 6섹터 총 30Lv 강화 자금)
+        60000,  // S7
+        100000, // S8
+        160000, // S9 (3차 중보 드랍 시점: 9섹터 총 45Lv 초월 자금)
+        240000  // S10 (최종 10섹터: 총 50Lv MAX 도배 자금)
+      ];
+      return sectorCorePrices[Math.min(sectorCorePrices.length - 1, s)];
     }
 
     // [v3.1 3대 빌드 밸런스] 비코어(Pure Stat) 순수 스탯 마스터리 보너스:
@@ -679,7 +696,7 @@
       if (armoryBanner) {
         if (nearArmory) {
           armoryBanner.className = "h-9 px-3 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-xs font-bold text-emerald-200 flex items-center truncate";
-          armoryBanner.textContent = `🟢 상시 무기고 연결됨 — 현재 섹터(${game.currentRoomIndex + 1}섹터) 강화 상한: 스탯당 Lv.${secCap} (총 Lv.${maxTotalHere}/50)`;
+          armoryBanner.textContent = `🟢 상시 무기고 연결됨 — 현재 섹터(${game.currentRoomIndex + 1}섹터) 총 레벨 상한: Lv.${maxTotalHere}/50 (각 스탯 최대 Lv.10까지 자유 강화)`;
         } else {
           armoryBanner.className = "h-9 px-3 rounded-xl bg-rose-950/90 border border-rose-400/50 text-xs font-bold text-rose-200 flex items-center truncate";
           armoryBanner.textContent = `🔴 무기고 반경 밖 — 외벽 [🔧상시무기고] 앞(6.8m)에서 언제든 강화·구매 가능 (현재 상한 Lv.${maxTotalHere}/50)`;
@@ -821,7 +838,7 @@
         const statDefs = getWeaponStatDefs(wIdx);
         const isAllMax = statDefs.every(st => inv.stats[st.key] >= 10);
         const rollableDefs = statDefs.filter(st => !st.reqSector || (game.currentRoomIndex || 0) >= st.reqSector);
-        const isSectorCapped = !isAllMax && rollableDefs.every(st => inv.stats[st.key] >= secCap);
+        const isSectorCapped = !isAllMax && (inv.totalLv >= maxTotalHere || rollableDefs.every(st => inv.stats[st.key] >= 10));
         const avgLv = Math.floor(inv.totalLv / 5);
         const rollCost = getUpgradeCost(wIdx, avgLv, inv.totalLv);
         const maxA = getWeaponMaxAmmo(me, wIdx);
@@ -945,12 +962,12 @@
           statsHtml = `<div class="grid grid-cols-5 gap-1.5 pt-1">` + statDefs.map(st => {
             const curLv = inv.stats[st.key];
             const isSecLocked = Boolean(st.reqSector && (game.currentRoomIndex || 0) < st.reqSector);
-            const isSecMax = curLv >= secCap;
-            const canClickStat = canRollStat && !isSecMax && !isSecLocked;
+            const isStatMax = curLv >= 10;
+            const canClickStat = canRollStat && !isStatMax && !isSecLocked;
             const statBoxClass = canClickStat
               ? "border-amber-400/70 bg-slate-900 hover:bg-amber-950/40 text-slate-100 cursor-pointer"
               : "border-slate-700 bg-slate-800/80 text-slate-500 cursor-not-allowed opacity-65";
-            const lvText = isSecLocked ? `🔒${st.reqSector + 1}섹터` : `Lv.${curLv}/${secCap}`;
+            const lvText = isSecLocked ? `🔒${st.reqSector + 1}섹터` : `Lv.${curLv}/10`;
             return `
               <button type="button" data-upg-w="${wIdx}" title="${st.desc}" ${!canClickStat ? "disabled" : ""}
                       class="p-1.5 rounded-xl border text-center transition ${statBoxClass}">
@@ -973,7 +990,7 @@
                 <span class="px-2 py-0.5 rounded-md text-xs font-mono-code font-bold ${
                   inv.awakened ? "bg-cyan-500 text-slate-950" :
                   inv.tier1Special ? "bg-fuchsia-500 text-slate-950" : "bg-amber-500/20 text-amber-300"
-                }">Lv.${inv.totalLv}/${maxTotalHere}</span>
+                }">총 Lv.${inv.totalLv}/${maxTotalHere}</span>
               </div>
               ${headerRight}
             </div>

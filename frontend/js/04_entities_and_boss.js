@@ -153,19 +153,31 @@
       gunMesh.position.set(0.55, 1.18, 0.48);
       group.add(gunMesh);
 
-      // [v3.1 버그 수정] 일반 밝은 섹터에서는 손전등 조명 및 원뿔 빔을 완전히 비활성화(visible = false, intensity = 0)
-      const flashLight = new THREE.PointLight(0xfffbeb, 0.0, 26, 1.6);
-      flashLight.position.set(0, 2.2, 1.1);
+      // [v3.2 리얼 호러 전술 손전등] 전방 60도 피자조각 집중 조명 (THREE.SpotLight) + 등 뒤 완전 암전
+      const flashLight = new THREE.SpotLight(0xfffbeb, 0.0, 38, Math.PI / 6, 0.35, 1.15);
+      flashLight.position.set(0, 1.75, 0.3);
+      const spotTarget = new THREE.Object3D();
+      spotTarget.position.set(0, 0.8, 16);
+      group.add(spotTarget);
+      flashLight.target = spotTarget;
       flashLight.visible = false;
       group.add(flashLight);
 
-      const coneGeo = new THREE.ConeGeometry(3.2, 11.5, 16, 1, true);
+      // 발밑 3.2m 초미세 최소 실루엣 풋라이트 (뒤돌아도 본인 발밑은 희미하게 분간 가능하나 밖은 칠흑)
+      const footLight = new THREE.PointLight(0xfffbeb, 0.0, 3.2, 2.0);
+      footLight.position.set(0, 0.7, 0);
+      footLight.visible = false;
+      group.add(footLight);
+
+      // 먼지 낀 공기를 가르는 입체 손전등 빔 원뿔 메쉬 (Additive Blending)
+      const coneGeo = new THREE.ConeGeometry(5.2, 24, 20, 1, true);
       coneGeo.rotateX(Math.PI / 2);
+      coneGeo.translate(0, 0, 12);
       const flashCone = new THREE.Mesh(
         coneGeo,
-        new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false })
+        new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
       );
-      flashCone.position.set(0, 1.15, 6.2);
+      flashCone.position.set(0, 1.2, 0.3);
       flashCone.visible = false;
       group.add(flashCone);
       const ringMat = new THREE.MeshBasicMaterial({ color: 0xef4444, side: THREE.DoubleSide, transparent: true, opacity: 0.0 });
@@ -206,7 +218,7 @@
       thermitePack.visible = false;
       group.add(thermitePack);
 
-      return { group, body, head, leftLeg, rightLeg, gunMesh, ringMat, flashLight, flashCone, payloadPack, pbCrystal, thermitePack };
+      return { group, body, head, leftLeg, rightLeg, gunMesh, ringMat, flashLight, footLight, flashCone, payloadPack, pbCrystal, thermitePack };
     }
 
     function spawnSquadPlayers() {
@@ -519,9 +531,9 @@
 
         cGroup.position.set(x, 0, z);
         entitiesGroup.add(cGroup);
-        const pkObj = { x, z, kind: "CORE", mesh: cGroup };
+        const pkObj = { x, z, kind: "CORE", mesh: cGroup, isPickup: true };
         game.pickups.push(pkObj);
-        registerWorldSymbol(
+        pkObj.sym = registerWorldSymbol(
           x, 2.5, z,
           "🧬변이코어[획득]",
           "bg-fuchsia-950/95 border-fuchsia-400 text-fuchsia-200 animate-bounce",
@@ -551,18 +563,18 @@
       );
       mesh.position.set(x, 0.55, z);
       entitiesGroup.add(mesh);
-      const pkObj = { x, z, kind, wIdx: weaponIdx, mesh };
+      const pkObj = { x, z, kind, wIdx: weaponIdx, mesh, isPickup: true };
       game.pickups.push(pkObj);
 
       if (kind === "PART") {
-        registerWorldSymbol(
+        pkObj.sym = registerWorldSymbol(
           x, 2.0, z,
           "⚙️무기부품[획득]",
           "bg-amber-950/95 border-amber-400 text-amber-200",
           pkObj, game.currentRoomIndex
         );
       } else if (kind === "AMMO_PACK" && targetW) {
-        registerWorldSymbol(
+        pkObj.sym = registerWorldSymbol(
           x, 1.85, z,
           `📦${targetW.name}탄약`,
           "bg-slate-900/90 border-sky-400/80 text-sky-200",
@@ -651,10 +663,32 @@
       crackGroupLow.visible = false;
       bGroup.add(crackGroupLow);
 
-      if (awakened || tier1Special) {
+      // 4. 탄환관통(st.atk > 0) 업그레이드 시 방벽 중앙에 아군 사격용 네온 사이안 총안구(Firing Slit) 배치!
+      if (st.atk > 0) {
+        const slitMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+        const slit = new THREE.Mesh(
+          new THREE.BoxGeometry(barLen * 0.82, 0.14, barThick + 0.1),
+          slitMat
+        );
+        slit.position.set(0, 1.25, 0);
+        bGroup.add(slit);
+      }
+
+      // 5. 1차 코어개조(15Lv): 가시 철갑 반사 장갑판 (Spike Armor Plates)
+      if (tier1Special && !awakened) {
+        const spikeMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(barLen * 0.88, 0.35, barThick + 0.22),
+          new THREE.MeshStandardMaterial({ color: 0x4f46e5, metalness: 0.8, roughness: 0.3 })
+        );
+        spikeMesh.position.y = 0.95;
+        bGroup.add(spikeMesh);
+      }
+
+      // 6. 2차 코어각성(30Lv): 상단 자동 센트리 포탑 탑재 (인당 최대 3기)
+      if (awakened) {
         const turret = new THREE.Mesh(
           new THREE.CylinderGeometry(0.35, 0.45, 0.6, 8),
-          new THREE.MeshBasicMaterial({ color: awakened ? 0x22d3ee : 0xc084fc })
+          new THREE.MeshBasicMaterial({ color: 0x22d3ee })
         );
         turret.position.y = 1.95;
         bGroup.add(turret);
@@ -668,12 +702,12 @@
 
       // [v3.1] 인당 동시 가동 센트리 포탑 최대 3기 제한 + 내장 탄약 160~340발 + 탄약 소진 시 8초 냉각 후 100% 재장전!
       const activeTurrets = game.barricades.filter(b => b.ownerId === pid && b.hasTurret);
-      const canMountTurret = (awakened || tier1Special) && (activeTurrets.length < 3);
+      const canMountTurret = Boolean(awakened) && (activeTurrets.length < 3);
       const maxTurretAmmo = 160 + (st.atk || 0) * 18 + (st.area || 0) * 18;
 
-      const maxHpVal = 380 + st.spd * 170 + (tier1Special ? 220 : 0);
-      const canReflect = ((st.atk || 0) > 0 && (game.currentRoomIndex || 0) >= 4) || !!tier1Special || !!awakened;
-      const thornsVal = canReflect ? Math.round((14 + (st.atk || 0) * 14) * (tier1Special ? 1.8 : 1.0)) : 0;
+      const maxHpVal = 380 + st.spd * 180 + (tier1Special ? 220 : 0);
+      // 반사 피해는 기본 스탯이 아닌 15Lv 1차 코어개조(가시철갑) 및 30Lv 2차 각성 전용으로 분리!
+      const thornsVal = (tier1Special || awakened) ? Math.round(650 * (awakened ? 1.5 : 1.0)) : 0;
       game.barricades.push({
         ownerId: pid,
         x, z,
@@ -689,8 +723,10 @@
         hpFillMat,
         crackGroupMed,
         crackGroupLow,
+        pierceLv: st.atk || 0,
+        bulletDmgBonus: 1 + (st.atk || 0) * 0.15,
         thornsDmg: thornsVal,
-        turretDmg: Math.round(42 * (1 + st.atk * 0.35)),
+        turretDmg: Math.round(48 * (1 + (st.atk || 0) * 0.15)),
         turretRange: 14.0 * sizeScale,
         stunDur: 0.22 + st.stun * 0.22,
         tier1Special: !!tier1Special,

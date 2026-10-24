@@ -262,10 +262,10 @@
         { key: "stun", label: "감전저지", desc: "기절·넉백↑" },
         { key: "knock", label: "셀효율", desc: "무소모+6.5%" }
       ],
-      // 6: 전술 바리케이드 (반사딜은 중반 5섹터(index 4)부터 강화 가능!)
+      // 6: 전술 바리케이드 (탄환관통 업그레이드 시 아군 탄환이 방벽을 통과하며 화력 증폭!)
       [
-        { key: "atk", label: "반사·포탑딜", desc: "5S+ 반사·포탑↑", reqSector: 4 },
-        { key: "spd", label: "내구도", desc: "체력+170" },
+        { key: "atk", label: "탄환관통", desc: "아군탄 통과·화력+15%" },
+        { key: "spd", label: "내구도", desc: "체력+180" },
         { key: "area", label: "방벽크기", desc: "폭·사거리↑" },
         { key: "stun", label: "충격저지", desc: "접근기절↑" },
         { key: "knock", label: "설치효율", desc: "무소모+6.5%" }

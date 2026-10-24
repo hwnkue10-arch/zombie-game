@@ -376,7 +376,10 @@
         }
 
         if (nextR.isBossRoom && game.boss) {
-          game.boss.active = true;
+          // [v3.2 10섹터 3단계 레이드]: 1단계(냉각 무력화) 및 2단계(파일런 파괴) 동안 보스는 고치 속 동면 상태 유지
+          game.boss.active = false;
+          game.boss.shielded = true;
+          if (game.boss.shieldMat) game.boss.shieldMat.opacity = 0.75;
         }
       }
 
@@ -947,7 +950,7 @@
           const safeBanner = document.getElementById("hud-safe-banner");
           if (safeBanner) {
             document.getElementById("hud-safe-banner-text").textContent =
-              `🔒 후방 격벽 봉쇄! 섹터 ${curRoom.index + 1} 강화 상한(Lv.${getSectorMaxStatLv() * 5}) 해금!`;
+              `🔒 후방 격벽 봉쇄 완료! 섹터 ${curRoom.index + 1} 무기 총 레벨 상한(총 Lv.${getSectorMaxStatLv() * 5}/50) 해금!`;
             safeBanner.classList.remove("hidden");
             setTimeout(() => safeBanner.classList.add("hidden"), 4800);
           }
@@ -998,6 +1001,36 @@
           const collapseTimerEl = document.getElementById("hud-collapse-timer");
           if (collapseTimerEl && !game.collapseState.active) {
             collapseTimerEl.textContent = "";
+          }
+        }
+      }
+
+      // [v3.2 10섹터 3단계 레이드 2단계]: 생체 방어 파일런 3기 실시간 피격/파괴 판정
+      if (curRoom && curRoom.isBossRoom && curRoom.bossPhaseStage === 2) {
+        for (let i = game.bloodPylons.length - 1; i >= 0; i--) {
+          const pyl = game.bloodPylons[i];
+          if (pyl.hp <= 0) {
+            spawnBloodParticles(pyl.x, 3.0, pyl.z, 0xf43f5e, 15);
+            entitiesGroup.remove(pyl.mesh);
+            game.bloodPylons.splice(i, 1);
+          }
+        }
+        if (game.bloodPylons.length === 0) {
+          curRoom.bossPhaseStage = 3;
+          if (game.boss) {
+            game.boss.active = true;
+            game.boss.shielded = false;
+            if (game.boss.shieldMat) game.boss.shieldMat.opacity = 0.0;
+            spawnBloodParticles(game.boss.x, 3.5, game.boss.z, 0xef4444, 30);
+          }
+          SoundFX.play("explosion");
+          SoundFX.play("alarm");
+          const safeBanner = document.getElementById("hud-safe-banner");
+          if (safeBanner) {
+            document.getElementById("hud-safe-banner-text").textContent =
+              "⚠️ [경고] 보호 파일런 전멸! 변이 심장 '더 코어'가 완전 각성합니다!";
+            safeBanner.classList.remove("hidden");
+            setTimeout(() => safeBanner.classList.add("hidden"), 5000);
           }
         }
       }
@@ -1080,10 +1113,34 @@
         }
       }
 
-      // 3. Environmental Sector Anomalies & [v3.1] 블랙아웃 정전 호러 이벤트 + 일반 섹터 손전등 완벽 비활성화 버그 수정!
+      // 3. Environmental Sector Anomalies & [v3.2] 블랙아웃 정전 호러 60초 과부하 트립 타이머
       if (curRoom && (curRoom.blackoutEventTimer || 0) > 0) {
         curRoom.blackoutEventTimer = Math.max(0, curRoom.blackoutEventTimer - dt);
       }
+
+      // 비상 발전기 60초 전력 타이머 카운트다운: 60초 후 과부하 차단기 트립으로 재암전!
+      if (curRoom && curRoom.envType === "BLACKOUT" && curRoom.envCleared && !curRoom.cleared) {
+        curRoom.blackoutRestoredTimer = Math.max(0, (curRoom.blackoutRestoredTimer || 60.0) - dt);
+        if (curRoom.blackoutRestoredTimer <= 0) {
+          curRoom.envCleared = false;
+          curRoom.blackoutRestoredTimer = 0;
+          SoundFX.play("alarm");
+          const genNode = game.missionNodes.find(n => n.roomIndex === curRoom.index && n.kind === "ENV_CONTROL");
+          if (genNode) {
+            genNode.done = false;
+            genNode.holdTime = 0;
+            spawnBloodParticles(genNode.x, 2.2, genNode.z, 0xf59e0b, 10);
+          }
+          const safeBanner = document.getElementById("hud-safe-banner");
+          if (safeBanner) {
+            document.getElementById("hud-safe-banner-text").textContent =
+              "⚡ 비상 발전기 과부하 정전! 구역 조명이 다시 꺼졌습니다! (배전반을 다시 조작해 전력을 복구하세요)";
+            safeBanner.classList.remove("hidden");
+            setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+          }
+        }
+      }
+
       const isBlackoutNow = Boolean(
         curRoom && !curRoom.cleared && (
           (curRoom.envType === "BLACKOUT" && !curRoom.envCleared) ||
@@ -1092,9 +1149,9 @@
       );
 
       if (isBlackoutNow) {
-        const emergencyPulse = 0.10 + Math.max(0, Math.sin(game.elapsedTime * 5.5)) * 0.08;
-        ambientLight.intensity = emergencyPulse;
-        dirLight.intensity = 0.08;
+        // 완전 칠흑 암전: 손전등 전방 원뿔 외에는 뒤와 주변이 완전히 어두워짐!
+        ambientLight.intensity = 0.015;
+        dirLight.intensity = 0.0;
       } else if (curRoom && curRoom.envType === "BLOOD_RAIN") {
         ambientLight.intensity = 0.52;
         dirLight.intensity = 0.75;
@@ -1106,10 +1163,14 @@
       game.players.forEach(p => {
         p.dashCooldown = Math.max(0, p.dashCooldown - dt);
         p.bashCooldown = Math.max(0, (p.bashCooldown || 0) - dt);
-        // [v3.1 버그 수정] 암전(Blackout) 상태일 때만 전술 라이트가 켜지고, 일반 밝은 섹터에서는 visible=false & intensity=0으로 완벽 차단!
+        // [v3.2] 암전(Blackout) 상태일 때만 SpotLight 피자조각 전방 빔 + 발밑 풋라이트 점등!
         if (p.visual && p.visual.flashLight) {
           p.visual.flashLight.visible = isBlackoutNow && !p.downed;
-          p.visual.flashLight.intensity = (isBlackoutNow && !p.downed) ? 2.8 : 0.0;
+          p.visual.flashLight.intensity = (isBlackoutNow && !p.downed) ? 6.5 : 0.0;
+        }
+        if (p.visual && p.visual.footLight) {
+          p.visual.footLight.visible = isBlackoutNow && !p.downed;
+          p.visual.footLight.intensity = (isBlackoutNow && !p.downed) ? 0.35 : 0.0;
         }
         if (p.visual && p.visual.flashCone) {
           p.visual.flashCone.visible = isBlackoutNow && !p.downed;
@@ -1549,23 +1610,78 @@
                 : `🔒 먼저 [${reqStep - 1}단계 목표] 완료 후 웨이브를 방어해야 개방됩니다!`;
               interactBar.style.width = "0%";
             } else if (nearMissionNode.kind === "ENV_CONTROL") {
-              interactTitle.textContent = nearMissionNode.envType === "TOXIC_FOG" ? "☣️ [F 홀드] 환기밸브 개방" : "💡 [F 홀드] 비상조명 가동";
+              const isFog = nearMissionNode.envType === "TOXIC_FOG";
+              if (curRoom && (curRoom.blackoutRestoredTimer || 0) > 0) {
+                interactTitle.textContent = `💡 비상 발전기 가동 중 (${Math.ceil(curRoom.blackoutRestoredTimer)}초 후 과부하)`;
+                interactBar.style.width = "100%";
+              } else {
+                interactTitle.textContent = isFog ? "☣️ [F 홀드] 환기밸브 개방" : "💡 [F 홀드] 비상발전기 가동";
+                if (holdingF) {
+                  nearMissionNode.holdTime += dt;
+                  interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 1.5) * 100) + "%";
+                  if (nearMissionNode.holdTime >= 1.5) {
+                    if (isFog) {
+                      nearMissionNode.done = true;
+                      curRoom.envCleared = true;
+                      entitiesGroup.remove(nearMissionNode.mesh);
+                    } else {
+                      // [v3.2] 비상 발전기 가동: 60초간 전력 복구 후 자동 과부하 트립 발생!
+                      curRoom.envCleared = true;
+                      curRoom.blackoutRestoredTimer = 60.0;
+                      nearMissionNode.holdTime = 0;
+                      const safeBanner = document.getElementById("hud-safe-banner");
+                      if (safeBanner) {
+                        document.getElementById("hud-safe-banner-text").textContent =
+                          "💡 비상 발전기 가동! 60초간 구역 조명이 복구됩니다. (과부하 방전 전까지 구역을 확보하세요!)";
+                        safeBanner.classList.remove("hidden");
+                        setTimeout(() => safeBanner.classList.add("hidden"), 4200);
+                      }
+                    }
+                    spawnMissionStageVFX(
+                      nearMissionNode.x,
+                      nearMissionNode.z,
+                      isFog ? 0x84cc16 : 0xfacc15,
+                      7.5,
+                      18,
+                      false
+                    );
+                    SoundFX.play("upgrade");
+                  }
+                } else {
+                  interactBar.style.width = "0%";
+                }
+              }
+            } else if (nearMissionNode.kind === "BOSS_COOLANT") {
+              interactTitle.textContent = `❄️ [F 홀드] ${nearMissionNode.coolantIdx}번 보조 냉각콘솔 과부하`;
               if (holdingF) {
                 nearMissionNode.holdTime += dt;
-                interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 1.5) * 100) + "%";
-                if (nearMissionNode.holdTime >= 1.5) {
+                interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 2.0) * 100) + "%";
+                if (nearMissionNode.holdTime >= 2.0) {
                   nearMissionNode.done = true;
-                  curRoom.envCleared = true;
                   entitiesGroup.remove(nearMissionNode.mesh);
-                  spawnMissionStageVFX(
-                    nearMissionNode.x,
-                    nearMissionNode.z,
-                    nearMissionNode.envType === "TOXIC_FOG" ? 0x84cc16 : 0xfacc15,
-                    7.5,
-                    18,
-                    false
-                  );
+                  curRoom.coolantsDone = (curRoom.coolantsDone || 0) + 1;
+                  spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x06b6d4, 8.0, 20, false);
                   SoundFX.play("upgrade");
+                  if (curRoom.coolantsDone >= 2) {
+                    curRoom.bossPhaseStage = 2;
+                    spawnSector10DefensePylons(curRoom);
+                    SoundFX.play("alarm");
+                    const safeBanner = document.getElementById("hud-safe-banner");
+                    if (safeBanner) {
+                      document.getElementById("hud-safe-banner-text").textContent =
+                        "⚡ 냉각 반응로 과부하 완료! 중앙 생체 방어 파일런 3기가 기립합니다! (집중 사격 파괴)";
+                      safeBanner.classList.remove("hidden");
+                      setTimeout(() => safeBanner.classList.add("hidden"), 5000);
+                    }
+                  } else {
+                    const safeBanner = document.getElementById("hud-safe-banner");
+                    if (safeBanner) {
+                      document.getElementById("hud-safe-banner-text").textContent =
+                        "❄️ 1번 콘솔 과부하 완료! 반대편 2번 냉각 콘솔을 과부하시키세요!";
+                      safeBanner.classList.remove("hidden");
+                      setTimeout(() => safeBanner.classList.add("hidden"), 4000);
+                    }
+                  }
                 }
               } else {
                 interactBar.style.width = "0%";
@@ -1904,9 +2020,9 @@
           (ref.hp !== undefined && ref.hp <= 0) ||
           (ref.active !== undefined && !ref.active) ||
           (ref.activeInCalm !== undefined && !ref.activeInCalm && !(curRoom && curRoom.isBossRoom)) ||
-          ((ref.kind === "CORE" || ref.kind === "PART") && !game.pickups.includes(ref));
+          ((ref.isPickup || ref.kind === "CORE" || ref.kind === "PART" || ref.kind === "AMMO_PACK") && !game.pickups.includes(ref));
 
-        if (isGone || (sym.roomIndex !== game.currentRoomIndex && ref.kind !== "CORE" && ref.kind !== "PART")) {
+        if (isGone || (sym.roomIndex !== game.currentRoomIndex && !ref.isPickup && ref.kind !== "CORE" && ref.kind !== "PART" && ref.kind !== "AMMO_PACK")) {
           sym.el.style.display = "none";
           return;
         }
@@ -2747,12 +2863,47 @@
 
         let removeBullet = b.life <= 0;
 
-        const canPierceBarricade = !b.isZombieProjectile && (b.piercing || (b.pierceLeft || 1) > 1);
-        if (isPointBlockedByWall(b.x, b.z, 0.15, canPierceBarricade)) {
+        // 외벽 및 방폭문 충돌 검사 (바리케이드는 별도 전술 관통 로직으로 처리)
+        if (isPointBlockedByWall(b.x, b.z, 0.15, true)) {
           if (b.explosiveRadius > 0) {
             triggerExplosion(b.x, b.z, b.explosiveRadius, b.damage, b.ownerId, b.awakened, 0, b.tier1Special);
           }
           removeBullet = true;
+        }
+
+        // 전술 바리케이드 충돌 & 아군 탄환 관통(화력 증폭) 판정
+        if (!removeBullet) {
+          if (b.isZombieProjectile) {
+            for (const bar of game.barricades) {
+              if (Math.abs(b.x - bar.x) < bar.hw + 0.25 && Math.abs(b.z - bar.z) < bar.hd + 0.25) {
+                bar.hp -= b.damage;
+                updateBarricadeDamageVisual(bar);
+                spawnBloodParticles(b.x, 1.15, b.z, 0x84cc16, 3);
+                removeBullet = true;
+                break;
+              }
+            }
+          } else {
+            for (const bar of game.barricades) {
+              if (Math.abs(b.x - bar.x) < bar.hw + 0.15 && Math.abs(b.z - bar.z) < bar.hd + 0.15) {
+                if (bar.pierceLv > 0 || b.piercing) {
+                  // [탄환관통 업그레이드 방벽]: 아군 탄환이 총안구를 통과하며 화력 증폭!
+                  if (!b.piercedBars) b.piercedBars = [];
+                  if (!b.piercedBars.includes(bar)) {
+                    b.piercedBars.push(bar);
+                    b.damage = Math.round(b.damage * (bar.bulletDmgBonus || 1.15));
+                    spawnBloodParticles(b.x, 1.15, b.z, 0x38bdf8, 2);
+                  }
+                } else {
+                  if (b.explosiveRadius > 0) {
+                    triggerExplosion(b.x, b.z, b.explosiveRadius, b.damage, b.ownerId, b.awakened, 0, b.tier1Special);
+                  }
+                  removeBullet = true;
+                  break;
+                }
+              }
+            }
+          }
         }
 
         if (!removeBullet && b.isZombieProjectile) {
@@ -2983,6 +3134,12 @@
                 });
               }
             }
+          }
+          pk.done = true;
+          if (pk.sym && pk.sym.el) {
+            pk.sym.el.remove();
+            const sIdx = game.worldSymbols.indexOf(pk.sym);
+            if (sIdx !== -1) game.worldSymbols.splice(sIdx, 1);
           }
           entitiesGroup.remove(pk.mesh);
           game.pickups.splice(i, 1);

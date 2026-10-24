@@ -239,7 +239,7 @@
         if (envEl) {
           const envIcons = {
             NORMAL: "",
-            BLACKOUT: curRoom.envCleared ? "💡조명복구" : "🌑암전",
+            BLACKOUT: curRoom.envCleared ? `💡전력 ${Math.ceil(curRoom.blackoutRestoredTimer || 0)}s` : "🌑암전",
             TOXIC_FOG: curRoom.envCleared ? "💨환기완료" : "☣️독안개",
             BLOOD_RAIN: "🩸BPx1.35",
             CRYO_LEAK: "❄️냉각"
@@ -286,10 +286,21 @@
             objBar.style.width = Math.min(100, Math.max(0, clearProg * 100)) + "%";
           }
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.condType === "THERMITE" ? 3 : (curRoom.reqWaves || curRoom.targetVal || 3));
-        } else if (curRoom.isBossRoom && game.boss) {
-          objText.textContent = "🎯 목표: 변이 심장 '더 코어' 파괴";
-          if (objSub) objSub.textContent = `보스 무적기믹 파훼 · 무기고 상시개방`;
-          objBar.style.width = ((1 - game.boss.hp / game.boss.maxHp) * 100) + "%";
+        } else if (curRoom.isBossRoom) {
+          if ((curRoom.bossPhaseStage || 1) === 1) {
+            objText.textContent = `🎯 [1단계] 보조 냉각 콘솔 2기 과부하 [F] (${curRoom.coolantsDone || 0}/2)`;
+            if (objSub) objSub.textContent = `호드의 급습을 막아내며 돔 양쪽 냉각기를 과부하시키세요!`;
+            objBar.style.width = ((curRoom.coolantsDone || 0) * 50) + "%";
+          } else if (curRoom.bossPhaseStage === 2) {
+            const remPyl = game.bloodPylons ? game.bloodPylons.length : 0;
+            objText.textContent = `🎯 [2단계] 생체 방어 파일런 3기 파괴 (${Math.max(0, 3 - remPyl)}/3)`;
+            if (objSub) objSub.textContent = `코어를 보호하는 방어 파일런 3기를 집중 사격으로 파괴하세요!`;
+            objBar.style.width = (((3 - remPyl) / 3) * 100) + "%";
+          } else if (game.boss) {
+            objText.textContent = "🎯 [3단계] 최종 진화 하이브 마인드 '더 코어' 섬멸";
+            if (objSub) objSub.textContent = `보스 무적기믹 파훼 · 50Lv 풀강 화력 총동원`;
+            objBar.style.width = ((1 - game.boss.hp / game.boss.maxHp) * 100) + "%";
+          }
         } else if (curRoom.condType === "THERMITE") {
           if (curRoom.subStage === 0) {
             objText.textContent = game.thermiteParts < 2
