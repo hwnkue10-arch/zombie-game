@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — Frontend Module: 06_simulation_and_ai.js
+ * BOXHEAD: THE CORE v3.2 — Frontend Module: 06_simulation_and_ai.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -867,6 +867,21 @@
           n.dish.rotation.z += dt * (n.holdTime > 0 ? 9.0 : 2.2);
         } else if (n.kind === "ENV_CONTROL" && !n.done && n.wheelMesh) {
           n.wheelMesh.rotation.z += dt * (n.holdTime > 0 ? 10.0 : 0.8);
+        } else if (n.kind === "RADAR_CONSOLE" && !n.done) {
+          if (n.coilRing) n.coilRing.rotation.z += dt * (n.holdTime > 0 ? 8.5 : 1.8);
+        } else if (n.kind === "RADAR_DISH" && !n.done) {
+          if (n.dish) n.dish.rotation.y += dt * (n.holdTime > 0 ? 6.2 : 0.9);
+          if (n.ring) n.ring.rotation.z += dt * (n.holdTime > 0 ? 7.0 : 1.4);
+        } else if (n.kind === "RADAR_BEACON" && !n.done) {
+          if (n.halo) {
+            n.halo.rotation.z += dt * (n.holdTime > 0 ? 12.0 : 3.0);
+            n.halo.position.y = 3.4 + Math.sin(game.elapsedTime * 4.5) * 0.16;
+          }
+        } else if (n.kind === "DECON_VALVE") {
+          if (n.wheel) n.wheel.rotation.z += dt * (n.holdTime > 0 ? 12.0 : (n.done ? 0 : 0.6));
+          if (!n.done && Math.random() < 0.22) {
+            spawnBloodParticles(n.x, 2.7, n.z, 0x10b981, 1);
+          }
         }
       });
 
@@ -1182,6 +1197,13 @@
         p.stimBuffTimer = Math.max(0, p.stimBuffTimer - dt);
         p.swapOverchargeTimer = Math.max(0, p.swapOverchargeTimer - dt);
 
+        if (p.stimBuffTimer > 0) {
+          p.bleedingTimer = 0;
+          p.acidTimer = 0;
+          p.shockTimer = 0;
+          p.frostTimer = 0;
+        }
+
         if (p.tempHp > 0 && p.stimBuffTimer <= 0) {
           p.tempHp = Math.max(0, p.tempHp - 3.5 * dt);
         }
@@ -1194,6 +1216,12 @@
         }
         if (p.acidTimer > 0) {
           p.acidTimer -= dt;
+        }
+        if (p.shockTimer > 0) {
+          p.shockTimer -= dt;
+        }
+        if (p.frostTimer > 0) {
+          p.frostTimer -= dt;
         }
 
         if (p.bandagingTimer > 0) {
@@ -1802,6 +1830,104 @@
                 nearMissionNode.holdTime = 0;
                 interactBar.style.width = "0%";
               }
+            } else if (nearMissionNode.kind === "RADAR_CONSOLE") {
+              interactTitle.textContent = "📡 [F 홀드] 통신 배전반 전력 인가";
+              if (holdingF) {
+                nearMissionNode.holdTime = (nearMissionNode.holdTime || 0) + dt;
+                interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 2.2) * 100) + "%";
+                if (Math.random() < 0.35) {
+                  spawnBloodParticles(nearMissionNode.x, 1.8, nearMissionNode.z, 0x38bdf8, 1);
+                }
+                if (nearMissionNode.holdTime >= 2.2) {
+                  nearMissionNode.done = true;
+                  curRoom.progress = 1;
+                  spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x38bdf8, 6.0, 18, false);
+                  SoundFX.play("upgrade");
+                  advanceRoomMissionStage(
+                    curRoom,
+                    1,
+                    "✅ 통신 배전반 가동 완료! 다음 웨이브를 방어하면 🛰️레이더 안테나가 활성화됩니다!"
+                  );
+                }
+              } else {
+                nearMissionNode.holdTime = 0;
+                interactBar.style.width = "0%";
+              }
+            } else if (nearMissionNode.kind === "RADAR_DISH") {
+              interactTitle.textContent = "🛰️ [F 홀드] 대형 레이더 안테나 각도 정렬";
+              if (holdingF) {
+                nearMissionNode.holdTime = (nearMissionNode.holdTime || 0) + dt;
+                interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 2.5) * 100) + "%";
+                if (Math.random() < 0.35) {
+                  spawnBloodParticles(nearMissionNode.x, 2.2, nearMissionNode.z, 0x06b6d4, 1);
+                }
+                if (nearMissionNode.holdTime >= 2.5) {
+                  nearMissionNode.done = true;
+                  curRoom.progress = 2;
+                  spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x06b6d4, 6.5, 20, false);
+                  SoundFX.play("upgrade");
+                  advanceRoomMissionStage(
+                    curRoom,
+                    2,
+                    "✅ 레이더 안테나 각도 정렬 완료! 다음 웨이브를 방어하면 📶위성 송신 비콘이 가동됩니다!"
+                  );
+                }
+              } else {
+                nearMissionNode.holdTime = 0;
+                interactBar.style.width = "0%";
+              }
+            } else if (nearMissionNode.kind === "RADAR_BEACON") {
+              interactTitle.textContent = "📶 [F 홀드] 고출력 위성 주파수 전송";
+              if (holdingF) {
+                nearMissionNode.holdTime = (nearMissionNode.holdTime || 0) + dt;
+                interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 3.0) * 100) + "%";
+                if (Math.random() < 0.4) {
+                  spawnBloodParticles(nearMissionNode.x, 2.5, nearMissionNode.z, 0x3b82f6, 1);
+                }
+                if (nearMissionNode.holdTime >= 3.0) {
+                  nearMissionNode.done = true;
+                  curRoom.progress = 3;
+                  spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x3b82f6, 9.0, 26, true);
+                  // 강력한 고주파 EMP 방출: 반경 12m 내 좀비 3.5초 감전 마비!
+                  game.zombies.forEach(z => {
+                    if (Math.hypot(z.x - nearMissionNode.x, z.z - nearMissionNode.z) <= 12.0) {
+                      z.stunTimer = Math.max(z.stunTimer || 0, 3.5);
+                    }
+                  });
+                  SoundFX.play("upgrade");
+                  checkRoomClear(curRoom);
+                }
+              } else {
+                nearMissionNode.holdTime = 0;
+                interactBar.style.width = "0%";
+              }
+            } else if (nearMissionNode.kind === "DECON_VALVE") {
+              interactTitle.textContent = `☣️ [F 홀드] 오염 에어로졸 밸브 #${nearMissionNode.stepOrder || 1} 폐쇄`;
+              if (holdingF) {
+                nearMissionNode.holdTime = (nearMissionNode.holdTime || 0) + dt;
+                interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 2.0) * 100) + "%";
+                if (Math.random() < 0.35) {
+                  spawnBloodParticles(nearMissionNode.x, 2.0, nearMissionNode.z, 0x10b981, 1);
+                }
+                if (nearMissionNode.holdTime >= 2.0) {
+                  nearMissionNode.done = true;
+                  curRoom.progress++;
+                  game.bioPoints += 500;
+                  spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x10b981, 6.5, 18, false);
+                  SoundFX.play("upgrade");
+                  if (curRoom.progress < curRoom.targetVal) {
+                    advanceRoomMissionStage(
+                      curRoom,
+                      reqStep,
+                      `✅ 오염 밸브 #${reqStep} 차단 완료 (+500 BP)! 다음 웨이브를 방어하면 밸브 #${reqStep + 1}이 개방됩니다!`
+                    );
+                  }
+                  checkRoomClear(curRoom);
+                }
+              } else {
+                nearMissionNode.holdTime = 0;
+                interactBar.style.width = "0%";
+              }
             }
           } else if (nearThermiteDoor) {
             showPrompt = true;
@@ -1940,8 +2066,13 @@
             // 나노 주사기 개조 시에는 자가 치료 중에도 이동속도 감속이 전혀 없음!
             if (p.bandagingTimer > 0 && !isPlayerSyringeUpgraded(p)) moveSpeed *= 0.42;
             if (p.carryingPayload) moveSpeed *= 0.78;
-            if (p.acidTimer > 0) moveSpeed *= 0.72;
-            if (p.stimBuffTimer > 0) moveSpeed *= 1.25;
+            if (p.stimBuffTimer > 0) {
+              moveSpeed *= 1.25;
+            } else {
+              if (p.acidTimer > 0) moveSpeed *= 0.72;
+              if (p.shockTimer > 0) moveSpeed *= 0.55;
+              if (p.frostTimer > 0) moveSpeed *= 0.65;
+            }
             if (p.isSprinting) moveSpeed *= 1.42;
 
             if (isMoving) {

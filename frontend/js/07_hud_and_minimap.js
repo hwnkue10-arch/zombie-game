@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — Frontend Module: 07_hud_and_minimap.js
+ * BOXHEAD: THE CORE v3.2 — Frontend Module: 07_hud_and_minimap.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -101,7 +101,9 @@
       let ailHtml = "";
       if (me.bleedingTimer > 0) ailHtml += `<span class="px-1.5 py-0.5 rounded bg-rose-600 text-[11px] font-bold text-white">🩸출혈</span>`;
       if (me.acidTimer > 0) ailHtml += `<span class="px-1.5 py-0.5 rounded bg-lime-600 text-[11px] font-bold text-slate-950">🧪산성</span>`;
-      if (me.stimBuffTimer > 0) ailHtml += `<span class="px-1.5 py-0.5 rounded bg-amber-400 text-[11px] font-bold text-slate-950">💉가속</span>`;
+      if (me.shockTimer > 0) ailHtml += `<span class="px-1.5 py-0.5 rounded bg-yellow-400 text-[11px] font-bold text-slate-950">⚡감전</span>`;
+      if (me.frostTimer > 0) ailHtml += `<span class="px-1.5 py-0.5 rounded bg-cyan-400 text-[11px] font-bold text-slate-950">❄️동상</span>`;
+      if (me.stimBuffTimer > 0) ailHtml += `<span class="px-1.5 py-0.5 rounded bg-amber-400 text-[11px] font-bold text-slate-950">💉면역·폭주</span>`;
       ailEl.innerHTML = ailHtml;
 
       document.getElementById("hud-medkit-count").textContent = me.medkits;
@@ -332,6 +334,22 @@
             objBar.style.width = "80%";
           }
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.reqWaves || 2);
+        } else if (curRoom.condType === "RADAR_UPLINK") {
+          if (compStg < 1) {
+            objText.textContent = `📡 통신 배전반 전력 인가 [F]`;
+            objBar.style.width = "33%";
+          } else if (compStg < 2) {
+            objText.textContent = `🛰️ 레이더 안테나 각도 정렬 [F]`;
+            objBar.style.width = "66%";
+          } else {
+            objText.textContent = `📶 위성 주파수 전송 [F]`;
+            objBar.style.width = "90%";
+          }
+          if (objSub) objSub.textContent = getSequentialWaveSubText(3);
+        } else if (curRoom.condType === "DECON_PURGE") {
+          objText.textContent = `☣️ 오염 밸브 폐쇄 [F] (${curRoom.progress}/${curRoom.targetVal})`;
+          objBar.style.width = ((curRoom.progress / curRoom.targetVal) * 100) + "%";
+          if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.targetVal);
         } else if (curRoom.condType === "HIVE_NODES") {
           objText.textContent = `🧬 생체 신경절 파괴 (${curRoom.progress}/${curRoom.targetVal})`;
           objBar.style.width = ((curRoom.progress / curRoom.targetVal) * 100) + "%";

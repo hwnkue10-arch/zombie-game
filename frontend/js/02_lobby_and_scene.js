@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — Frontend Module: 02_lobby_and_scene.js
+ * BOXHEAD: THE CORE v3.2 — Frontend Module: 02_lobby_and_scene.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */

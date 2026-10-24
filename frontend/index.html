@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>BOXHEAD: THE CORE v3.1 — 전장의 안개 · 비정형 섹터 · 소강기 팝업 무기고 · 코어 상점/추출 & 지향성 독가스 에디션</title>
+  <title>BOXHEAD: THE CORE v3.2 — 밸런스 총괄 개편 · 슈트 강화 & 부품 환전소 · 스팀팩 만능정화 · 신규 미션 에디션</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
@@ -317,11 +317,11 @@
         </div>
       </div>
 
-      <!-- Quick Supply Strip (전 탄약 일괄 보급 + 의료품 + 부품 + 변이 코어) -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-slate-950/90 p-2.5 rounded-2xl border border-slate-800 shrink-0">
+      <!-- Quick Supply Strip (전 탄약 일괄 보급 + 의료품 + 부품 합성/환전 + 변이 코어) -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 bg-slate-950/90 p-2.5 rounded-2xl border border-slate-800 shrink-0">
         <button id="btn-buy-all-ammo" type="button" aria-label="전 탄약 일괄 보급 (전 총기 + 설치물)" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/35 text-left transition flex flex-col justify-between h-14">
-          <div class="text-xs font-extrabold text-emerald-300 truncate">📦 전 탄약 일괄 보급</div>
-          <div id="upg-buy-all-ammo-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">220 BP (전 총기·설치물)</div>
+          <div class="text-xs font-extrabold text-emerald-300 truncate">📦 전 탄약 보급</div>
+          <div id="upg-buy-all-ammo-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">220 BP (전 총기)</div>
         </button>
         <button id="btn-buy-medkit" type="button" aria-label="구급키트 (+1) 110 BP" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-teal-500/35 text-left transition flex flex-col justify-between h-14">
           <div id="upg-buy-medkit-title" class="text-xs font-extrabold text-teal-300 truncate">구급키트 (+1)</div>
@@ -335,13 +335,17 @@
           <div class="text-xs font-extrabold text-indigo-200 truncate">⚙️ 부품 합성 (+1)</div>
           <div id="upg-craft-part-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">450 BP</div>
         </button>
+        <button id="btn-scrap-part" type="button" aria-label="잉여 부품 분해 연구자금 환전" class="p-2 rounded-xl bg-amber-950/80 hover:bg-amber-900/80 border border-amber-400/50 text-left transition flex flex-col justify-between h-14">
+          <div class="text-xs font-extrabold text-amber-200 truncate">⚙️ 잉여부품 환전</div>
+          <div id="upg-scrap-part-label" class="text-[11px] font-mono-code text-emerald-300 font-bold truncate">+4,500 BP</div>
+        </button>
         <button id="btn-buy-core" type="button" aria-label="변이 코어 상점 구매" class="p-2 rounded-xl bg-fuchsia-950/80 hover:bg-fuchsia-900/80 border border-fuchsia-400/50 text-left transition flex flex-col justify-between h-14">
           <div class="text-xs font-extrabold text-fuchsia-200 truncate">🛒 변이코어 구매</div>
-          <div id="upg-buy-core-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">3S 해금 (750BP)</div>
+          <div id="upg-buy-core-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">3S 해금</div>
         </button>
         <button id="btn-sell-core" type="button" aria-label="변이 코어 추출 판매 환급" class="p-2 rounded-xl bg-cyan-950/80 hover:bg-cyan-900/80 border border-cyan-400/50 text-left transition flex flex-col justify-between h-14">
           <div class="text-xs font-extrabold text-cyan-200 truncate">🧬 코어 추출판매</div>
-          <div id="upg-sell-core-label" class="text-[11px] font-mono-code text-emerald-300 font-bold truncate">+900 BP 환급</div>
+          <div id="upg-sell-core-label" class="text-[11px] font-mono-code text-emerald-300 font-bold truncate">+6,000 BP</div>
         </button>
       </div>
 
@@ -376,7 +380,7 @@
         <div>
           <div class="flex items-center gap-2">
             <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white uppercase">4-PLAYER CO-OP</span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">v3.1 TACTICAL OVERHAUL · 전장의안개 · 비정형맵 · 팝업무기고</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">v3.2 TACTICAL OVERHAUL · 밸런스총괄개편 · 슈트강화&부품환전 · 스팀팩만능정화</span>
           </div>
           <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
             BOXHEAD : <span class="text-red-500">THE CORE</span>
@@ -686,7 +690,7 @@
   </div>
 
   <!-- ==================== MAIN GAME ENGINE SCRIPT (v2.0) ==================== -->
-  <!-- ==================== MODULAR GAME ENGINE SCRIPTS (v3.1) ==================== -->
+  <!-- ==================== MODULAR GAME ENGINE SCRIPTS (v3.2) ==================== -->
   <script src="js/01_audio_and_weapons.js"></script>
   <script src="js/02_lobby_and_scene.js"></script>
   <script src="js/03_dungeon_and_world.js"></script>

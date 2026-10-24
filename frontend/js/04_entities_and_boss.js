@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — Frontend Module: 04_entities_and_boss.js
+ * BOXHEAD: THE CORE v3.2 — Frontend Module: 04_entities_and_boss.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -289,6 +289,8 @@
           tempHp: 0,
           bleedingTimer: 0,
           acidTimer: 0,
+          shockTimer: 0,
+          frostTimer: 0,
           medkits: 1,
           stims: 1,
           stamina: 50,
@@ -296,6 +298,8 @@
           staminaExhaustTimer: 0,
           isSprinting: false,
           suitUpgrades: {
+            maxHp: 0,
+            armorPlating: 0,
             medkitCap: 0,
             stimCap: 0,
             maxStamina: 0,
@@ -724,7 +728,10 @@
         crackGroupMed,
         crackGroupLow,
         pierceLv: st.atk || 0,
-        bulletDmgBonus: 1 + (st.atk || 0) * 0.15,
+        // [v3.2 밸런스 역산] 1~3Lv: 방벽 안전사격 총안구(85%~100%) -> 4~7Lv: 가속증폭(108%~132%) -> 8~10Lv: 코어증폭(142%~165%)
+        bulletDmgBonus: (st.atk && st.atk > 0)
+          ? [0, 0.85, 0.92, 1.00, 1.08, 1.16, 1.24, 1.32, 1.42, 1.52, 1.65][Math.min(10, st.atk)]
+          : 0,
         thornsDmg: thornsVal,
         turretDmg: Math.round(48 * (1 + (st.atk || 0) * 0.15)),
         turretRange: 14.0 * sizeScale,
@@ -793,27 +800,35 @@
       // 기본 상태는 적색 고폭 드럼통, 15Lv/30Lv 코어 개조 시에만 극저온 냉각 배럴 외형 적용!
       const bodyColor = awakened ? 0x0284c7 : (tier1Special ? 0x0ea5e9 : 0xdc2626);
       const tankBody = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.60, 0.60, 1.48, 16),
+        new THREE.CylinderGeometry(0.58, 0.58, 1.40, 18),
         new THREE.MeshStandardMaterial({
           color: bodyColor,
           roughness: isCryoBarrel ? 0.25 : 0.45,
           metalness: isCryoBarrel ? 0.35 : 0.25
         })
       );
-      tankBody.position.y = 0.74;
+      tankBody.position.y = 0.72;
       group.add(tankBody);
 
-      // 상하단 강화 림
+      // 상하단 강화 림 (Z-fighting 방지를 위해 평면 캡이 없는 토러스 링 구조로 정밀 성형)
       const rimMat = new THREE.MeshStandardMaterial({
         color: isCryoBarrel ? 0xe0f2fe : 0x1e293b,
         roughness: 0.45,
         metalness: 0.25
       });
-      const topRim = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.14, 16), rimMat);
-      topRim.position.y = 1.41;
-      const btmRim = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.14, 16), rimMat);
-      btmRim.position.y = 0.07;
+      const topRim = new THREE.Mesh(new THREE.TorusGeometry(0.59, 0.045, 8, 20), rimMat);
+      topRim.rotation.x = Math.PI / 2;
+      topRim.position.y = 1.38;
+
+      const btmRim = new THREE.Mesh(new THREE.TorusGeometry(0.59, 0.045, 8, 20), rimMat);
+      btmRim.rotation.x = Math.PI / 2;
+      btmRim.position.y = 0.08;
       group.add(topRim, btmRim);
+
+      // 상단 오목 금속 덮개 (상단면 높이를 1.422로 분리하여 몸통 상단면과의 Z-Fighting 완벽 차단)
+      const lidMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.54, 0.02, 16), rimMat);
+      lidMesh.position.y = 1.422;
+      group.add(lidMesh);
 
       // 중앙 경고/발광 밴드
       const coreMat = new THREE.MeshStandardMaterial({
@@ -822,16 +837,16 @@
         emissiveIntensity: awakened ? 1.0 : (tier1Special ? 0.75 : 0.45),
         roughness: 0.2
       });
-      const coreBand = new THREE.Mesh(new THREE.CylinderGeometry(0.63, 0.63, 0.32, 16), coreMat);
-      coreBand.position.y = 0.74;
+      const coreBand = new THREE.Mesh(new THREE.CylinderGeometry(0.61, 0.61, 0.30, 18), coreMat);
+      coreBand.position.y = 0.72;
       group.add(coreBand);
 
       // 상단 압력 밸브
       const valve = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.22, 0.22, 0.20, 12),
-        new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.4 })
+        new THREE.CylinderGeometry(0.18, 0.18, 0.14, 12),
+        new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.6, roughness: 0.3 })
       );
-      valve.position.y = 1.55;
+      valve.position.set(0.18, 1.48, 0);
       group.add(valve);
 
       group.position.set(x, 0, z);

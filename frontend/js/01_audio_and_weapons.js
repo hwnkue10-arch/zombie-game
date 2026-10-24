@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — Frontend Module: 01_audio_and_weapons.js
+ * BOXHEAD: THE CORE v3.2 — Frontend Module: 01_audio_and_weapons.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -262,9 +262,9 @@
         { key: "stun", label: "감전저지", desc: "기절·넉백↑" },
         { key: "knock", label: "셀효율", desc: "무소모+6.5%" }
       ],
-      // 6: 전술 바리케이드 (탄환관통 업그레이드 시 아군 탄환이 방벽을 통과하며 화력 증폭!)
+      // 6: 전술 바리케이드 (탄환관통: 1Lv 총안구 개방 / 4Lv+ 전자기 가속 화력 증폭)
       [
-        { key: "atk", label: "탄환관통", desc: "아군탄 통과·화력+15%" },
+        { key: "atk", label: "탄환관통", desc: "탄환통과(1L+)·가속증폭(4L+)" },
         { key: "spd", label: "내구도", desc: "체력+180" },
         { key: "area", label: "방벽크기", desc: "폭·사거리↑" },
         { key: "stun", label: "충격저지", desc: "접근기절↑" },
@@ -314,9 +314,29 @@
     }
 
     // =========================================================================
-    // [v3.2] 2b. 전술 슈트 · 의료 · 기동력 강화 시스템 (7종) 및 부품 합성 비용
+    // [v3.2] 2b. 전술 슈트 · 외골격 · 의료 · 기동력 강화 시스템 (9종) 및 잉여 부품 활용
     // =========================================================================
     const SUIT_UPGRADE_DEFS = {
+      maxHp: {
+        key: "maxHp",
+        icon: "❤️",
+        name: "생체 나노 심장",
+        desc: "최대 체력 +25 증가 (기본 100 ➔ 최대 225 HP)",
+        maxLv: 5,
+        reqRooms: [0, 2, 4, 6, 8],
+        costs: [1000, 3800, 15000, 45000, 110000],
+        partsCosts: [0, 0, 1, 1, 2]
+      },
+      armorPlating: {
+        key: "armorPlating",
+        icon: "🛡️",
+        name: "케블라 방탄 외골격",
+        desc: "받는 모든 피해 -6% 영구 경감 (최대 -30% 방어막)",
+        maxLv: 5,
+        reqRooms: [1, 3, 5, 7, 9],
+        costs: [1500, 5200, 20000, 58000, 135000],
+        partsCosts: [0, 0, 1, 2, 2]
+      },
       medkitCap: {
         key: "medkitCap",
         icon: "🩹",
@@ -324,7 +344,8 @@
         desc: "구급키트[Q] 최대 소지 +1 (최대 4개 · 즉시 +1 보충)",
         maxLv: 3,
         reqRooms: [1, 4, 7],
-        costs: [2200, 12000, 45000]
+        costs: [2200, 12000, 45000],
+        partsCosts: [0, 1, 1]
       },
       stimCap: {
         key: "stimCap",
@@ -333,7 +354,8 @@
         desc: "스팀팩[E] 최대 소지 +1 (최대 4개 · 즉시 +1 보충)",
         maxLv: 3,
         reqRooms: [1, 4, 7],
-        costs: [2500, 14000, 52000]
+        costs: [2500, 14000, 52000],
+        partsCosts: [0, 1, 1]
       },
       maxStamina: {
         key: "maxStamina",
@@ -342,7 +364,8 @@
         desc: "최대 스태미너 +25 증가 (기본 50 ➔ 최대 150 ST)",
         maxLv: 4,
         reqRooms: [0, 2, 4, 6],
-        costs: [900, 3800, 13500, 38000]
+        costs: [900, 3800, 13500, 38000],
+        partsCosts: [0, 0, 1, 1]
       },
       staminaRegen: {
         key: "staminaRegen",
@@ -351,7 +374,8 @@
         desc: "초당 스태미너 회복 +6.5/s (기본 10/s ➔ 최대 36/s)",
         maxLv: 4,
         reqRooms: [0, 2, 4, 6],
-        costs: [900, 3800, 13500, 38000]
+        costs: [900, 3800, 13500, 38000],
+        partsCosts: [0, 0, 1, 1]
       },
       dashCd: {
         key: "dashCd",
@@ -360,7 +384,8 @@
         desc: "[Space] 점프 소모량 -5 ST 감소 (35 ST ➔ 15 ST)",
         maxLv: 4,
         reqRooms: [0, 2, 5, 7],
-        costs: [1200, 4800, 18000, 48000]
+        costs: [1200, 4800, 18000, 48000],
+        partsCosts: [0, 0, 1, 1]
       },
       bashCd: {
         key: "bashCd",
@@ -369,7 +394,8 @@
         desc: "[V] 기절기 쿨타임 -0.4초 단축 & 충격 반경 증가",
         maxLv: 4,
         reqRooms: [0, 2, 5, 7],
-        costs: [1200, 4800, 18000, 48000]
+        costs: [1200, 4800, 18000, 48000],
+        partsCosts: [0, 0, 1, 1]
       },
       syringe: {
         key: "syringe",
@@ -379,9 +405,20 @@
         maxLv: 1,
         reqRooms: [4],
         costs: [38000],
+        partsCosts: [2],
         isSpecial: true
       }
     };
+
+    function getPlayerMaxHp(player) {
+      const upg = (player && player.suitUpgrades && player.suitUpgrades.maxHp) || 0;
+      return 100 + upg * 25;
+    }
+
+    function getPlayerDmgReduction(player) {
+      const upg = (player && player.suitUpgrades && player.suitUpgrades.armorPlating) || 0;
+      return Math.min(0.30, upg * 0.06);
+    }
 
     function getPlayerMaxMedkits(player) {
       const lv = (player && player.suitUpgrades && player.suitUpgrades.medkitCap) || 0;
@@ -405,7 +442,11 @@
 
     function getPlayerJumpStaminaCost(player) {
       const lv = (player && player.suitUpgrades && player.suitUpgrades.dashCd) || 0;
-      return Math.max(15, 35 - lv * 5);
+      let cost = Math.max(15, 35 - lv * 5);
+      if (player && player.shockTimer > 0 && (player.stimBuffTimer || 0) <= 0) {
+        cost *= 2.0;
+      }
+      return cost;
     }
 
     function getPlayerDashCooldownMax(player) {

@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — Frontend Module: 05_combat_and_upgrades.js
+ * BOXHEAD: THE CORE v3.2 — Frontend Module: 05_combat_and_upgrades.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -119,9 +119,11 @@
       if (code.startsWith("Digit")) {
         const num = parseInt(code.replace("Digit", ""), 10);
         if (num >= 1 && num <= 8) selectWeaponSlot(me, num - 1);
-      } else if (code === "KeyQ" || code === "KeyH" || code === "KeyC") {
+      } else if (code === "KeyQ") {
+        // [v3.2 조작 획일화] Q키 전담: 구급키트 / 나노 주사기
         startSelfBandaging(me);
-      } else if (code === "KeyE" || code === "KeyG" || code === "KeyR") {
+      } else if (code === "KeyE") {
+        // [v3.2 조작 획일화] E키 전담: 아드레날린 스팀팩 (중복 R/G키 제거)
         useAdrenalineStim(me);
       } else if (code === "Space") {
         triggerTacticalDash(me);
@@ -178,15 +180,24 @@
       SoundFX.play("pickup");
     }
 
-    // [E] 아드레날린 스팀팩 즉시 투여 (+45 임시체력 보호막 + 6.5초간 이동속도·연사력·스태미너 무한 폭주)
+    // [E] 아드레날린 스팀팩 즉시 투여 (+50 임시보호막 + 10.0초 폭주 + 모든 상태이상 완벽 정화 & 군중제어 면역)
     function useAdrenalineStim(player) {
       if (player.downed || player.stims <= 0) return;
       player.stims--;
-      player.tempHp = Math.min(60, player.tempHp + 45);
-      player.stimBuffTimer = 6.5;
+      player.tempHp = Math.min(80, (player.tempHp || 0) + 50);
+      player.stimBuffTimer = 10.0; // [v3.2] 지속 시간 대폭 상향 (기존 6.5s -> 10.0s)
+      
+      // [v3.2 만능 상태이상 정화 (Universal Cleanse)]
+      player.bleedingTimer = 0;
       player.acidTimer = 0;
+      player.shockTimer = 0;
+      player.frostTimer = 0;
+      
+      // 스태미너 100% 즉시 완충 및 탈진 해제
       player.stamina = getPlayerMaxStamina(player);
       player.staminaExhaustTimer = 0;
+      
+      spawnBloodParticles(player.x, 1.2, player.z, 0xfacc15, 14);
       SoundFX.play("revive");
     }
 
@@ -581,6 +592,35 @@
       updateWeaponSlotsHUD();
     }
 
+    // [v3.2 잉여 부품 분해 연구 자금 환전 모델]
+    // 무기 및 슈트 해금 후 남는 부품을 현재 섹터 가치에 맞춰 대량의 BP로 환전할 수 있습니다!
+    function getPartScrapRefundBp() {
+      const s = Math.max(0, game.currentRoomIndex || 0);
+      const table = [3000, 3500, 4500, 7000, 10000, 14000, 19000, 25000, 32000, 42000];
+      return table[Math.min(table.length - 1, s)];
+    }
+
+    function scrapWeaponPartForBp(player) {
+      const toastEl = document.getElementById("upg-roll-toast");
+      if (!isPlayerNearArmory(player)) {
+        if (toastEl) toastEl.textContent = "⛔ [🔧무기고] 반경 안에서만 잉여 부품 분해 환전이 가능합니다!";
+        return;
+      }
+      if ((game.weaponParts || 0) < 1) {
+        if (toastEl) toastEl.textContent = "⚠️ 분해 환전할 [⚙️무기 부품]이 없습니다!";
+        return;
+      }
+      const refund = getPartScrapRefundBp();
+      game.weaponParts--;
+      game.bioPoints += refund;
+      SoundFX.play("upgrade");
+      if (toastEl) {
+        toastEl.textContent = `⚙️ [잉여 부품 분해 환전] +${refund.toLocaleString()} BP 획득! (현재 부품: ${game.weaponParts}개)`;
+      }
+      renderUpgradeModal();
+      updateWeaponSlotsHUD();
+    }
+
     function upgradePlayerSuitStat(player, key) {
       const toastEl = document.getElementById("upg-roll-toast");
       if (!player || !SUIT_UPGRADE_DEFS[key]) return;
@@ -589,7 +629,7 @@
         return;
       }
       if (!player.suitUpgrades) {
-        player.suitUpgrades = { medkitCap: 0, stimCap: 0, maxStamina: 0, staminaRegen: 0, dashCd: 0, bashCd: 0, syringe: 0 };
+        player.suitUpgrades = { maxHp: 0, armorPlating: 0, medkitCap: 0, stimCap: 0, maxStamina: 0, staminaRegen: 0, dashCd: 0, bashCd: 0, syringe: 0 };
       }
       const def = SUIT_UPGRADE_DEFS[key];
       const curLv = player.suitUpgrades[key] || 0;
@@ -603,15 +643,24 @@
         return;
       }
       const cost = def.costs[curLv] || 1000;
+      const partCost = (def.partsCosts && def.partsCosts[curLv]) || 0;
       if (game.bioPoints < cost) {
         if (toastEl) toastEl.textContent = `⚠️ BP가 부족합니다! ([${def.name}] 강화 필요: ${cost.toLocaleString()} BP)`;
         return;
       }
+      if ((game.weaponParts || 0) < partCost) {
+        if (toastEl) toastEl.textContent = `⚠️ [⚙️무기 부품]이 부족합니다! ([${def.name}] 강화 필요: ⚙️부품 ${partCost}개)`;
+        return;
+      }
 
       game.bioPoints -= cost;
+      if (partCost > 0) game.weaponParts -= partCost;
       player.suitUpgrades[key] = curLv + 1;
 
-      if (key === "medkitCap") {
+      if (key === "maxHp") {
+        player.maxHp = getPlayerMaxHp(player);
+        player.hp = Math.min(player.maxHp, player.hp + 25);
+      } else if (key === "medkitCap") {
         player.medkits = Math.min(getPlayerMaxMedkits(player), player.medkits + 1);
       } else if (key === "stimCap") {
         player.stims = Math.min(getPlayerMaxStims(player), player.stims + 1);
@@ -626,7 +675,7 @@
       if (toastEl) {
         toastEl.textContent = key === "syringe"
           ? `💉 [나노 의료 주사기 특수개조] 완료! 이제 [Q] 자가 치료가 0.6초(무감속), [F] 아군 치료가 0.4초로 대폭 가속됩니다!`
-          : `🧬 [${def.name}] Lv.${curLv + 1}/${def.maxLv} 강화 완료! (-${cost.toLocaleString()} BP)`;
+          : `🧬 [${def.name}] Lv.${curLv + 1}/${def.maxLv} 강화 완료! (-${cost.toLocaleString()} BP${partCost > 0 ? ` · ⚙️-${partCost}` : ""})`;
       }
       renderUpgradeModal();
       updateWeaponSlotsHUD();
@@ -754,18 +803,23 @@
 
       setSupplyBtnVisualState("btn-craft-part", nearArmory && game.bioPoints >= partCost, "bg-indigo-950/85 hover:bg-indigo-900 border border-indigo-400/70");
 
+      const scrapRefund = getPartScrapRefundBp();
+      const scrapPartLbl = document.getElementById("upg-scrap-part-label");
+      if (scrapPartLbl) scrapPartLbl.textContent = `+${scrapRefund.toLocaleString()} BP (보유:${game.weaponParts || 0})`;
+      setSupplyBtnVisualState("btn-scrap-part", nearArmory && (game.weaponParts || 0) >= 1, "bg-amber-950/85 hover:bg-amber-900 border border-amber-400/70");
+
       const canBuyCore = nearArmory && (game.shopCoresBought || 0) < 3 && game.currentRoomIndex >= shopInfo.reqRoom && game.bioPoints >= shopInfo.cost;
       setSupplyBtnVisualState("btn-buy-core", canBuyCore, "bg-fuchsia-950/85 hover:bg-fuchsia-900 border border-fuchsia-400/70");
 
       const canSellCore = nearArmory && (game.coreSamples || 0) >= 1 && (game.shopCoresBought || 0) === 0;
       setSupplyBtnVisualState("btn-sell-core", canSellCore, "bg-cyan-950/85 hover:bg-cyan-900 border border-cyan-400/70");
 
-      // ==================== 1) 7종 신체 · 의료 · 기동 강화 그리드 렌더링 ====================
+      // ==================== 1) 9종 전술 신체 · 외골격 · 의료 · 기동 강화 그리드 렌더링 ====================
       const suitGrid = document.getElementById("upgrade-suit-grid");
       if (suitGrid) {
         suitGrid.innerHTML = "";
         if (!me.suitUpgrades) {
-          me.suitUpgrades = { medkitCap: 0, stimCap: 0, maxStamina: 0, staminaRegen: 0, dashCd: 0, bashCd: 0, syringe: 0 };
+          me.suitUpgrades = { maxHp: 0, armorPlating: 0, medkitCap: 0, stimCap: 0, maxStamina: 0, staminaRegen: 0, dashCd: 0, bashCd: 0, syringe: 0 };
         }
         Object.keys(SUIT_UPGRADE_DEFS).forEach(sKey => {
           const def = SUIT_UPGRADE_DEFS[sKey];
@@ -774,10 +828,13 @@
           const reqRoom = isMax ? 0 : (def.reqRooms[curLv] || 0);
           const isRoomLocked = !isMax && game.currentRoomIndex < reqRoom;
           const cost = isMax ? 0 : (def.costs[curLv] || 1000);
-          const canUpg = nearArmory && !isMax && !isRoomLocked && game.bioPoints >= cost;
+          const partCost = isMax ? 0 : ((def.partsCosts && def.partsCosts[curLv]) || 0);
+          const canUpg = nearArmory && !isMax && !isRoomLocked && game.bioPoints >= cost && (game.weaponParts || 0) >= partCost;
 
           let statNowText = "";
-          if (sKey === "medkitCap") statNowText = `최대 ${getPlayerMaxMedkits(me)}개 소지`;
+          if (sKey === "maxHp") statNowText = `최대 ${getPlayerMaxHp(me)} HP`;
+          else if (sKey === "armorPlating") statNowText = `피해 ${Math.round(getPlayerDmgReduction(me) * 100)}% 경감`;
+          else if (sKey === "medkitCap") statNowText = `최대 ${getPlayerMaxMedkits(me)}개 소지`;
           else if (sKey === "stimCap") statNowText = `최대 ${getPlayerMaxStims(me)}개 소지`;
           else if (sKey === "maxStamina") statNowText = `최대 ${getPlayerMaxStamina(me)} ST`;
           else if (sKey === "staminaRegen") statNowText = `초당 +${getPlayerStaminaRegen(me)}/s`;
@@ -785,11 +842,12 @@
           else if (sKey === "bashCd") statNowText = `쿨 ${getPlayerBashCooldownMax(me).toFixed(2)}s · 반경 ${getPlayerBashRadius(me).toFixed(1)}m`;
           else if (sKey === "syringe") statNowText = curLv > 0 ? "자가0.6s(무감속)·아군0.4s" : "기본: 자가2.8s·아군1.8s";
 
+          const costText = `${cost.toLocaleString()}BP${partCost > 0 ? ` + ⚙️${partCost}개` : ""}`;
           const btnLabel = isMax
             ? `✔ MAX (Lv.${curLv}/${def.maxLv})`
             : isRoomLocked
-              ? `🔒 ${reqRoom + 1}섹터 해금 (${cost.toLocaleString()}BP)`
-              : `강화 (${cost.toLocaleString()} BP)`;
+              ? `🔒 ${reqRoom + 1}섹터 해금 (${costText})`
+              : `강화 (${costText})`;
 
           const btnColorClass = canUpg
             ? (sKey === "syringe"
@@ -1132,7 +1190,7 @@
       const overdriveMult = (!isDownedPistol && effTranscended) ? 1.55 : ((!isDownedPistol && inv.totalLv >= 45) ? 1.35 : 1.0);
 
       const atkMult = (1 + effAtkLv * 0.20) * resMult * (effTier1 ? 1.15 : 1.0) * pureBonus.dmgMult * overdriveMult;
-      const spdMult = isDownedPistol ? 0.85 : ((1 + effSpdLv * 0.10) * (pureBonus.spdMult || 1.0) * (effTranscended ? 1.25 : (inv.totalLv >= 45 ? 1.15 : 1.0)) * (player.stimBuffTimer > 0 ? 1.25 : 1.0) * (player.swapOverchargeTimer > 0 ? 1.25 : 1.0));
+      const spdMult = isDownedPistol ? 0.85 : ((1 + effSpdLv * 0.10) * (pureBonus.spdMult || 1.0) * (effTranscended ? 1.25 : (inv.totalLv >= 45 ? 1.15 : 1.0)) * (player.stimBuffTimer > 0 ? 1.25 : 1.0) * (player.swapOverchargeTimer > 0 ? 1.25 : 1.0) * (player.frostTimer > 0 && player.stimBuffTimer <= 0 ? 0.75 : 1.0));
       const isPierceInArea = (wIdx === 0 || wIdx === 3);
       const rangeMult = isPierceInArea ? 1.15 : (1 + effAreaLv * 0.22);
       const stunDur = isDownedPistol ? 0.15 : ((wDef.stun + effStunLv * 0.22) * (player.swapOverchargeTimer > 0 ? 1.35 : 1.0));
@@ -1842,7 +1900,7 @@
       }
     }
 
-    function damagePlayer(player, dmg, causesBleed, causesAcid) {
+    function damagePlayer(player, dmg, causesBleed, causesAcid, causesShock, causesFrost) {
       if (player.downed || player.dashActiveTimer > 0 || !game.running) return;
 
       // Cancel self-bandaging if hit hard
@@ -1850,8 +1908,11 @@
         player.bandagingTimer = 0;
       }
 
+      // [v3.2 케블라 방탄 외골격] 받는 모든 피해 영구 경감 (-6%/Lv, 최대 -30%)
+      const red = getPlayerDmgReduction(player);
+      let rem = Math.max(1, Math.round(dmg * (1 - red)));
+
       // Absorb with Temporary HP (Adrenaline Stim) first!
-      let rem = dmg;
       if (player.tempHp > 0) {
         const absorbed = Math.min(player.tempHp, rem);
         player.tempHp -= absorbed;
@@ -1859,8 +1920,13 @@
       }
       player.hp = Math.max(0, player.hp - rem);
 
-      if (causesBleed && Math.random() < 0.35) player.bleedingTimer = 8.0;
-      if (causesAcid) player.acidTimer = 6.0;
+      // [v3.2] 스팀팩 폭주 중에는 모든 상태이상 및 군중제어 완전 면역!
+      if (player.stimBuffTimer <= 0) {
+        if (causesBleed && Math.random() < 0.35) player.bleedingTimer = 8.0;
+        if (causesAcid) player.acidTimer = 6.0;
+        if (causesShock) player.shockTimer = 4.5;
+        if (causesFrost) player.frostTimer = 4.0;
+      }
 
       spawnBloodParticles(player.x, 1.2, player.z, 0xef4444, 2);
 

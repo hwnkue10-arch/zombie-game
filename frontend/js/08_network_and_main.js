@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — Frontend Module: 08_network_and_main.js
+ * BOXHEAD: THE CORE v3.2 — Frontend Module: 08_network_and_main.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -867,6 +867,13 @@
         if (me) craftWeaponPart(me);
       });
     }
+    const btnScrapPart = document.getElementById("btn-scrap-part");
+    if (btnScrapPart) {
+      btnScrapPart.addEventListener("click", () => {
+        const me = game.players[mySlotIndex];
+        if (me) scrapWeaponPartForBp(me);
+      });
+    }
     document.getElementById("btn-buy-core").addEventListener("click", () => {
       const me = game.players[mySlotIndex];
       if (me) buyShopCoreSample(me);
@@ -929,8 +936,8 @@
         const me = game.players[mySlotIndex];
         if (act === "f") touchInteractF = true;
         else if (act === "shift") window.touchSprintShift = true;
-        else if ((act === "q" || act === "h") && me) startSelfBandaging(me);
-        else if ((act === "e" || act === "g") && me) useAdrenalineStim(me);
+        else if (act === "q" && me) startSelfBandaging(me);
+        else if (act === "e" && me) useAdrenalineStim(me);
         else if (act === "space" && me) triggerTacticalDash(me);
       });
       btn.addEventListener("pointerup", () => {

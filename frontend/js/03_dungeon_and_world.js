@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.1 — Frontend Module: 03_dungeon_and_world.js
+ * BOXHEAD: THE CORE v3.2 — Frontend Module: 03_dungeon_and_world.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */
@@ -217,7 +217,7 @@
       let gx = 0, gz = 0;
       const GRID_STEP = 124;
 
-      const missionPool = ["THERMITE", "GENERATORS", "PAYLOAD", "HIVE_NODES", "EXTERMINATE"];
+      const missionPool = ["THERMITE", "GENERATORS", "PAYLOAD", "RADAR_UPLINK", "HIVE_NODES", "DECON_PURGE", "EXTERMINATE"];
       const shapePool = ["RECT_BUNKER", "TUNNEL_LONG", "L_FACILITY", "OCTAGON_REACTOR", "CROSS_WAREHOUSE"];
       const scaleMult = game.pacing === "marathon" ? 1.35 : (game.pacing === "blitz" ? 0.55 : 0.95);
 
@@ -257,6 +257,8 @@
         if (condType === "THERMITE") targetVal = Math.round(22 * scaleMult);
         else if (condType === "GENERATORS") targetVal = stageTier;
         else if (condType === "PAYLOAD") targetVal = 1;
+        else if (condType === "RADAR_UPLINK") targetVal = 3;
+        else if (condType === "DECON_PURGE") targetVal = Math.min(4, stageTier);
         else if (condType === "HIVE_NODES") targetVal = stageTier;
         else if (condType === "EXTERMINATE") targetVal = Math.max(2, stageTier - 1);
 
@@ -269,7 +271,9 @@
 
         const payloadSteps = (i >= 3) ? 3 : 2; // 4섹터+ 블랙박스 미션은 중간에 🔐보안중계기 해독 단계 포함!
         const totalSteps = condType === "THERMITE" ? 3
-          : (condType === "PAYLOAD" ? payloadSteps : targetVal);
+          : (condType === "PAYLOAD" ? payloadSteps
+          : (condType === "RADAR_UPLINK" ? 3
+          : targetVal));
 
         const secTimer = isBossRoom ? 999 : Math.round((260 + i * 20) * (game.pacing === "blitz" ? 0.75 : 1.0));
         // 외벽 스폰 구멍 추가 파공 이벤트: 섹터당 약 42% 확률로만 발생(안 터지는 섹터 존재), 타이머 50% 이하 중반부터만 발동!
@@ -1200,6 +1204,169 @@
             upNode, room.index
           );
         }
+      } else if (room.condType === "RADAR_UPLINK") {
+        const rGroup = new THREE.Group();
+        if (stepOrder === 1) {
+          // 1단계: 📡 통신 배전반 (Main Breaker Console)
+          const base = new THREE.Mesh(
+            new THREE.BoxGeometry(2.6, 2.2, 1.4),
+            new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.65, roughness: 0.35 })
+          );
+          base.position.y = 1.1;
+          rGroup.add(base);
+          const screen = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.6, 0.9),
+            new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+          );
+          screen.position.set(0, 1.45, 0.71);
+          rGroup.add(screen);
+          const coilRing = new THREE.Mesh(
+            new THREE.TorusGeometry(0.7, 0.08, 8, 20),
+            new THREE.MeshBasicMaterial({ color: 0x67e8f9 })
+          );
+          coilRing.rotation.x = Math.PI / 2;
+          coilRing.position.y = 2.4;
+          rGroup.add(coilRing);
+          rGroup.position.set(pos.x, 0, pos.z);
+          entitiesGroup.add(rGroup);
+          const nodeObj = {
+            roomIndex: room.index,
+            kind: "RADAR_CONSOLE",
+            stepOrder: 1,
+            x: pos.x, z: pos.z,
+            done: false,
+            holdTime: 0,
+            mesh: rGroup,
+            coilRing,
+            screen
+          };
+          game.missionNodes.push(nodeObj);
+          nodeObj.sym = registerWorldSymbol(
+            pos.x, 3.2, pos.z,
+            "📡통신배전반[F]",
+            "bg-sky-950/90 border-sky-400 text-sky-200",
+            nodeObj, room.index
+          );
+        } else if (stepOrder === 2) {
+          // 2단계: 🛰️ 대형 파라볼라 안테나 (Parabolic Radar Dish)
+          const mount = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.5, 1.4, 1.6, 8),
+            new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 })
+          );
+          mount.position.y = 0.8;
+          rGroup.add(mount);
+          const dish = new THREE.Mesh(
+            new THREE.CylinderGeometry(2.2, 0.4, 0.6, 18),
+            new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.7, roughness: 0.25 })
+          );
+          dish.position.y = 2.4;
+          dish.rotation.x = Math.PI / 4;
+          rGroup.add(dish);
+          const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(2.25, 0.12, 8, 24),
+            new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+          );
+          ring.position.y = 2.5;
+          ring.rotation.x = Math.PI / 4;
+          rGroup.add(ring);
+          rGroup.position.set(pos.x, 0, pos.z);
+          entitiesGroup.add(rGroup);
+          const nodeObj = {
+            roomIndex: room.index,
+            kind: "RADAR_DISH",
+            stepOrder: 2,
+            x: pos.x, z: pos.z,
+            done: false,
+            holdTime: 0,
+            mesh: rGroup,
+            dish,
+            ring
+          };
+          game.missionNodes.push(nodeObj);
+          nodeObj.sym = registerWorldSymbol(
+            pos.x, 3.6, pos.z,
+            "🛰️레이더안테나[F]",
+            "bg-cyan-950/90 border-cyan-400 text-cyan-200",
+            nodeObj, room.index
+          );
+        } else {
+          // 3단계: 📶 고출력 위성 송신 비콘 타워 (Satellite Uplink Beacon)
+          const tower = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.3, 0.9, 3.4, 10),
+            new THREE.MeshStandardMaterial({ color: 0x1e3a8a, emissive: 0x1d4ed8, emissiveIntensity: 0.7 })
+          );
+          tower.position.y = 1.7;
+          rGroup.add(tower);
+          const halo = new THREE.Mesh(
+            new THREE.TorusGeometry(1.4, 0.14, 8, 24),
+            new THREE.MeshBasicMaterial({ color: 0x60a5fa })
+          );
+          halo.rotation.x = Math.PI / 2;
+          halo.position.y = 3.4;
+          rGroup.add(halo);
+          rGroup.position.set(pos.x, 0, pos.z);
+          entitiesGroup.add(rGroup);
+          const nodeObj = {
+            roomIndex: room.index,
+            kind: "RADAR_BEACON",
+            stepOrder: 3,
+            x: pos.x, z: pos.z,
+            done: false,
+            holdTime: 0,
+            mesh: rGroup,
+            tower,
+            halo
+          };
+          game.missionNodes.push(nodeObj);
+          nodeObj.sym = registerWorldSymbol(
+            pos.x, 4.0, pos.z,
+            "📶위성주파수전송[F]",
+            "bg-blue-950/90 border-blue-400 text-blue-200",
+            nodeObj, room.index
+          );
+        }
+      } else if (room.condType === "DECON_PURGE") {
+        // ☣️ 오염 격리구역 에어로졸 정화 밸브 폐쇄
+        const vGroup = new THREE.Group();
+        const baseBox = new THREE.Mesh(
+          new THREE.BoxGeometry(2.0, 1.4, 2.0),
+          new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.7, roughness: 0.3 })
+        );
+        baseBox.position.y = 0.7;
+        vGroup.add(baseBox);
+        const pipe = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.45, 0.45, 1.8, 12),
+          new THREE.MeshStandardMaterial({ color: 0x059669, metalness: 0.6, roughness: 0.3 })
+        );
+        pipe.position.y = 1.8;
+        vGroup.add(pipe);
+        const wheel = new THREE.Mesh(
+          new THREE.TorusGeometry(0.85, 0.12, 8, 20),
+          new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xd97706, emissiveIntensity: 0.8 })
+        );
+        wheel.rotation.x = Math.PI / 2;
+        wheel.position.y = 2.65;
+        vGroup.add(wheel);
+        vGroup.position.set(pos.x, 0, pos.z);
+        entitiesGroup.add(vGroup);
+        const deconNode = {
+          roomIndex: room.index,
+          kind: "DECON_VALVE",
+          stepOrder,
+          x: pos.x, z: pos.z,
+          done: false,
+          holdTime: 0,
+          mesh: vGroup,
+          wheel,
+          pipe
+        };
+        game.missionNodes.push(deconNode);
+        deconNode.sym = registerWorldSymbol(
+          pos.x, 3.3, pos.z,
+          `☣️정화밸브#${stepOrder}[F]`,
+          "bg-emerald-950/90 border-emerald-400 text-emerald-200",
+          deconNode, room.index
+        );
       } else if (room.condType === "HIVE_NODES" || room.condType === "EXTERMINATE") {
         // 생체 신경절 또는 군락 증폭기가 랜덤 위치에서 솟아오름 -> 사격으로 찾아 파괴!
         const hGroup = new THREE.Group();
