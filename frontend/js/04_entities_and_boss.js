@@ -369,6 +369,7 @@
           specActiveTimer: 0,
           specCooldown: 0,
           tempShield: 0,
+          juggernautShieldTimer: 10.0,
           postClearGraceTimer: 0,
           cloakActive: false,
           overclockActive: false,
@@ -385,7 +386,8 @@
             modules: {
               magnet: { level: 0, maxLevel: 4 },
               medi: { level: 0, maxLevel: 1, cooldown: 0, maxCooldown: 90.0, sectorRevivesUsed: 0 },
-              interceptor: { level: 0, maxLevel: 4, cooldown: 0 }
+              interceptor: { level: 0, maxLevel: 4, cooldown: 0 },
+              supply: { level: 0, maxLevel: 3 }
             },
             state: "IDLE"
           },

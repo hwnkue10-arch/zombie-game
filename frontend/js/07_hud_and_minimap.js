@@ -174,20 +174,14 @@
         }
       }
 
-      // [다목적 전술 드론 카드 HUD 업데이트]
+      // [다목적 전술 드론 카드 HUD 업데이트 - 구매 전에는 숨김!]
       const droneCard = document.getElementById("hud-drone-card");
       if (droneCard) {
         if (!me.drone || !me.drone.unlocked) {
-          const droneSummEl = document.getElementById("hud-drone-summary");
-          if (droneSummEl) {
-            droneSummEl.textContent = "🔒 무기고에서 드론 프레임 해금 필요";
-          }
-          const droneStatEl = document.getElementById("hud-drone-status");
-          if (droneStatEl) {
-            droneStatEl.textContent = "미보유 (무기고 600 BP)";
-            droneStatEl.className = "text-[10px] font-mono-code text-slate-500";
-          }
-        } else if (me.drone.modules) {
+          droneCard.classList.add("hidden");
+        } else {
+          droneCard.classList.remove("hidden");
+          if (me.drone.modules) {
           const magLv = (me.drone.modules.magnet && me.drone.modules.magnet.level) || 0;
           const magRad = [0, 4, 6, 8, 10][magLv] || 0;
           const intLv = (me.drone.modules.interceptor && me.drone.modules.interceptor.level) || 0;
@@ -222,6 +216,7 @@
           }
         }
       }
+    }
 
       const resCount = getResonanceCount(me);
       const pure15Count = me.inventory.filter(inv => inv.unlocked && !inv.tier1Special && inv.totalLv >= 15).length;
@@ -317,9 +312,9 @@
           const envIcons = {
             NORMAL: "",
             BLACKOUT: curRoom.envCleared ? `💡전력 ${Math.ceil(curRoom.blackoutRestoredTimer || 0)}s` : "🌑암전",
-            TOXIC_FOG: curRoom.envCleared ? "💨환기완료" : "☣️독안개",
+            TOXIC_FOG: curRoom.envCleared ? "💨환기완료" : (me.inSafeZone ? "🛡️정화안전구역" : "☣️독안개"),
             BLOOD_RAIN: "🩸BPx1.35",
-            CRYO_LEAK: "❄️냉각"
+            CRYO_LEAK: curRoom.envCleared ? "💨정화완료" : (me.inSafeZone ? "🛡️정화안전구역" : "❄️냉각")
           };
           envEl.textContent = envIcons[curRoom.envType] || "";
         }
@@ -528,6 +523,21 @@
           else if (exitK === "E") ctx.fillRect(rx - rw / 2, ry - rd / 2, rw * p, rd);
           else ctx.fillRect(rx + rw / 2 - rw * p, ry - rd / 2, rw * p, rd);
         }
+
+        // 정화 안전지대(Safe Zone) 미니맵 표시
+        if (r.safeZones && r.safeZones.length > 0) {
+          r.safeZones.forEach(sz => {
+            const szx = cx + (sz.x - refX) * scale;
+            const szy = cy + (sz.z - refZ) * scale;
+            ctx.fillStyle = "rgba(56, 189, 248, 0.25)";
+            ctx.strokeStyle = "#38bdf8";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(szx, szy, sz.radius * scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          });
+        }
       });
 
       if (game.spawnHoles) {
@@ -552,11 +562,33 @@
         ctx.fillRect(cx + (v.x - refX) * scale - 3, cy + (v.z - refZ) * scale - 3, 6, 6);
       });
 
-      ctx.fillStyle = "#38bdf8";
+      // 미션 목표 & 후방격벽 콘솔 미니맵 렌더링
       game.missionNodes.forEach(n => {
         const r = game.rooms[n.roomIndex];
         if (!n.done && r && r.unlocked) {
-          ctx.fillRect(cx + (n.x - refX) * scale - 2.5, cy + (n.z - refZ) * scale - 2.5, 5, 5);
+          const nx = cx + (n.x - refX) * scale;
+          const ny = cy + (n.z - refZ) * scale;
+          if (n.kind === "BULKHEAD_CONSOLE") {
+            ctx.fillStyle = "#f59e0b";
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1;
+            ctx.fillRect(nx - 3, ny - 3, 6, 6);
+            ctx.strokeRect(nx - 3, ny - 3, 6, 6);
+          } else {
+            const pulse = 1.0 + Math.sin(game.elapsedTime * 6.0) * 0.25;
+            const sz = 4.2 * pulse;
+            ctx.fillStyle = (n.kind === "GENERATOR" ? "#34d399" : (n.kind === "CHEM_PART" ? "#fbbf24" : "#38bdf8"));
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(nx, ny - sz);
+            ctx.lineTo(nx + sz, ny);
+            ctx.lineTo(nx, ny + sz);
+            ctx.lineTo(nx - sz, ny);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
         }
       });
       ctx.fillStyle = "#fb7185";

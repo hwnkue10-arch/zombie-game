@@ -326,6 +326,9 @@
           willHaveExtraBreach,
           maxExtraHoles,
           extraHolesOpened: 0,
+          safeZones: [],
+          bulkheadConsole: null,
+          bulkheadLocked: false,
           gasWaveActive: false,
           gasWaveProgress: 0,
           gasMesh: null,
@@ -605,6 +608,67 @@
       const armZ = room.wz + armSide.z + armSide.inNormZ * 1.4;
       const armRotY = armSide.dir === "N" ? 0 : (armSide.dir === "S" ? Math.PI : (armSide.dir === "W" ? Math.PI / 2 : -Math.PI / 2));
       room.armoryFixedPos = { x: armX, z: armZ, rotY: armRotY, inNormX: armSide.inNormX, inNormZ: armSide.inNormZ };
+
+      // [기본 안전지대] 독안개/냉각 가스 섹터: 무기고 주변에 상시 대기 정화 돔(반경 9.5m) 기본 생성
+      if (room.envType === "TOXIC_FOG" || room.envType === "CRYO_LEAK") {
+        addRoomSafeZone(room, armX + armSide.inNormX * 3.5, armZ + armSide.inNormZ * 3.5, 9.5, "무기고 정화구역");
+      }
+
+      // [수동 격벽 폐쇄 시스템] 2섹터 이상: 새로 도착한 방 입구 안쪽에 [F] 수동 후방 격벽 폐쇄 콘솔 배치
+      if (room.index >= 1) {
+        const inDoorSide = sides.find(sd => room.connectedDirs[sd.dir] === room.index - 1);
+        if (inDoorSide) {
+          const cX = room.wx + inDoorSide.x + inDoorSide.inNormX * 4.2;
+          const cZ = room.wz + inDoorSide.z + inDoorSide.inNormZ * 4.2;
+          const cGroup = new THREE.Group();
+          const basePed = new THREE.Mesh(
+            new THREE.BoxGeometry(2.0, 1.4, 1.4),
+            new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 })
+          );
+          basePed.position.y = 0.7;
+          cGroup.add(basePed);
+
+          const screen = new THREE.Mesh(
+            new THREE.BoxGeometry(1.5, 0.8, 0.18),
+            new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x0369a1, emissiveIntensity: 0.85 })
+          );
+          screen.position.set(0, 1.45, -0.2);
+          screen.rotation.x = -Math.PI / 6;
+          cGroup.add(screen);
+
+          const lever = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.09, 0.09, 0.75, 8),
+            new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xb91c1c, emissiveIntensity: 0.8 })
+          );
+          lever.position.set(0.45, 1.5, 0.1);
+          lever.rotation.z = Math.PI / 4;
+          cGroup.add(lever);
+
+          cGroup.position.set(cX, 0, cZ);
+          entitiesGroup.add(cGroup);
+
+          const bConsole = {
+            kind: "BULKHEAD_CONSOLE",
+            roomIndex: room.index,
+            x: cX,
+            z: cZ,
+            doorSide: inDoorSide,
+            holdTime: 0,
+            done: false,
+            mesh: cGroup,
+            lever
+          };
+          room.bulkheadConsole = bConsole;
+          game.missionNodes.push(bConsole);
+          bConsole.sym = registerWorldSymbol(
+            cX, 3.2, cZ,
+            "🔒후방격벽폐쇄[F]",
+            "bg-amber-950/90 border-amber-400 text-amber-200 font-extrabold",
+            bConsole,
+            room.index
+          );
+        }
+      }
 
       if (!room.isBossRoom) {
         const subWallMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.75 });
@@ -1103,20 +1167,70 @@
       return `${dirStr} ${dist}m`;
     }
 
+    // [정화 안전지대 생성 함수]
+    function addRoomSafeZone(room, x, z, radius, name) {
+      if (!room) return null;
+      if (!room.safeZones) room.safeZones = [];
+      const isFog = (room.envType === "TOXIC_FOG");
+      const group = new THREE.Group();
+
+      const ringGeo = new THREE.RingGeometry(radius - 0.45, radius, 36);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: isFog ? 0x84cc16 : 0x38bdf8,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.08;
+      group.add(ring);
+
+      const fillGeo = new THREE.CircleGeometry(radius - 0.45, 36);
+      const fillMat = new THREE.MeshBasicMaterial({
+        color: isFog ? 0x65a30d : 0x0284c7,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.14
+      });
+      const fill = new THREE.Mesh(fillGeo, fillMat);
+      fill.rotation.x = -Math.PI / 2;
+      fill.position.y = 0.06;
+      group.add(fill);
+
+      group.position.set(x, 0, z);
+      worldGroup.add(group);
+
+      const zone = { x, z, radius, name, group, ring, fill, isPickup: false };
+      room.safeZones.push(zone);
+
+      registerWorldSymbol(
+        x, 2.8, z,
+        isFog ? "🛡️환기정화구역" : "🛡️난방안전구역",
+        isFog ? "bg-lime-950/90 border-lime-400 text-lime-200" : "bg-sky-950/90 border-sky-400 text-sky-200",
+        zone, room.index
+      );
+      return zone;
+    }
+
     // 웨이브 방어 성공 시 해당 단계(stepOrder)의 미션 목표를 섹터 내 랜덤 위치에 출현시키는 함수!
     function spawnRandomMissionStepForRoom(room, stepOrder, forcePos) {
       if (!room || room.isBossRoom || room.hasMidBoss) return;
       const pos = forcePos ? { x: forcePos.x, z: forcePos.z } : findRandomSafeMissionPos(room);
       room.activeMissionTargetPos = pos;
 
-      // 출현 위치에 하늘로 솟구치는 신호 비콘 이펙트 생성
-      const beaconMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.35, 1.4, 16, 12),
-        new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.55 })
-      );
-      beaconMesh.position.set(pos.x, 8.0, pos.z);
+      // [상시 가시성 비콘] 출현 위치에 하늘로 솟구치는 상시 신호 기둥(비콘 빔) 생성 (미션 완료 시까지 영구 점등!)
+      const beaconColor = (room.condType === "GENERATORS" ? 0x10b981 : (room.condType === "THERMITE" ? 0xf59e0b : 0x38bdf8));
+      const beaconGeo = new THREE.CylinderGeometry(0.35, 1.4, 32, 16);
+      const beaconMat = new THREE.MeshBasicMaterial({
+        color: beaconColor,
+        transparent: true,
+        opacity: 0.52,
+        side: THREE.DoubleSide
+      });
+      const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+      beaconMesh.position.set(pos.x, 16.0, pos.z);
       effectsGroup.add(beaconMesh);
-      game.particles.push({ mesh: beaconMesh, life: 2.2, maxLife: 2.2 });
 
       if (room.condType === "THERMITE") {
         const isTable = (stepOrder === 3);
@@ -1170,7 +1284,8 @@
           holo,
           coreCone,
           tank,
-          cap
+          cap,
+          beaconMesh
         };
         game.missionNodes.push(nodeObj);
         nodeObj.sym = registerWorldSymbol(
@@ -1214,7 +1329,8 @@
           mesh: gGroup,
           turbine,
           coilRing,
-          coreMat: turbine.material
+          coreMat: turbine.material,
+          beaconMesh
         };
         game.missionNodes.push(genNode);
         genNode.sym = registerWorldSymbol(

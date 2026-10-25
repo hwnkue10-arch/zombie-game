@@ -266,7 +266,7 @@
 
       <!-- Tactical Drone & Class Specialization Skill Dock -->
       <div class="flex items-center justify-between w-full max-w-3xl px-1 pointer-events-auto gap-2">
-        <div id="hud-drone-card" class="hud-glass px-3 py-1.5 rounded-xl border border-cyan-500/40 flex items-center gap-2.5 shadow-lg">
+        <div id="hud-drone-card" class="hidden hud-glass px-3 py-1.5 rounded-xl border border-cyan-500/40 flex items-center gap-2.5 shadow-lg">
           <span class="text-base">🛸</span>
           <div class="flex flex-col text-left">
             <div class="flex items-center gap-1.5">
@@ -276,6 +276,14 @@
             <span id="hud-drone-status" class="text-[10px] font-mono-code text-cyan-400">대기 중</span>
           </div>
         </div>
+
+        <button id="btn-open-spec-modal" type="button" class="hidden hud-glass px-3 py-1.5 rounded-xl border border-amber-400/80 bg-amber-950/60 hover:bg-amber-900/80 flex items-center gap-2 shadow-lg animate-pulse cursor-pointer">
+          <span class="text-base">🎖️</span>
+          <div class="flex flex-col text-left">
+            <span class="text-xs font-black text-amber-300">작전 특성화 해금!</span>
+            <span class="text-[10px] font-mono-code text-amber-200">[T] 키로 선택</span>
+          </div>
+        </button>
 
         <div id="hud-spec-card" class="hidden hud-glass px-3 py-1.5 rounded-xl border border-amber-500/50 flex items-center gap-2.5 shadow-lg">
           <span id="hud-spec-icon" class="text-xl">🛡️</span>
@@ -600,12 +608,17 @@
   <!-- ==================== CLASS SPECIALIZATION MODAL (Sector 2 Clear) ==================== -->
   <div id="spec-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md pointer-events-auto">
     <div class="hud-glass rounded-3xl max-w-4xl w-full p-5 sm:p-7 border border-amber-500/50 shadow-2xl flex flex-col gap-4 text-left">
-      <div class="flex flex-col gap-1 border-b border-slate-800 pb-3">
-        <div class="flex items-center gap-2.5">
-          <span class="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono-code font-black">SECTOR 2 CLEARED</span>
-          <h2 class="text-xl sm:text-2xl font-black text-white">🎖️ 작전 특성화 선택 (Class Specialization)</h2>
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex flex-col gap-1">
+          <div class="flex items-center gap-2.5">
+            <span class="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono-code font-black">SECTOR 2 CLEARED</span>
+            <h2 class="text-xl sm:text-2xl font-black text-white">🎖️ 작전 특성화 선택 (Class Specialization)</h2>
+          </div>
+          <p class="text-xs text-slate-300 mt-1">스쿼드의 전술 역할을 극대화할 특성화를 1개 선택하십시오. [C] 액티브 스킬과 강력한 패시브가 영구 부여됩니다.</p>
         </div>
-        <p class="text-xs text-slate-300 mt-1">스쿼드의 전술 역할을 극대화할 특성화를 1개 선택하십시오. [C] 액티브 스킬과 강력한 패시브가 영구 부여됩니다.</p>
+        <button id="btn-close-spec-modal" type="button" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-600 transition shrink-0 cursor-pointer">
+          닫기 / 나중에 선택 [ESC] ✕
+        </button>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -620,7 +633,7 @@
               <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-amber-950 border border-amber-500/40 text-amber-200">탱커 & 돌파</span>
             </div>
             <div class="mt-2.5 space-y-1 text-xs text-slate-300">
-              <div class="flex items-start gap-1.5"><span class="text-amber-400 font-bold">패시브:</span> 받는 피해 -10% 경감, 일반 감염체 몸싸움 관통 통과 (포위 갇힘 방지), 최대 HP +35</div>
+              <div class="flex items-start gap-1.5"><span class="text-amber-400 font-bold">패시브:</span> 상시 피해 -15% 경감, 일반 감염체 밀치며 돌파(포위 저지), 10초마다 35 HP 결사 재생 방어막 자동 충전, 최대 HP +35</div>
               <div class="flex items-start gap-1.5"><span class="text-amber-400 font-bold">[C] 액티브:</span> <b class="text-white">『전술 도발 & 결사 요새』</b> (쿨 40초 / 6초 지속)</div>
               <div class="text-[11px] text-slate-400 pl-3">· 18m 반경 내 모든 일반 감염체 어그로 강제 집중<br>· +80 임시 쉴드 즉시 획득 & 발동 중 받는 피해 추가 -40% 경감 (총 -50%)</div>
             </div>

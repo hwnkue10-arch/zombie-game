@@ -1160,12 +1160,13 @@
     document.getElementById("btn-buy-medkit").addEventListener("click", () => {
       const me = game.players[mySlotIndex];
       const toastEl = document.getElementById("upg-roll-toast");
-      if (!me || !isPlayerNearArmory(me)) {
-        if (toastEl) toastEl.textContent = "⛔ 무기고 반경 안에서만 구급키트 구매가 가능합니다!";
+      const hasSupplyDrone = me && me.drone && me.drone.unlocked && me.drone.modules && me.drone.modules.supply && (me.drone.modules.supply.level || 0) >= 1;
+      if (!me || (!isPlayerNearArmory(me) && !hasSupplyDrone)) {
+        if (toastEl) toastEl.textContent = "⛔ 무기고 반경 안이거나 [📦원격보급드론]이 있어야 구급키트 구매가 가능합니다!";
         return;
       }
       const maxM = getPlayerMaxMedkits(me);
-      const cost = getSectorSupplyCost(110);
+      const cost = getSectorSupplyCost(160);
       if (me.medkits >= maxM) {
         if (toastEl) toastEl.textContent = `ℹ️ 구급키트 소지 한도(${me.medkits}/${maxM})입니다! [구급상자 파우치 확장]으로 늘릴 수 있습니다.`;
         return;
@@ -1175,18 +1176,22 @@
         me.medkits++;
         triggerUpgradeHighlight("supply", { supplyKey: "btn-buy-medkit" });
         SoundFX.play("pickup");
+        if (hasSupplyDrone && !isPlayerNearArmory(me) && toastEl) {
+          toastEl.textContent = `🛸 [드론 원격 보급] 구급키트가 공중 투하되었습니다! (-${cost.toLocaleString()} BP)`;
+        }
         renderUpgradeModal();
       }
     });
     document.getElementById("btn-buy-stim").addEventListener("click", () => {
       const me = game.players[mySlotIndex];
       const toastEl = document.getElementById("upg-roll-toast");
-      if (!me || !isPlayerNearArmory(me)) {
-        if (toastEl) toastEl.textContent = "⛔ 무기고 반경 안에서만 스팀팩 구매가 가능합니다!";
+      const hasSupplyDrone = me && me.drone && me.drone.unlocked && me.drone.modules && me.drone.modules.supply && (me.drone.modules.supply.level || 0) >= 1;
+      if (!me || (!isPlayerNearArmory(me) && !hasSupplyDrone)) {
+        if (toastEl) toastEl.textContent = "⛔ 무기고 반경 안이거나 [📦원격보급드론]이 있어야 스팀팩 구매가 가능합니다!";
         return;
       }
       const maxS = getPlayerMaxStims(me);
-      const cost = getSectorSupplyCost(90);
+      const cost = getSectorSupplyCost(140);
       if (me.stims >= maxS) {
         if (toastEl) toastEl.textContent = `ℹ️ 스팀팩 소지 한도(${me.stims}/${maxS})입니다! [스팀팩 전술 벨트 확장]으로 늘릴 수 있습니다.`;
         return;
@@ -1196,6 +1201,9 @@
         me.stims++;
         triggerUpgradeHighlight("supply", { supplyKey: "btn-buy-stim" });
         SoundFX.play("pickup");
+        if (hasSupplyDrone && !isPlayerNearArmory(me) && toastEl) {
+          toastEl.textContent = `🛸 [드론 원격 보급] 스팀팩이 공중 투하되었습니다! (-${cost.toLocaleString()} BP)`;
+        }
         renderUpgradeModal();
       }
     });

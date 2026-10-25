@@ -135,8 +135,8 @@
       },
       {
         id: 1, key: "2", name: "컴뱃 산탄총", eng: "Combat Shotgun",
-        ammoType: "SHELL", infinite: false, startAmmo: 36, maxAmmo: 96, packAmmo: 24, packCost: 75, baseCost: 52,
-        reqParts: 2, unlockBpCost: 600,
+        ammoType: "SHELL", infinite: false, startAmmo: 36, maxAmmo: 96, packAmmo: 24, packCost: 110, baseCost: 75,
+        reqParts: 2, unlockBpCost: 900,
         fireRate: 0.52, damage: 30, speed: 36, spread: 0.28, pellets: 8,
         stun: 0.58, knockback: 2.7, weakMult: 1.15,
         color: 0xf97316, sound: "shotgun", unlockedAtStart: false,
@@ -146,8 +146,8 @@
       },
       {
         id: 2, key: "3", name: "기관단총 UZI", eng: "Micro UZI",
-        ammoType: "SMG", infinite: false, startAmmo: 220, maxAmmo: 560, packAmmo: 130, packCost: 75, baseCost: 52,
-        reqParts: 2, unlockBpCost: 600,
+        ammoType: "SMG", infinite: false, startAmmo: 220, maxAmmo: 560, packAmmo: 130, packCost: 110, baseCost: 75,
+        reqParts: 2, unlockBpCost: 1000,
         fireRate: 0.066, damage: 38, speed: 44, spread: 0.08, pellets: 1,
         stun: 0.20, knockback: 0.40, weakMult: 1.20,
         runAndGun: true, ammoRefillBonus: 1.5,
@@ -158,8 +158,8 @@
       },
       {
         id: 3, key: "4", name: "중화기 돌격소총", eng: "Heavy Rifle",
-        ammoType: "RIFLE", infinite: false, startAmmo: 120, maxAmmo: 320, packAmmo: 70, packCost: 90, baseCost: 60,
-        reqParts: 3, unlockBpCost: 1800,
+        ammoType: "RIFLE", infinite: false, startAmmo: 120, maxAmmo: 320, packAmmo: 70, packCost: 130, baseCost: 85,
+        reqParts: 3, unlockBpCost: 2400,
         fireRate: 0.105, damage: 55, speed: 50, spread: 0.025, pellets: 1,
         stun: 0.38, knockback: 1.15, weakMult: 1.65,
         pierceBase: 1, heavyImpact: true,
@@ -170,8 +170,8 @@
       },
       {
         id: 4, key: "5", name: "유탄발사기", eng: "Grenade Launcher",
-        ammoType: "GRENADE", infinite: false, startAmmo: 14, maxAmmo: 40, packAmmo: 8, packCost: 100, baseCost: 68,
-        reqParts: 3, unlockBpCost: 2400,
+        ammoType: "GRENADE", infinite: false, startAmmo: 14, maxAmmo: 40, packAmmo: 8, packCost: 150, baseCost: 95,
+        reqParts: 3, unlockBpCost: 3200,
         fireRate: 0.70, damage: 195, speed: 26, spread: 0.04, pellets: 1,
         stun: 0.90, knockback: 3.5, explosiveRadius: 5.8, weakMult: 1.25,
         color: 0xf43f5e, sound: "shotgun", unlockedAtStart: false,
@@ -181,8 +181,8 @@
       },
       {
         id: 5, key: "6", name: "플라즈마 레일건", eng: "Plasma Railgun",
-        ammoType: "CELL", infinite: false, startAmmo: 10, maxAmmo: 28, packAmmo: 6, packCost: 110, baseCost: 75,
-        reqParts: 4, unlockBpCost: 4500,
+        ammoType: "CELL", infinite: false, startAmmo: 10, maxAmmo: 28, packAmmo: 6, packCost: 160, baseCost: 105,
+        reqParts: 4, unlockBpCost: 5500,
         fireRate: 0.78, damage: 295, speed: 75, spread: 0.0, pellets: 1,
         stun: 1.15, knockback: 2.3, piercing: true, weakMult: 1.85,
         color: 0x22d3ee, sound: "railgun", unlockedAtStart: false,
@@ -332,8 +332,8 @@
         name: "생체 나노 심장",
         desc: "최대 체력 +25 증가 (기본 100 ➔ 최대 225 HP)",
         maxLv: 5,
-        reqRooms: [0, 2, 4, 6, 8],
-        costs: [1000, 3800, 15000, 45000, 110000],
+        reqRooms: [0, 1, 2, 4, 6],
+        costs: [1200, 3600, 11000, 32000, 85000],
         partsCosts: [0, 0, 1, 1, 2]
       },
       armorPlating: {
@@ -343,9 +343,9 @@
         name: "케블라 방탄 외골격",
         desc: "받는 모든 피해 -6% 영구 경감 (최대 -30% 방어막)",
         maxLv: 5,
-        reqRooms: [1, 3, 5, 7, 9],
-        costs: [1500, 5200, 20000, 58000, 135000],
-        partsCosts: [0, 0, 1, 2, 2]
+        reqRooms: [0, 1, 2, 4, 6],
+        costs: [1500, 4200, 14000, 38000, 95000],
+        partsCosts: [0, 0, 1, 1, 2]
       },
       medkitCap: {
         key: "medkitCap",
@@ -354,8 +354,8 @@
         name: "구급상자 파우치",
         desc: "구급키트[Z] 최대 소지 +1 (최대 4개 · 즉시 +1 보충)",
         maxLv: 3,
-        reqRooms: [1, 4, 7],
-        costs: [2200, 12000, 45000],
+        reqRooms: [0, 2, 4],
+        costs: [1800, 7500, 28000],
         partsCosts: [0, 1, 1]
       },
       stimCap: {
@@ -365,8 +365,8 @@
         name: "스팀팩 벨트",
         desc: "스팀팩[X] 최대 소지 +1 (최대 4개 · 즉시 +1 보충)",
         maxLv: 3,
-        reqRooms: [1, 4, 7],
-        costs: [2500, 14000, 52000],
+        reqRooms: [0, 2, 4],
+        costs: [2000, 8500, 32000],
         partsCosts: [0, 1, 1]
       },
       syringe: {
@@ -388,8 +388,8 @@
         name: "최대 스태미너",
         desc: "최대 스태미너 +25 증가 (기본 50 ➔ 최대 150 ST)",
         maxLv: 4,
-        reqRooms: [0, 2, 4, 6],
-        costs: [900, 3800, 13500, 38000],
+        reqRooms: [0, 1, 3, 5],
+        costs: [1000, 3200, 11000, 32000],
         partsCosts: [0, 0, 1, 1]
       },
       staminaRegen: {
@@ -399,8 +399,8 @@
         name: "스태미너 회복력",
         desc: "초당 스태미너 회복 +6.5/s (기본 10/s ➔ 최대 36/s)",
         maxLv: 4,
-        reqRooms: [0, 2, 4, 6],
-        costs: [900, 3800, 13500, 38000],
+        reqRooms: [0, 1, 3, 5],
+        costs: [1000, 3200, 11000, 32000],
         partsCosts: [0, 0, 1, 1]
       },
       dashCd: {
@@ -410,8 +410,8 @@
         name: "점프 스태미너 절감",
         desc: "[Space] 점프 소모량 -5 ST 감소 (35 ST ➔ 15 ST)",
         maxLv: 4,
-        reqRooms: [0, 2, 5, 7],
-        costs: [1200, 4800, 18000, 48000],
+        reqRooms: [0, 1, 3, 5],
+        costs: [1200, 3800, 14000, 42000],
         partsCosts: [0, 0, 1, 1]
       },
       bashCd: {
@@ -421,8 +421,8 @@
         name: "기절 밀치기 강화",
         desc: "[V] 기절기 쿨타임 -0.4초 단축 & 충격 반경 증가",
         maxLv: 4,
-        reqRooms: [0, 2, 5, 7],
-        costs: [1200, 4800, 18000, 48000],
+        reqRooms: [0, 1, 3, 5],
+        costs: [1200, 3800, 14000, 42000],
         partsCosts: [0, 0, 1, 1]
       },
       sprintSpeed: {
@@ -430,17 +430,17 @@
         category: "MOBILITY",
         icon: "👟",
         name: "기동 전술화 (기동력 증강)",
-        desc: "기본 이동속도 및 Shift 질주 속도 +7% 증가 (최대 +21% 기동력)",
-        maxLv: 3,
-        reqRooms: [0, 2, 5],
-        costs: [1500, 6000, 22000],
-        partsCosts: [0, 1, 1]
+        desc: "기본 이동속도 및 Shift 질주 속도 +5% 증가 (최대 +25% 기동력)",
+        maxLv: 5,
+        reqRooms: [0, 1, 2, 4, 6],
+        costs: [1200, 3500, 9500, 25000, 65000],
+        partsCosts: [0, 0, 1, 1, 2]
       }
     };
 
     function getPlayerMoveSpeedBonus(player) {
       const upg = (player && player.suitUpgrades && player.suitUpgrades.sprintSpeed) || 0;
-      return upg * 0.07;
+      return upg * 0.05;
     }
 
     function getPlayerMaxHp(player) {

@@ -400,7 +400,7 @@
       if (!inv || !inv.unlocked) return;
       const statDefs = getWeaponStatDefs(wIdx);
       const secCap = getSectorMaxStatLv(); // 현재 섹터 진행도 (1~10)
-      const maxTotalHere = secCap * 5; // 한 섹터당 무기 총 레벨 상한 +5Lv씩 해금 (S1=5, S2=10, ..., S10=50)
+      const maxTotalHere = Math.min(50, secCap * 8 + 2); // 섹터당 총 레벨 상한 대폭 완화 (S1=10, S2=18, S3=26, ..., S6+=50)
 
       if (inv.totalLv >= maxTotalHere) {
         if (toastEl) {
@@ -763,8 +763,9 @@
 
     function buyAllAmmo(player) {
       const toastEl = document.getElementById("upg-roll-toast");
-      if (!isPlayerNearArmory(player)) {
-        if (toastEl) toastEl.textContent = "⛔ 탄약 일괄 보급은 [🔧상시무기고] 반경 안에서만 가능합니다!";
+      const hasSupplyDrone = player.drone && player.drone.unlocked && player.drone.modules && player.drone.modules.supply && (player.drone.modules.supply.level || 0) >= 1;
+      if (!isPlayerNearArmory(player) && !hasSupplyDrone) {
+        if (toastEl) toastEl.textContent = "⛔ 탄약 일괄 보급은 [🔧상시무기고] 반경 안이거나 [📦원격보급드론]이 필요합니다!";
         return;
       }
       // 해금된 총기(1~5), 바리케이드(6), 폭약통(7) 중 탄약 보충이 필요한 항목이 있는지 확인
@@ -776,7 +777,7 @@
         if (toastEl) toastEl.textContent = "ℹ️ 모든 총기 및 설치물의 탄약이 이미 최대 적재량에 도달했습니다.";
         return;
       }
-      const scaledCost = getSectorSupplyCost(220);
+      const scaledCost = getSectorSupplyCost(320);
       if (game.bioPoints < scaledCost) {
         if (toastEl) toastEl.textContent = `⚠️ BP가 부족합니다! (전 탄약 일괄 보급: ${scaledCost.toLocaleString()} BP)`;
         return;
@@ -822,7 +823,7 @@
 
       const nearArmory = isPlayerNearArmory(me);
       const secCap = getSectorMaxStatLv();
-      const maxTotalHere = secCap * 5;
+      const maxTotalHere = Math.min(50, secCap * 8 + 2);
 
       const armoryBanner = document.getElementById("upg-armory-status");
       if (armoryBanner) {
@@ -859,30 +860,33 @@
         `무기공명: ${resCount}개 · 순수시너지: ${pure15Count}개 (전체화력 +${resPct}%)`;
 
       // 상단 6개 보급/합성/코어 버튼 가격 및 활성(컬러)/비활성(회색) 상태 동기화
-      const allAmmoCost = getSectorSupplyCost(220);
+      const hasSupplyDrone = me.drone && me.drone.unlocked && me.drone.modules && me.drone.modules.supply && (me.drone.modules.supply.level || 0) >= 1;
+      const canOrderConsumable = nearArmory || hasSupplyDrone;
+
+      const allAmmoCost = getSectorSupplyCost(320);
       const anyNeedsAmmo = me.inventory.some((inv, idx) => inv.unlocked && !WEAPONS[idx].infinite && inv.ammo < getWeaponMaxAmmo(me, idx));
       const buyAllAmmoLbl = document.getElementById("upg-buy-all-ammo-label");
       if (buyAllAmmoLbl) {
         buyAllAmmoLbl.textContent = anyNeedsAmmo ? `${allAmmoCost.toLocaleString()} BP (전 총기·설치물)` : "모든 탄약 만석 (100%)";
       }
-      setSupplyBtnVisualState("btn-buy-all-ammo", nearArmory && anyNeedsAmmo && game.bioPoints >= allAmmoCost, "bg-slate-900 hover:bg-emerald-950/80 border border-emerald-400/60");
+      setSupplyBtnVisualState("btn-buy-all-ammo", canOrderConsumable && anyNeedsAmmo && game.bioPoints >= allAmmoCost, "bg-slate-900 hover:bg-emerald-950/80 border border-emerald-400/60");
 
-      const medCost = getSectorSupplyCost(110);
+      const medCost = getSectorSupplyCost(160);
       const maxMed = getPlayerMaxMedkits(me);
       const hasSyr = isPlayerSyringeUpgraded(me);
       const medTitle = document.getElementById("upg-buy-medkit-title");
       if (medTitle) medTitle.textContent = `${hasSyr ? "💉나노주사기" : "🩹구급키트"} (${me.medkits}/${maxMed})`;
       const btnMedPrice = document.getElementById("upg-buy-medkit-label");
       if (btnMedPrice) btnMedPrice.textContent = me.medkits >= maxMed ? `소지 상한 (${me.medkits}/${maxMed})` : `${medCost.toLocaleString()} BP`;
-      setSupplyBtnVisualState("btn-buy-medkit", nearArmory && me.medkits < maxMed && game.bioPoints >= medCost, "bg-slate-900 hover:bg-teal-950/80 border border-teal-400/60");
+      setSupplyBtnVisualState("btn-buy-medkit", canOrderConsumable && me.medkits < maxMed && game.bioPoints >= medCost, "bg-slate-900 hover:bg-teal-950/80 border border-teal-400/60");
 
-      const stimCost = getSectorSupplyCost(90);
+      const stimCost = getSectorSupplyCost(140);
       const maxStm = getPlayerMaxStims(me);
       const stimTitle = document.getElementById("upg-buy-stim-title");
       if (stimTitle) stimTitle.textContent = `💉스팀팩 (${me.stims}/${maxStm})`;
       const btnStimPrice = document.getElementById("upg-buy-stim-label");
       if (btnStimPrice) btnStimPrice.textContent = me.stims >= maxStm ? `소지 상한 (${me.stims}/${maxStm})` : `${stimCost.toLocaleString()} BP`;
-      setSupplyBtnVisualState("btn-buy-stim", nearArmory && me.stims < maxStm && game.bioPoints >= stimCost, "bg-slate-900 hover:bg-yellow-950/80 border border-yellow-400/60");
+      setSupplyBtnVisualState("btn-buy-stim", canOrderConsumable && me.stims < maxStm && game.bioPoints >= stimCost, "bg-slate-900 hover:bg-yellow-950/80 border border-yellow-400/60");
 
       setSupplyBtnVisualState("btn-craft-part", nearArmory && game.bioPoints >= partCost, "bg-indigo-950/85 hover:bg-indigo-900 border border-indigo-400/70");
 
@@ -1024,14 +1028,15 @@
             modules: {
               magnet: { level: 0, maxLevel: 4 },
               medi: { level: 0, maxLevel: 1, cooldown: 0, maxCooldown: 90.0, sectorRevivesUsed: 0 },
-              interceptor: { level: 0, maxLevel: 4, cooldown: 0 }
+              interceptor: { level: 0, maxLevel: 4, cooldown: 0 },
+              supply: { level: 0, maxLevel: 3 }
             }
           };
         }
 
         if (!me.drone.unlocked) {
           // [미해금 상태] 전술 드론 프레임 구매 유도 배너/버튼 렌더링
-          const chassisCost = 600;
+          const chassisCost = 900;
           const canBuyChassis = nearArmory && game.bioPoints >= chassisCost;
           const lockCard = document.createElement("div");
           lockCard.className = "col-span-1 md:col-span-3 rounded-2xl p-4 border border-indigo-500/50 bg-gradient-to-r from-slate-950 via-indigo-950/40 to-slate-950 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl";
@@ -1097,6 +1102,16 @@
               parts: [0, 1],
               desc: "다운된 아군 발생 시 드론이 시체로 직접 비행하여 원격 소생 (HP 30 회복 & 독가스/산성/출혈 치료).",
               getStat: (lv) => lv === 0 ? "비활성 (미장착)" : `쿨 90s · 구급키트 1개 소모 · 섹터당 2회`
+            },
+            {
+              key: "supply",
+              name: "📦 원격 보급 모듈",
+              curLv: (me.drone.modules.supply && me.drone.modules.supply.level) || 0,
+              maxLv: 3,
+              costs: [0, 450, 850, 1400],
+              parts: [0, 0, 1, 1],
+              desc: "무기고에 직접 가지 않아도 필드 어디서나 소모품(구급약/스팀팩/탄약)을 드론으로 즉시 원격 조달합니다.",
+              getStat: (lv) => lv === 0 ? "비활성 (미장착)" : (lv === 1 ? "원격 주문 해금 (+20% 수수료)" : (lv === 2 ? "원격 정가 주문" : "정가 +15% 추가 보너스"))
             }
           ];
 
@@ -2470,6 +2485,9 @@
       } else if (key === "medi") {
         bpCost = 700;
         partCost = 1;
+      } else if (key === "supply") {
+        bpCost = [0, 450, 850, 1400][nextLv] || 850;
+        partCost = [0, 0, 1, 1][nextLv] || 0;
       }
 
       if (game.bioPoints < bpCost || (game.weaponParts || 0) < partCost) {
@@ -2493,6 +2511,11 @@
       SoundFX.play("upgrade");
     }
 
+    function closeSpecializationModal() {
+      const modal = document.getElementById("spec-modal");
+      if (modal) modal.classList.add("hidden");
+    }
+
     function chooseSpecialization(specKey) {
       const me = game.players[mySlotIndex];
       if (!me) return;
@@ -2502,12 +2525,16 @@
         me.maxHp += 35;
         me.hp = Math.min(me.maxHp, me.hp + 35);
         me.canPassThroughZombies = true;
+        me.tempShield = Math.max(me.tempShield || 0, 35);
+        me.juggernautShieldTimer = 10.0;
       } else if (specKey === "MEDIC") {
         game.reviveDuration = 3.5;
       }
 
       const modal = document.getElementById("spec-modal");
       if (modal) modal.classList.add("hidden");
+      const noticeBtn = document.getElementById("btn-open-spec-modal");
+      if (noticeBtn) noticeBtn.classList.add("hidden");
       SoundFX.play("revive");
       updateHUD();
 
@@ -2587,5 +2614,25 @@
       document.getElementById("btn-spec-striker")?.addEventListener("click", () => chooseSpecialization("STRIKER"));
       document.getElementById("btn-spec-medic")?.addEventListener("click", () => chooseSpecialization("MEDIC"));
       document.getElementById("btn-spec-scout")?.addEventListener("click", () => chooseSpecialization("SCOUT"));
+      document.getElementById("btn-close-spec-modal")?.addEventListener("click", () => closeSpecializationModal());
+      document.getElementById("btn-open-spec-modal")?.addEventListener("click", () => openSpecializationModal());
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if ((e.key === "t" || e.key === "T") && !document.getElementById("chat-input-field")?.matches(":focus")) {
+        const modal = document.getElementById("spec-modal");
+        if (modal) {
+          if (modal.classList.contains("hidden")) {
+            const me = game.players[mySlotIndex];
+            if (me && !me.specialization && (game.specAvailable || game.currentRoomIndex >= 1)) {
+              openSpecializationModal();
+            }
+          } else {
+            closeSpecializationModal();
+          }
+        }
+      } else if (e.key === "Escape") {
+        closeSpecializationModal();
+      }
     });
 

@@ -407,9 +407,18 @@
         door.open = true;
       }
 
-      // [2섹터 클리어 기념] 4대 작전 특성화 선택 모달 오픈!
+      // [2섹터 클리어 기념] 4대 작전 특성화 해금 알림 (게임 도중 강제 팝업 방지 -> [T]로 편할 때 선택)
       if (room.index === 1) {
-        openSpecializationModal();
+        game.specAvailable = true;
+        const specNoticeBtn = document.getElementById("btn-open-spec-modal");
+        if (specNoticeBtn) specNoticeBtn.classList.remove("hidden");
+        const safeBanner = document.getElementById("hud-safe-banner");
+        if (safeBanner) {
+          document.getElementById("hud-safe-banner-text").textContent =
+            "🎖️ [2섹터 완수] 4대 작전 특성화 해금! [T] 키를 눌러 특성을 선택하십시오.";
+          safeBanner.classList.remove("hidden");
+          setTimeout(() => safeBanner.classList.add("hidden"), 5000);
+        }
       }
 
       if (game.rooms[nextIdx]) {
@@ -738,6 +747,21 @@
       if (game.wavePhase === "CALM" && game.waveTimer > 4.0) {
         game.waveTimer = 4.0;
       }
+
+      // [미션 비콘 제거 & 환경 안전지대 확장] 완료된 미션 노드의 수직 빛기둥을 소거하고 정화 구역 확장!
+      const compNode = (game.missionNodes || []).find(n => n.roomIndex === room.index && (n.stepOrder === completedStep || n.genIndex === completedStep));
+      if (compNode) {
+        if (compNode.beaconMesh) {
+          effectsGroup.remove(compNode.beaconMesh);
+          compNode.beaconMesh = null;
+        }
+        if (room.envType === "TOXIC_FOG" || room.envType === "CRYO_LEAK") {
+          if (typeof addRoomSafeZone === "function") {
+            addRoomSafeZone(room, compNode.x, compNode.z, 8.5, `목표 #${completedStep} 정화구역`);
+            spawnMissionStageVFX(compNode.x, compNode.z, 0x38bdf8, 8.5, 25, false);
+          }
+        }
+      }
       const safeBanner = document.getElementById("hud-safe-banner");
       if (safeBanner && toastText) {
         document.getElementById("hud-safe-banner-text").textContent = toastText;
@@ -928,6 +952,8 @@
           if (!n.done && mePlayer && Math.hypot(mePlayer.x - n.x, mePlayer.z - n.z) < 18.0 && Math.random() < 0.12) {
             spawnBloodParticles(n.x, 2.7, n.z, 0x10b981, 1);
           }
+        } else if (n.kind === "BULKHEAD_CONSOLE" && !n.done) {
+          if (n.lever) n.lever.rotation.z = (Math.PI / 4) - ((n.holdTime || 0) / 0.8) * (Math.PI / 2);
         }
       });
 
@@ -962,84 +988,123 @@
         checkRoomClear(curRoom);
       }
 
-      // 1b. 클리어된 섹터에서 플레이어가 다음 섹터 문을 넘어 실제로 진입했을 때 비로소 섹터 전환 및 후방 격벽 봉쇄!
+      function closeAndLockBulkheadDoor(room) {
+        if (!room || room.lockedBehind) return;
+        room.lockedBehind = true;
+
+        const prevIdx = room.index - 1;
+        const backDoor = game.doors.find(d => d.fromRoom === prevIdx && d.toRoom === room.index);
+        if (backDoor) {
+          backDoor.open = false;
+          backDoor.lockedPermanently = true;
+          backDoor.mesh.position.y = 2.0;
+          backDoor.mesh.material.color.setHex(0x991b1b);
+          backDoor.mesh.material.emissive.setHex(0x450a0a);
+        }
+
+        if (room.bulkheadConsole) {
+          room.bulkheadConsole.done = true;
+          if (room.bulkheadConsole.lever) {
+            room.bulkheadConsole.lever.rotation.z = -Math.PI / 4;
+          }
+          if (room.bulkheadConsole.sym && room.bulkheadConsole.sym.el) {
+            room.bulkheadConsole.sym.el.style.display = "none";
+          }
+        }
+
+        const meP = game.players[mySlotIndex] || game.players[0];
+        game.players.forEach((pl, idx) => {
+          if (pl.id !== meP.id && (Math.abs(pl.x - room.wx) >= (room.hw || room.half) || Math.abs(pl.z - room.wz) >= (room.hd || room.half))) {
+            const ang = (idx / 4) * Math.PI * 2;
+            pl.x = meP.x + Math.cos(ang) * 2.8;
+            pl.z = meP.z + Math.sin(ang) * 2.8;
+            if (pl.visual && pl.visual.group) pl.visual.group.position.set(pl.x, 0, pl.z);
+          }
+        });
+
+        if (wsClient && wsClient.readyState === WebSocket.OPEN && !isRemoteClient) {
+          try {
+            wsClient.send(JSON.stringify({
+              type: "SECTOR_LOCK_TELEPORT",
+              roomIdx: room.index,
+              destX: room.wx,
+              destZ: room.wz
+            }));
+          } catch (e) {}
+        }
+
+        // 이전 섹터 잔존 감염체 100% 완전 소멸
+        for (let zi = game.zombies.length - 1; zi >= 0; zi--) {
+          if (game.zombies[zi].roomIndex < room.index) {
+            entitiesGroup.remove(game.zombies[zi].group);
+            game.zombies.splice(zi, 1);
+          }
+        }
+
+        SoundFX.play("explosion");
+        shakeCamera(0.65, 0.45);
+        if (typeof spawnExplosionVFX === "function") {
+          spawnExplosionVFX(room.bulkheadConsole ? room.bulkheadConsole.x : room.wx, 1.5, room.bulkheadConsole ? room.bulkheadConsole.z : room.wz, 4.0);
+        }
+
+        const collapseBanner = document.getElementById("hud-collapse-banner");
+        if (collapseBanner) collapseBanner.classList.add("hidden");
+        const collapseMsg = document.getElementById("hud-collapse-msg");
+        if (collapseMsg) collapseMsg.textContent = "";
+        const collapseTimerEl = document.getElementById("hud-collapse-timer");
+        if (collapseTimerEl) collapseTimerEl.textContent = "";
+        if (game.collapseState) game.collapseState.active = false;
+
+        const safeBanner = document.getElementById("hud-safe-banner");
+        if (safeBanner) {
+          if (room.hasMidBoss && !room.midBossAwakened) {
+            document.getElementById("hud-safe-banner-text").textContent =
+              "⚠️ 후방 격벽 폐쇄 완료! 중간보스 생체 캡슐 감지! 스쿼드 정비 후 [F] 단말기를 가동하십시오.";
+          } else if (room.isBossRoom) {
+            if (game.boss) {
+              game.boss.active = false;
+              game.boss.shielded = true;
+              if (game.boss.shieldMat) game.boss.shieldMat.opacity = 0.85;
+            }
+            document.getElementById("hud-safe-banner-text").textContent =
+              "👑 후방 격벽 폐쇄 완료! 무기고 정비 완료 후 입구의 [F] 격벽 콘솔을 가동하십시오.";
+          } else {
+            document.getElementById("hud-safe-banner-text").textContent =
+              `🔒 후방 격벽 폐쇄 완료! 통로 영구 차단 & S${room.index + 1} 강화 상한 해금`;
+          }
+          safeBanner.classList.remove("hidden");
+          setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+        }
+      }
+
+      // 1b. 클리어된 섹터에서 플레이어가 다음 섹터에 진입했을 때 부드러운 섹터 전환
       if (curRoom && curRoom.cleared && game.rooms[curRoom.index + 1]) {
         const nextR = game.rooms[curRoom.index + 1];
         const nextIdx = nextR.index;
-        const insideMarginX = (nextR.hw || nextR.half) - 2.5;
-        const insideMarginZ = (nextR.hd || nextR.half) - 2.5;
         const meP = game.players[mySlotIndex] || game.players[0];
         const activeHumans = game.players.filter(pl => !pl.downed && (pl.role === "LOCAL" || pl.role === "REMOTE"));
         const humanEntered = (activeHumans.length > 0)
-          ? activeHumans.some(pl => Math.abs(pl.x - nextR.wx) < insideMarginX && Math.abs(pl.z - nextR.wz) < insideMarginZ)
-          : (meP && Math.abs(meP.x - nextR.wx) < insideMarginX && Math.abs(meP.z - nextR.wz) < insideMarginZ);
+          ? activeHumans.some(pl => Math.abs(pl.x - nextR.wx) <= ((nextR.hw || nextR.half) + 2.0) && Math.abs(pl.z - nextR.wz) <= ((nextR.hd || nextR.half) + 2.0))
+          : (meP && Math.abs(meP.x - nextR.wx) <= ((nextR.hw || nextR.half) + 2.0) && Math.abs(meP.z - nextR.wz) <= ((nextR.hd || nextR.half) + 2.0));
 
-        if (humanEntered && !nextR.lockedBehind) {
+        if (humanEntered && game.currentRoomIndex !== nextIdx) {
           game.currentRoomIndex = nextIdx;
+          nextR.unlocked = true;
           relocateArmoryForCalmPhase(nextR);
           updateRoomVisibility();
 
-          nextR.lockedBehind = true;
-
-          const backDoor = game.doors.find(d => d.fromRoom === curRoom.index && d.toRoom === nextIdx);
-          if (backDoor) {
-            backDoor.open = false;
-            backDoor.lockedPermanently = true;
-            backDoor.mesh.position.y = 2.0;
-            backDoor.mesh.material.color.setHex(0x991b1b);
-            backDoor.mesh.material.emissive.setHex(0x450a0a);
-          }
-          game.players.forEach((pl, idx) => {
-            if (pl.id !== meP.id && (Math.abs(pl.x - nextR.wx) >= (nextR.hw || nextR.half) || Math.abs(pl.z - nextR.wz) >= (nextR.hd || nextR.half))) {
-              const ang = (idx / 4) * Math.PI * 2;
-              pl.x = meP.x + Math.cos(ang) * 2.8;
-              pl.z = meP.z + Math.sin(ang) * 2.8;
-              if (pl.visual && pl.visual.group) pl.visual.group.position.set(pl.x, 0, pl.z);
-            }
-          });
-          // [v3.3 멀티플레이 격벽 고립 방지] 원격 클라이언트 및 후방 잔류 대원을 위한 섹터 진입 강제 동기화
-          if (wsClient && wsClient.readyState === WebSocket.OPEN && !isRemoteClient) {
-            try {
-              wsClient.send(JSON.stringify({
-                type: "SECTOR_LOCK_TELEPORT",
-                roomIdx: nextR.index,
-                destX: nextR.wx,
-                destZ: nextR.wz
-              }));
-            } catch (e) {}
-          }
-          for (let zi = game.zombies.length - 1; zi >= 0; zi--) {
-            if (game.zombies[zi].roomIndex < nextR.index) {
-              entitiesGroup.remove(game.zombies[zi].group);
-              game.zombies.splice(zi, 1);
+          // 다음 섹터 진입 시 1단계 미션 노드가 아직 없다면 즉시 배치하여 비콘 및 가시성 확보!
+          if (nextR.unlockStage === 0 && !nextR.isBossRoom && !nextR.hasMidBoss && nextR.condType !== "THERMITE") {
+            const hasNode = game.missionNodes.some(n => n.roomIndex === nextR.index && (n.stepOrder === 1 || n.genIndex === 1));
+            if (!hasNode && typeof spawnRandomMissionStepForRoom === "function") {
+              spawnRandomMissionStepForRoom(nextR, 1);
             }
           }
-          SoundFX.play("explosion");
-          const collapseBanner = document.getElementById("hud-collapse-banner");
-          if (collapseBanner) collapseBanner.classList.add("hidden");
-          const collapseMsg = document.getElementById("hud-collapse-msg");
-          if (collapseMsg) collapseMsg.textContent = "";
-          const collapseTimerEl = document.getElementById("hud-collapse-timer");
-          if (collapseTimerEl) collapseTimerEl.textContent = "";
-          if (game.collapseState) game.collapseState.active = false;
 
           const safeBanner = document.getElementById("hud-safe-banner");
-          if (safeBanner) {
-            if (nextR.hasMidBoss && !nextR.midBossAwakened) {
-              document.getElementById("hud-safe-banner-text").textContent =
-                "⚠️ 중간보스 생체 캡슐 감지! 스쿼드 정비 후 [F] 단말기를 가동하십시오.";
-            } else if (nextR.isBossRoom) {
-              if (game.boss) {
-                game.boss.active = false;
-                game.boss.shielded = true;
-                if (game.boss.shieldMat) game.boss.shieldMat.opacity = 0.85;
-              }
-              document.getElementById("hud-safe-banner-text").textContent =
-                "👑 최종 결전지 도달! 무기고 정비 완료 후 입구의 [F] 격벽 콘솔을 가동하십시오.";
-            } else {
-              document.getElementById("hud-safe-banner-text").textContent =
-                `🔒 후방 격벽 봉쇄! S${nextR.index + 1} 강화 상한(총 Lv.${getSectorMaxStatLv() * 5}/50) 해금`;
-            }
+          if (safeBanner && !nextR.lockedBehind) {
+            document.getElementById("hud-safe-banner-text").textContent =
+              "🚪 섹터 진입! 입구 콘솔 [F]로 후방 격벽을 폐쇄하고 잔존 감염체를 소멸시키십시오.";
             safeBanner.classList.remove("hidden");
             setTimeout(() => safeBanner.classList.add("hidden"), 4500);
           }
@@ -1280,11 +1345,15 @@
           Math.abs(p.x - curRoom.wx) <= ((curRoom.hw || curRoom.half) + 1.0) &&
           Math.abs(p.z - curRoom.wz) <= ((curRoom.hd || curRoom.half) + 1.0)
         );
-        if (!p.downed && insideCurRoom && curRoom.envType === "TOXIC_FOG" && !curRoom.envCleared && !curRoom.cleared) {
+        const inSafeZone = curRoom && curRoom.safeZones && curRoom.safeZones.some(sz => Math.hypot(p.x - sz.x, p.z - sz.z) <= sz.radius);
+        p.inSafeZone = Boolean(inSafeZone);
+
+        // 정화 안전지대(inSafeZone) 내에서는 독안개 및 냉각 가스 피해 100% 면역!
+        if (!p.downed && insideCurRoom && !inSafeZone && curRoom.envType === "TOXIC_FOG" && !curRoom.envCleared && !curRoom.cleared) {
           damagePlayer(p, 1.45 * dt, false, false);
         }
         // [v3.3] 냉각 가스 누출(CRYO_LEAK) 섹터 환경피해 및 동상(causesFrost = true) 부여
-        if (!p.downed && insideCurRoom && curRoom.envType === "CRYO_LEAK" && !curRoom.envCleared && !curRoom.cleared) {
+        if (!p.downed && insideCurRoom && !inSafeZone && curRoom.envType === "CRYO_LEAK" && !curRoom.envCleared && !curRoom.cleared) {
           damagePlayer(p, 1.2 * dt, false, false, false, true);
         }
         p.dashActiveTimer = Math.max(0, p.dashActiveTimer - dt);
@@ -1292,6 +1361,18 @@
         p.swapOverchargeTimer = Math.max(0, p.swapOverchargeTimer - dt);
         p.postClearGraceTimer = Math.max(0, (p.postClearGraceTimer || 0) - dt);
         p.specCooldown = Math.max(0, (p.specCooldown || 0) - dt);
+
+        // 선봉장(Juggernaut) 패시브: 10초마다 35 HP 결사 방어막(tempShield) 자동 재생
+        if (p.specialization === "JUGGERNAUT" && !p.downed) {
+          p.juggernautShieldTimer = (p.juggernautShieldTimer !== undefined ? p.juggernautShieldTimer : 10.0) - dt;
+          if (p.juggernautShieldTimer <= 0) {
+            p.juggernautShieldTimer = 10.0;
+            if ((p.tempShield || 0) < 35) {
+              p.tempShield = 35;
+              spawnMissionStageVFX(p.x, p.z, 0xf59e0b, 2.5, 6, false);
+            }
+          }
+        }
 
         if (p.specActiveTimer > 0) {
           p.specActiveTimer = Math.max(0, p.specActiveTimer - dt);
@@ -1318,7 +1399,10 @@
           }
         }
         if (p.tempShield > 0 && p.specActiveTimer <= 0) {
-          p.tempShield = Math.max(0, p.tempShield - 18 * dt);
+          const minShield = (p.specialization === "JUGGERNAUT") ? 35 : 0;
+          if (p.tempShield > minShield) {
+            p.tempShield = Math.max(minShield, p.tempShield - 18 * dt);
+          }
         }
 
         // 다목적 전술 드론 시스템 (미해금 시 3D 모델 비활성화 & 기능 정지)
@@ -1585,12 +1669,16 @@
           }
           SoundFX.play("alarm");
         } else {
-          // SURGE 웨이브 방어 체크: 웨이브 방어 중(waitingForWaveDefense)일 때는:
-          // 1) 웨이브 정원(Quota)이 전부 스폰 완료되어야 하고
-          // 2) 생존 좀비 수가 5마리 이하로 소탕되어야 소강기(CALM)로 진입!
+          // SURGE 웨이브 방어 체크:
+          // [초반 1~3섹터 완화] 1~3섹터(game.currentRoomIndex <= 2)에서는 초반 화력 부족으로 좀비가 계속 누적되는 것을 막기 위해,
+          // 미션 방어 중뿐만 아니라 일반 웨이브에서도 스폰 정원이 모두 출현하고 생존 좀비가 5마리 이하로 소탕되어야 소강기(CALM)로 전환!
+          // 4섹터 이후부터는 기존대로 시간 경과 시 미션 대기 상태가 아니면 계속 다음 웨이브 진행!
+          const isEarlySector = (game.currentRoomIndex || 0) <= 2;
           const quotaFinished = curRoom ? ((curRoom.waveZombiesSpawned || 0) >= (curRoom.waveZombieQuota || 1)) : true;
           const zombiesCleared = game.zombies.length <= 5;
-          if (curRoom && curRoom.waitingForWaveDefense && (!quotaFinished || !zombiesCleared)) {
+          const mustWaitForClear = curRoom && (curRoom.waitingForWaveDefense || isEarlySector);
+
+          if (mustWaitForClear && (!quotaFinished || !zombiesCleared)) {
             game.waveTimer = 0; // 정원 출현 및 잔당 5마리 이하 소탕 대기 상태 유지
           } else {
             game.wavePhase = "CALM";
@@ -2024,6 +2112,36 @@
                 }
               } else {
                 interactBar.style.width = "0%";
+              }
+            } else if (nearMissionNode.kind === "BULKHEAD_CONSOLE") {
+              const targetRoom = game.rooms[nearMissionNode.roomIndex];
+              const livingHumans = game.players.filter(pl => !pl.downed && (pl.role === "LOCAL" || pl.role === "REMOTE"));
+              const allInside = targetRoom && livingHumans.length > 0 && livingHumans.every(pl =>
+                Math.abs(pl.x - targetRoom.wx) <= (targetRoom.hw || targetRoom.half) &&
+                Math.abs(pl.z - targetRoom.wz) <= (targetRoom.hd || targetRoom.half)
+              );
+
+              if (targetRoom && targetRoom.lockedBehind) {
+                interactTitle.textContent = "🔒 후방 격벽 폐쇄 완료";
+                interactDesc.textContent = "이전 구역과의 통로가 영구 차단되었습니다.";
+                interactBar.style.width = "0%";
+              } else if (!allInside) {
+                interactTitle.textContent = "⚠️ 대원 미도착: 전원 구역 진입 필요";
+                interactDesc.textContent = "살아있는 모든 대원이 구역 내로 진입해야 격벽을 폐쇄할 수 있습니다.";
+                interactBar.style.width = "0%";
+              } else {
+                interactTitle.textContent = "🔒 [F 홀드] 후방 격벽 긴급 폐쇄";
+                interactDesc.textContent = "후방 통로를 영구 차단하고 이전 구역 감염체를 소멸시킵니다. (0.8초)";
+                if (holdingF) {
+                  nearMissionNode.holdTime = (nearMissionNode.holdTime || 0) + dt;
+                  interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 0.8) * 100) + "%";
+                  if (nearMissionNode.holdTime >= 0.8) {
+                    closeAndLockBulkheadDoor(targetRoom);
+                  }
+                } else {
+                  interactBar.style.width = "0%";
+                  nearMissionNode.holdTime = 0;
+                }
               }
             } else if (nearMissionNode.kind === "BOSS_MASTER_CONSOLE") {
               interactTitle.textContent = "🚨 [F 홀드] 최종 레이드 개시 (심장 격벽 해제)";
@@ -2704,7 +2822,9 @@
           }
           return;
         }
-        if (me && Math.hypot(sym.x - me.x, sym.z - me.z) > 44) {
+        const isMissionObj = ref && (ref.stepOrder !== undefined || ref.kind === "GENERATOR" || ref.kind === "CHEM_PART" || ref.kind === "SYNTH_TABLE" || ref.kind === "DECON_VALVE" || ref.kind === "RADAR_CONSOLE" || ref.kind === "RADAR_DISH" || ref.kind === "RADAR_BEACON" || ref.kind === "BULKHEAD_CONSOLE" || ref.kind === "BOSS_MASTER_CONSOLE" || ref.kind === "BOSS_COOLANT" || ref.kind === "BLACKBOX" || ref.kind === "SECURITY_RELAY" || ref.kind === "UPLOAD_TERMINAL");
+        const maxDist = isMissionObj ? 180 : 44;
+        if (me && Math.hypot(sym.x - me.x, sym.z - me.z) > maxDist) {
           sym.el.style.display = "none";
           return;
         }
@@ -3024,15 +3144,21 @@
           continue;
         }
 
-        // 쓰러진(빈사) 사람에게는 좀비 어그로가 절대 끌리지 않고 오직 살아있는(!p.downed) 사람에게만 끌림!
+        // 쓰러진(빈사) 사람이나 은신(Phantom Scout Cloaked) 중인 대원에게는 좀비 어그로가 절대 끌리지 않음!
         let target = null, minDist = 9999;
         game.players.forEach(p => {
           if (p.downed) return;
+          if (p.cloakActive && p.specActiveTimer > 0) return;
           const d = Math.hypot(p.x - z.x, p.z - z.z);
           if (d < minDist) { minDist = d; target = p; }
         });
 
         if (!target) {
+          // 어그로 대상이 없으면 천천히 배회(Wander)
+          z.wanderAngle = (z.wanderAngle || (Math.random() * Math.PI * 2)) + (Math.random() - 0.5) * dt * 2.0;
+          const wx = Math.cos(z.wanderAngle);
+          const wz = Math.sin(z.wanderAngle);
+          moveZombieSmart(z, wx, wz, z.speed * 0.28, dt, null);
           z.group.position.set(z.x, 0, z.z);
           continue;
         }
@@ -3077,6 +3203,9 @@
           } else if (dist > 1.35) {
             moveZombieSmart(z, nx, nz, z.speed, dt, target);
           } else if (z.attackCooldown <= 0) {
+            if (target.cloakActive && target.specActiveTimer > 0) {
+              continue;
+            }
             z.attackCooldown = 0.95;
             if (z.spec.explosive) {
               damageZombie(i, 9999, 0, 0, 0, -1);
@@ -3309,7 +3438,7 @@
           }
         }
 
-        // 살아있는 플레이어와도 최소 물리 반경 유지 (좀비가 캐릭터 모델 안으로 완전히 포개지지 않도록 함)
+        // 살아있는 플레이어와도 최소 물리 반경 유지 (선봉장 불도저 밀치기 vs 일반 대원 이동 차단)
         game.players.forEach(pl => {
           if (pl.downed) return;
           const pdx = z1.x - pl.x;
@@ -3318,8 +3447,18 @@
           if (Math.abs(pdx) < pMin && Math.abs(pdz) < pMin) {
             const pDist = Math.hypot(pdx, pdz) || 0.01;
             if (pDist < pMin) {
-              const push = (pMin - pDist) * 0.65;
-              moveEntityWithCollision(z1, (pdx / pDist) * push, (pdz / pDist) * push, z1.radius);
+              const overlap = pMin - pDist;
+              if (pl.specialization === "JUGGERNAUT") {
+                // 선봉장(Juggernaut)은 질주 시 좀비들을 밀치고 뚫고 나감 (불도저)
+                const pushZ = overlap * 0.85;
+                moveEntityWithCollision(z1, (pdx / pDist) * pushZ, (pdz / pDist) * pushZ, z1.radius);
+              } else {
+                // 일반 클래스는 좀비에게 진로가 막힘 (좀비를 통과할 수 없고 밀려남)
+                const pushPl = overlap * 0.7;
+                pl.x -= (pdx / pDist) * pushPl;
+                pl.z -= (pdz / pDist) * pushPl;
+                if (pl.visual && pl.visual.group) pl.visual.group.position.set(pl.x, 0, pl.z);
+              }
             }
           }
         });
