@@ -1918,7 +1918,7 @@
         ? (prevRoom && prevRoom.berserkActive)
         : (!isWaveHordeFinished && !isCalmSpawningRestricted);
 
-      if (canSpawnHorde && game.spawnTimer <= 0 && game.zombies.length < maxSwarm) {
+      if (!isRemoteClient && canSpawnHorde && game.spawnTimer <= 0 && game.zombies.length < maxSwarm) {
         game.spawnTimer = isSurge
           ? Math.max(0.40, 0.95 - game.currentRoomIndex * 0.04 - rWave * 0.02)
           : Math.max(1.8, 2.8 - game.currentRoomIndex * 0.06);
@@ -3455,7 +3455,7 @@
             });
 
             if (isSummoner) {
-              if (game.zombies.length < 180) {
+              if (!isRemoteClient && game.zombies.length < 180) {
                 spawnZombie("BOOMER", z.x + 2.2, z.z, z.roomIndex);
                 spawnZombie("RUNNER", z.x - 2.2, z.z, z.roomIndex);
               }
@@ -3700,7 +3700,7 @@
           game.cystPods.splice(i, 1);
         } else if (!pod.isMissionHive && !pod.isMidBossShieldNode && pod.timer <= 0) {
           entitiesGroup.remove(pod.mesh);
-          spawnZombie("BOOMER", pod.x, pod.z, game.rooms.length - 1);
+          if (!isRemoteClient) spawnZombie("BOOMER", pod.x, pod.z, game.rooms.length - 1);
           game.cystPods.splice(i, 1);
         }
       }

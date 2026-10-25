@@ -775,9 +775,17 @@
                   const c = !!rs[1];
                   const lb = !!rs[2];
                   if (r.unlocked !== u || r.cleared !== c) needVisUpdate = true;
+                  const wasLocked = r.lockedBehind;
                   r.unlocked = u;
                   r.cleared = c;
                   r.lockedBehind = lb;
+                  if (!wasLocked && lb) {
+                    if (r.bulkheadConsole) {
+                      r.bulkheadConsole.done = true;
+                      if (r.bulkheadConsole.lever) r.bulkheadConsole.lever.rotation.z = -Math.PI / 4;
+                      if (r.bulkheadConsole.sym && r.bulkheadConsole.sym.el) r.bulkheadConsole.sym.el.style.display = "none";
+                    }
+                  }
                 });
               }
 
@@ -874,18 +882,148 @@
                 if (Math.abs(meP.x - cr.wx) >= hw || Math.abs(meP.z - cr.wz) >= hd) {
                   meP.x = cr.wx + (mySlotIndex - 1.5) * 1.5;
                   meP.z = cr.wz + 1.2;
+                  if (meP.visual && meP.visual.group) meP.visual.group.position.set(meP.x, 0, meP.z);
                 }
               }
 
+              // [v3.5 멀티플레이 안전구역 완벽 동기화] 호스트에서 생성된 모든 안전지대를 클라이언트에서도 동일하게 시각화!
+              if (Array.isArray(msg.safeZones) && cr) {
+                if (!cr.safeZones) cr.safeZones = [];
+                msg.safeZones.forEach(szData => {
+                  const existing = cr.safeZones.find(sz => Math.hypot(sz.x - szData[0], sz.z - szData[1]) < 1.0);
+                  if (!existing) {
+                    if (typeof addRoomSafeZone === "function") {
+                      addRoomSafeZone(cr, szData[0], szData[1], szData[2], szData[3]);
+                    }
+                  }
+                });
+              }
+
+              // [v3.5 멀티플레이 중간보스 및 50% 실드 증폭핵 동기화]
+              if (msg.midBossState && game.midBoss) {
+                const mb = game.midBoss;
+                mb.hp = msg.midBossState.hp;
+                mb.maxHp = msg.midBossState.maxHp;
+                mb.mbShieldActive = msg.midBossState.shieldActive;
+                mb.mbGroggyTimer = msg.midBossState.groggyTimer;
+                mb.mbPhase2Triggered = msg.midBossState.phase2Triggered;
+                if (mb.mbShieldMesh && mb.mbShieldMesh.material) {
+                  mb.mbShieldMesh.material.opacity = mb.mbShieldActive ? 0.65 : 0.0;
+                }
+                if (Array.isArray(msg.midBossState.shieldNodes)) {
+                  for (let pi = game.cystPods.length - 1; pi >= 0; pi--) {
+                    const pod = game.cystPods[pi];
+                    if (pod && pod.isMidBossShieldNode) {
+                      const stillExists = msg.midBossState.shieldNodes.some(sn => Math.hypot(pod.x - sn[0], pod.z - sn[1]) < 1.0);
+                      if (!stillExists) {
+                        try { if (pod.mesh) entitiesGroup.remove(pod.mesh); } catch (e) {}
+                        if (pod.sym && pod.sym.el) pod.sym.el.remove();
+                        game.cystPods.splice(pi, 1);
+                      }
+                    }
+                  }
+                  msg.midBossState.shieldNodes.forEach((sn, idx) => {
+                    let existing = game.cystPods.find(p => p.isMidBossShieldNode && Math.hypot(p.x - sn[0], p.z - sn[1]) < 1.0);
+                    if (!existing) {
+                      const pGroup = new THREE.Group();
+                      const cMesh = new THREE.Mesh(
+                        new THREE.OctahedronGeometry(1.35, 1),
+                        new THREE.MeshStandardMaterial({ color: 0x06b6d4, emissive: 0x0891b2, emissiveIntensity: 0.95 })
+                      );
+                      cMesh.position.y = 1.6;
+                      pGroup.add(cMesh);
+                      const ringM = new THREE.Mesh(
+                        new THREE.TorusGeometry(1.6, 0.16, 8, 20),
+                        new THREE.MeshBasicMaterial({ color: 0x22d3ee })
+                      );
+                      ringM.rotation.x = Math.PI / 2;
+                      ringM.position.y = 0.3;
+                      pGroup.add(ringM);
+                      pGroup.position.set(sn[0], 0, sn[1]);
+                      entitiesGroup.add(pGroup);
+                      const nodePod = {
+                        x: sn[0], z: sn[1],
+                        hp: sn[2], maxHp: sn[3],
+                        isMissionHive: false,
+                        isMidBossShieldNode: true,
+                        parentMidBoss: mb,
+                        roomIndex: mb.roomIndex,
+                        timer: 9999,
+                        mesh: pGroup
+                      };
+                      game.cystPods.push(nodePod);
+                      nodePod.sym = registerWorldSymbol(
+                        sn[0], 3.2, sn[1],
+                        `🔗중간보스증폭핵#${idx + 1}(파괴필수)`,
+                        "bg-cyan-950/95 border-cyan-400 text-cyan-200 animate-pulse",
+                        nodePod, mb.roomIndex
+                      );
+                    } else {
+                      existing.hp = sn[2];
+                      existing.maxHp = sn[3];
+                    }
+                  });
+                }
+              }
+
+              // [v3.5 멀티플레이 10섹터 코어 보스 상태 동기화]
+              if (msg.bossState && game.boss) {
+                game.boss.active = msg.bossState.active;
+                game.boss.hp = msg.bossState.hp;
+                game.boss.maxHp = msg.bossState.maxHp;
+                game.boss.phase = msg.bossState.phase;
+                game.boss.invulnState = msg.bossState.invulnState;
+                game.boss.shielded = msg.bossState.shielded;
+                game.boss.groggyTimer = msg.bossState.groggyTimer;
+                game.boss.armorShredTimer = msg.bossState.armorShredTimer;
+                game.boss.lastPatternText = msg.bossState.lastPatternText;
+                game.boss.dead = msg.bossState.dead;
+                if (game.boss.shieldMat) {
+                  game.boss.shieldMat.opacity = game.boss.shielded ? 0.85 : 0.0;
+                }
+              }
+
+              // [v3.5 멀티플레이 핏빛 기둥 및 방어 파일런 동기화]
+              if (Array.isArray(msg.bloodPylons)) {
+                while (game.bloodPylons.length > msg.bloodPylons.length) {
+                  const rem = game.bloodPylons.pop();
+                  try { if (rem && rem.mesh) entitiesGroup.remove(rem.mesh); } catch (e) {}
+                  if (rem && rem.sym && rem.sym.el) rem.sym.el.remove();
+                }
+                msg.bloodPylons.forEach((ps, idx) => {
+                  let pObj = game.bloodPylons[idx];
+                  if (!pObj) {
+                    const pMesh = new THREE.Mesh(
+                      new THREE.CylinderGeometry(1.2, 1.6, 6.2, 12),
+                      new THREE.MeshStandardMaterial({ color: 0xbe123c, emissive: 0x9f1239, emissiveIntensity: 0.9 })
+                    );
+                    pMesh.position.set(ps[0], 3.1, ps[1]);
+                    entitiesGroup.add(pMesh);
+                    pObj = { x: ps[0], z: ps[1], hp: ps[2], maxHp: ps[3], mesh: pMesh, isPylon: true };
+                    game.bloodPylons.push(pObj);
+                    pObj.sym = registerWorldSymbol(
+                      ps[0], 4.4, ps[1],
+                      `🛡️방어파일런${idx + 1}[집중사격]`,
+                      "bg-rose-950/90 border-rose-500 text-rose-200",
+                      pObj, game.currentRoomIndex
+                    );
+                  } else {
+                    pObj.hp = ps[2];
+                    pObj.maxHp = ps[3];
+                  }
+                });
+              }
+
+              // [v3.5 감염체 360마리 전량 위치·체력·광폭화·동결/스턴 완벽 동기화]
               if (Array.isArray(msg.zombies)) {
                 while (game.zombies.length > msg.zombies.length) {
                   const rem = game.zombies.pop();
-                  if (rem && rem.group) entitiesGroup.remove(rem.group);
+                  try { if (rem && rem.group) entitiesGroup.remove(rem.group); } catch (e) {}
                 }
                 msg.zombies.forEach((zs, idx) => {
                   let zObj = game.zombies[idx];
                   if (!zObj || zObj.typeKey !== zs[0]) {
-                    if (zObj && zObj.group) entitiesGroup.remove(zObj.group);
+                    try { if (zObj && zObj.group) entitiesGroup.remove(zObj.group); } catch (e) {}
                     zObj = spawnZombie(zs[0], zs[1], zs[2], game.currentRoomIndex);
                     game.zombies.pop();
                     game.zombies[idx] = zObj;
@@ -894,16 +1032,31 @@
                   zObj.z += (zs[2] - zObj.z) * 0.45;
                   zObj.hp = zs[3];
                   zObj.maxHp = zs[4];
-                  zObj.group.position.set(zObj.x, 0, zObj.z);
-                  if (cr && cr.berserkActive && !zObj.berserkEnraged && !zObj.spec.isNutrientHost) {
+                  if (zObj.group) zObj.group.position.set(zObj.x, 0, zObj.z);
+
+                  const enrageLvl = zs[5] || 0;
+                  if (enrageLvl === 2 && !zObj.phase2Enraged && !zObj.spec.isNutrientHost) {
+                    zObj.phase2Enraged = true;
+                    zObj.berserkEnraged = true;
+                    if (zObj.skinMat) {
+                      zObj.skinMat.emissive.setHex(0x991b1b);
+                      zObj.skinMat.emissiveIntensity = 1.0;
+                    }
+                    if (zObj.group) zObj.group.scale.set(1.3, 1.3, 1.3);
+                  } else if (enrageLvl === 1 && !zObj.berserkEnraged && !zObj.spec.isNutrientHost) {
                     zObj.berserkEnraged = true;
                     if (zObj.skinMat) {
                       zObj.skinMat.emissive.setHex(0xef4444);
                       zObj.skinMat.emissiveIntensity = 0.85;
                     }
-                    if (zObj.group) {
-                      zObj.group.scale.multiplyScalar(1.15);
-                    }
+                    if (zObj.group) zObj.group.scale.set(1.15, 1.15, 1.15);
+                  }
+
+                  const fxState = zs[6] || 0;
+                  if (fxState === 1) {
+                    if (zObj.iceBlock) zObj.iceBlock.visible = true;
+                  } else if (zObj.iceBlock && zObj.iceBlock.visible) {
+                    zObj.iceBlock.visible = false;
                   }
                 });
               }
@@ -951,13 +1104,57 @@
       if (!game.running || isRemoteClient || !wsClient || wsClient.readyState !== WebSocket.OPEN) return;
       const cr = game.rooms[game.currentRoomIndex];
       try {
-        const zSnap = game.zombies.slice(0, 120).map(z => [
+        const zSnap = game.zombies.slice(0, 360).map(z => [
           z.typeKey,
           Math.round(z.x * 10) / 10,
           Math.round(z.z * 10) / 10,
           Math.round(z.hp),
-          Math.round(z.maxHp)
+          Math.round(z.maxHp),
+          z.phase2Enraged ? 2 : (z.berserkEnraged ? 1 : 0),
+          (z.freezeTimer > 0) ? 1 : ((z.stunTimer > 0) ? 2 : 0)
         ]);
+
+        const szSnap = (cr && cr.safeZones) ? cr.safeZones.map(sz => [
+          Math.round(sz.x * 10) / 10,
+          Math.round(sz.z * 10) / 10,
+          Math.round(sz.radius * 10) / 10,
+          sz.name || "안전구역"
+        ]) : [];
+
+        const mbSnap = game.midBoss ? {
+          hp: Math.round(game.midBoss.hp),
+          maxHp: game.midBoss.maxHp,
+          shieldActive: !!game.midBoss.mbShieldActive,
+          groggyTimer: Math.round((game.midBoss.mbGroggyTimer || 0) * 10) / 10,
+          phase2Triggered: !!game.midBoss.mbPhase2Triggered,
+          shieldNodes: game.cystPods.filter(p => p.isMidBossShieldNode).map(p => [
+            Math.round(p.x * 10) / 10,
+            Math.round(p.z * 10) / 10,
+            Math.round(p.hp),
+            Math.round(p.maxHp)
+          ])
+        } : null;
+
+        const bossSnap = game.boss ? {
+          active: !!game.boss.active,
+          hp: Math.round(game.boss.hp),
+          maxHp: game.boss.maxHp,
+          phase: game.boss.phase,
+          invulnState: game.boss.invulnState || "NONE",
+          shielded: !!game.boss.shielded,
+          groggyTimer: Math.round((game.boss.groggyTimer || 0) * 10) / 10,
+          armorShredTimer: Math.round((game.boss.armorShredTimer || 0) * 10) / 10,
+          lastPatternText: game.boss.lastPatternText || "",
+          dead: !!game.boss.dead
+        } : null;
+
+        const pylonSnap = (game.bloodPylons || []).map(p => [
+          Math.round(p.x * 10) / 10,
+          Math.round(p.z * 10) / 10,
+          Math.round(p.hp),
+          Math.round(p.maxHp)
+        ]);
+
         wsClient.send(JSON.stringify({
           type: "WORLD_SNAPSHOT",
           roomIdx: game.currentRoomIndex,
@@ -967,6 +1164,10 @@
           roomsState: (game.rooms || []).map(r => [r.unlocked ? 1 : 0, r.cleared ? 1 : 0, r.lockedBehind ? 1 : 0]),
           roomsGas: (game.rooms || []).map(r => [r.gasWaveActive ? 1 : 0, Math.round((r.gasWaveProgress || 0) * 1000) / 1000]),
           thermiteParts: game.thermiteParts || 0,
+          safeZones: szSnap,
+          midBossState: mbSnap,
+          bossState: bossSnap,
+          bloodPylons: pylonSnap,
           missionNodes: (game.missionNodes || [])
             .filter(n => n.roomIndex === game.currentRoomIndex)
             .map(n => ({
