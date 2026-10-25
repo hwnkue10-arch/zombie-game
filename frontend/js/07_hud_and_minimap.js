@@ -281,11 +281,23 @@
           if (secTimerTitle) secTimerTitle.textContent = "⚔️ 코어 결전";
           if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse";
         } else if (curRoom.index > 0 && !curRoom.lockedBehind) {
-          secTimerVal.textContent = "격벽 대기";
-          secTimerVal.className = "font-mono-code font-black text-lg text-amber-400 tracking-wider animate-pulse";
-          if (secTimerTitle) secTimerTitle.textContent = "🔒 후방 격벽 폐쇄 필요";
-          if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
-          secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-amber-500/80 shadow-2xl backdrop-blur-md pointer-events-auto";
+          const prevR = game.rooms[curRoom.index - 1];
+          const remSec = prevR ? Math.max(0, Math.ceil(prevR.sectorTimer || 0)) : 0;
+          const tMins = String(Math.floor(remSec / 60)).padStart(2, "0");
+          const tSecs = String(remSec % 60).padStart(2, "0");
+          secTimerVal.textContent = `${tMins}:${tSecs}`;
+
+          if (remSec <= 0) {
+            secTimerVal.className = "font-mono-code font-black text-xl text-rose-500 tracking-wider animate-ping";
+            if (secTimerTitle) secTimerTitle.textContent = "🚨 이전 구역 침공! (후방 격벽 폐쇄 필수)";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-red-600 animate-ping";
+            secTimerCont.className = "hud-glass-red rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-red-500 shadow-2xl backdrop-blur-md pointer-events-auto";
+          } else {
+            secTimerVal.className = "font-mono-code font-black text-xl text-amber-400 tracking-wider animate-pulse";
+            if (secTimerTitle) secTimerTitle.textContent = "⚠️ 후방 격벽 폐쇄 제한시간";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
+            secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-amber-500/80 shadow-2xl backdrop-blur-md pointer-events-auto";
+          }
         } else {
           const remSec = Math.max(0, Math.ceil(curRoom.sectorTimer || 0));
           const tMins = String(Math.floor(remSec / 60)).padStart(2, "0");
@@ -363,8 +375,14 @@
         };
 
         if (curRoom.index > 0 && !curRoom.lockedBehind) {
+          const prevR = game.rooms[curRoom.index - 1];
+          const remSec = prevR ? Math.max(0, Math.ceil(prevR.sectorTimer || 0)) : 0;
           objText.textContent = "🔒 후방 격벽 폐쇄 [F] (입구 콘솔)";
-          if (objSub) objSub.textContent = "입구 콘솔을 당겨 후방을 차단하면 작전이 개시됩니다.";
+          if (objSub) {
+            objSub.textContent = remSec <= 0
+              ? "🚨 이전 구역 침공 진행 중! 콘솔을 당겨 후방을 차단하세요!"
+              : `⚠️ 문을 닫지 않으면 이전 구역에서 강화 감염체 난입! (⏱️${remSec}s)`;
+          }
           objBar.style.width = "0%";
         } else if (curRoom.waitingForWaveDefense) {
           const quota = curRoom.waveZombieQuota || 30;
@@ -513,7 +531,8 @@
 
       const me = game.players[mySlotIndex] || game.players[0];
       const cx = cvs.width / 2, cy = cvs.height / 2;
-      const scale = 0.38;
+      // [미니맵 2.5배 확대] 기존 0.38 -> 0.95로 시원하게 확대하여 벽면, 경로, 안전지대, 감염체 실시간 식별성 극대화!
+      const scale = 0.95;
       const refX = me ? me.x : 0, refZ = me ? me.z : 0;
 
       // [v3.1 전장의 안개] 열리기 전(!r.unlocked)인 다음 섹터들은 미니맵에 절대 표시하지 않음!
@@ -529,7 +548,7 @@
         else ctx.fillStyle = "rgba(30, 41, 59, 0.92)";
 
         ctx.strokeStyle = r.index === game.currentRoomIndex ? "#f59e0b" : "#475569";
-        ctx.lineWidth = r.index === game.currentRoomIndex ? 1.8 : 1;
+        ctx.lineWidth = r.index === game.currentRoomIndex ? 2.0 : 1.2;
         ctx.fillRect(rx - rw / 2, ry - rd / 2, rw, rd);
         ctx.strokeRect(rx - rw / 2, ry - rd / 2, rw, rd);
 
@@ -549,9 +568,9 @@
           r.safeZones.forEach(sz => {
             const szx = cx + (sz.x - refX) * scale;
             const szy = cy + (sz.z - refZ) * scale;
-            ctx.fillStyle = "rgba(56, 189, 248, 0.25)";
+            ctx.fillStyle = "rgba(56, 189, 248, 0.28)";
             ctx.strokeStyle = "#38bdf8";
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 1.4;
             ctx.beginPath();
             ctx.arc(szx, szy, sz.radius * scale, 0, Math.PI * 2);
             ctx.fill();
@@ -562,14 +581,14 @@
 
       if (game.spawnHoles) {
         ctx.strokeStyle = "#f43f5e";
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = 1.6;
         game.spawnHoles.forEach(h => {
           const r = game.rooms[h.roomIndex];
           if (h.active && r && r.unlocked) {
             const hx = cx + (h.x - refX) * scale;
             const hy = cy + (h.z - refZ) * scale;
             ctx.beginPath();
-            ctx.arc(hx, hy, 3.2, 0, Math.PI * 2);
+            ctx.arc(hx, hy, 4.2, 0, Math.PI * 2);
             ctx.stroke();
           }
         });
@@ -579,7 +598,7 @@
         const r = game.rooms[v.roomIndex];
         if (!r || !r.unlocked || (!v.activeInCalm && !r.isBossRoom)) return;
         ctx.fillStyle = "#facc15";
-        ctx.fillRect(cx + (v.x - refX) * scale - 3, cy + (v.z - refZ) * scale - 3, 6, 6);
+        ctx.fillRect(cx + (v.x - refX) * scale - 4, cy + (v.z - refZ) * scale - 4, 8, 8);
       });
 
       // 미션 목표 & 후방격벽 콘솔 미니맵 렌더링
@@ -591,15 +610,15 @@
           if (n.kind === "BULKHEAD_CONSOLE") {
             ctx.fillStyle = "#f59e0b";
             ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = 1;
-            ctx.fillRect(nx - 3, ny - 3, 6, 6);
-            ctx.strokeRect(nx - 3, ny - 3, 6, 6);
+            ctx.lineWidth = 1.2;
+            ctx.fillRect(nx - 4, ny - 4, 8, 8);
+            ctx.strokeRect(nx - 4, ny - 4, 8, 8);
           } else {
             const pulse = 1.0 + Math.sin(game.elapsedTime * 6.0) * 0.25;
-            const sz = 4.2 * pulse;
+            const sz = 5.5 * pulse;
             ctx.fillStyle = (n.kind === "GENERATOR" ? "#34d399" : (n.kind === "CHEM_PART" ? "#fbbf24" : "#38bdf8"));
             ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = 1.2;
+            ctx.lineWidth = 1.4;
             ctx.beginPath();
             ctx.moveTo(nx, ny - sz);
             ctx.lineTo(nx + sz, ny);
@@ -615,14 +634,14 @@
       game.cystPods.forEach(pod => {
         const r = game.rooms[pod.roomIndex];
         if (pod.hp > 0 && pod.isMissionHive && r && r.unlocked) {
-          ctx.fillRect(cx + (pod.x - refX) * scale - 2.5, cy + (pod.z - refZ) * scale - 2.5, 5, 5);
+          ctx.fillRect(cx + (pod.x - refX) * scale - 3.5, cy + (pod.z - refZ) * scale - 3.5, 7, 7);
         }
       });
 
       if (game.boss && !game.boss.dead) {
         ctx.fillStyle = "#f43f5e";
         ctx.beginPath();
-        ctx.arc(cx + (game.boss.x - refX) * scale, cy + (game.boss.z - refZ) * scale, 4.5, 0, Math.PI * 2);
+        ctx.arc(cx + (game.boss.x - refX) * scale, cy + (game.boss.z - refZ) * scale, 6.0, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -630,14 +649,21 @@
       game.zombies.forEach(z => {
         const zx = cx + (z.x - refX) * scale;
         const zy = cy + (z.z - refZ) * scale;
-        ctx.fillRect(zx - 1, zy - 1, z.spec.isMidBoss ? 4.5 : 2, z.spec.isMidBoss ? 4.5 : 2);
+        const zSize = z.spec.isMidBoss ? 6.5 : (z.berserkEnraged ? 4.0 : 2.5);
+        ctx.fillStyle = z.berserkEnraged ? "#f43f5e" : "#ef4444";
+        ctx.fillRect(zx - zSize / 2, zy - zSize / 2, zSize, zSize);
       });
 
       game.players.forEach(p => {
+        const px = cx + (p.x - refX) * scale;
+        const py = cy + (p.z - refZ) * scale;
         ctx.fillStyle = p.downed ? "#ef4444" : "#" + p.color.toString(16).padStart(6, "0");
         ctx.beginPath();
-        ctx.arc(cx + (p.x - refX) * scale, cy + (p.z - refZ) * scale, 3.0, 0, Math.PI * 2);
+        ctx.arc(px, py, 4.2, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = p.id === mySlotIndex ? "#ffffff" : "#000000";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
       });
     }
 

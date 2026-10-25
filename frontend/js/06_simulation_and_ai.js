@@ -1125,9 +1125,54 @@
         }
       }
 
-      // 1c. 섹터 제한시간(260~440초) 초과 시 [🚨 타임아웃 페널티: 신경 독가스 살포 & 호드 광폭화]!
-      // [신규 규칙] 1섹터 이후(curRoom.index > 0)에서는 후방 격벽이 폐쇄(curRoom.lockedBehind === true)되어야 비로소 타이머가 작동!
+      // 1c. 섹터 제한시간 진행 및 후방 격벽 미폐쇄 시 이전 구역 강화 감염체 난입 로직:
+      // A) 현재 방이 후방 격벽 폐쇄 대기 중(isAwaitingBulkhead)인 경우:
+      //    -> 신규 방(curRoom)의 타이머는 아직 시작하지 않고 대기합니다.
+      //    -> 대신, 이전 방(prevRoom)의 제한시간이 계속해서 줄어듭니다!
+      //    -> 문을 닫지 않고 방치하면 이전 방의 스폰 구멍에서 붉은색 강화 감염체(Berserk Horde)가 지속 출현하여 열린 문으로 쏟아져 들어옵니다!
       const isAwaitingBulkhead = curRoom && curRoom.index > 0 && !curRoom.lockedBehind;
+      const prevRoom = isAwaitingBulkhead ? game.rooms[curRoom.index - 1] : null;
+
+      if (prevRoom && !prevRoom.lockedBehind) {
+        prevRoom.sectorTimer = Math.max(0, (prevRoom.sectorTimer || 260) - dt);
+        if (prevRoom.sectorTimer <= 0) {
+          prevRoom.berserkActive = true;
+        }
+
+        // 이전 섹터가 문이 열린 채 방치되면, 이전 섹터에서 강화 좀비가 지속 스폰되어 신규 방으로 들이닥침!
+        prevRoom.unclosedPursuitTimer = (prevRoom.unclosedPursuitTimer || 2.5) - dt;
+        if (prevRoom.unclosedPursuitTimer <= 0) {
+          prevRoom.unclosedPursuitTimer = prevRoom.sectorTimer <= 0 ? 1.6 : 3.2;
+          if (!isRemoteClient && game.zombies.length < 35) {
+            const spawnCount = prevRoom.sectorTimer <= 0 ? 3 : 2;
+            const holes = (prevRoom.spawnHoles && prevRoom.spawnHoles.length > 0) ? prevRoom.spawnHoles : null;
+            for (let sc = 0; sc < spawnCount; sc++) {
+              let sx = prevRoom.wx + (Math.random() - 0.5) * (prevRoom.hw * 0.7);
+              let sz = prevRoom.wz + (Math.random() - 0.5) * (prevRoom.hd * 0.7);
+              if (holes) {
+                const h = holes[Math.floor(Math.random() * holes.length)];
+                sx = h.x; sz = h.z;
+              }
+              const pType = Math.random() < 0.5 ? "RUNNER" : (Math.random() < 0.8 ? "WALKER" : "BOOMER");
+              const zmb = spawnZombie(pType, sx, sz, prevRoom.index);
+              if (zmb) {
+                // 이전 섹터 추격 감염체는 강화/광폭화 상태 (공격력·이속·체력 증가, 핏빛 발광)
+                zmb.berserkEnraged = true;
+                zmb.maxHp = Math.round(zmb.maxHp * 1.5);
+                zmb.hp = zmb.maxHp;
+                zmb.speed *= 1.25;
+                if (zmb.group) zmb.group.scale.multiplyScalar(1.1);
+                if (zmb.skinMat) {
+                  zmb.skinMat.emissive.setHex(0xef4444);
+                  zmb.skinMat.emissiveIntensity = 0.85;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // B) 신규 방 타이머: 후방 격벽이 폐쇄(lockedBehind)된 후에만 비로소 정상 작동!
       if (curRoom && !curRoom.cleared && !curRoom.isBossRoom && !isAwaitingBulkhead) {
         curRoom.sectorTimer = Math.max(0, (curRoom.sectorTimer || 260) - dt);
         if (curRoom.sectorTimer <= 0) {
