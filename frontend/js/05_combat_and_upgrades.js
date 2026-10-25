@@ -674,16 +674,11 @@
     function scrapWeaponPartForBp(player) {
       const toastEl = document.getElementById("upg-roll-toast");
       if (!isPlayerNearArmory(player)) {
-        if (toastEl) toastEl.textContent = "⛔ [🔧무기고] 반경 안에서만 잉여 부품 분해 환전이 가능합니다!";
-        return;
-      }
-      // [v3.3 무한 BP 차익 악용 원천 차단 2단계]
-      if (!areAllWeaponsUnlocked(player)) {
-        if (toastEl) toastEl.textContent = "🔒 8종 무기 전체 해금 완료 전에는 부품을 분해할 수 없습니다! (먼저 무기를 모두 해금하세요)";
+        if (toastEl) toastEl.textContent = "⛔ [🔧무기고] 반경 안에서만 부품 판매가 가능합니다!";
         return;
       }
       if ((game.weaponParts || 0) < 1) {
-        if (toastEl) toastEl.textContent = "⚠️ 분해 환전할 [⚙️무기 부품]이 없습니다!";
+        if (toastEl) toastEl.textContent = "⚠️ 판매할 [⚙️무기 부품]이 없습니다!";
         return;
       }
       const refund = getPartScrapRefundBp();
@@ -692,7 +687,7 @@
       triggerUpgradeHighlight("supply", { supplyKey: "btn-scrap-part" });
       SoundFX.play("upgrade");
       if (toastEl) {
-        toastEl.textContent = `⚙️ [잉여 부품 분해 환전] +${refund.toLocaleString()} BP 획득! (현재 부품: ${game.weaponParts}개)`;
+        toastEl.textContent = `⚙️ [무기 부품 판매] +${refund.toLocaleString()} BP 획득! (현재 부품: ${game.weaponParts}개)`;
       }
       renderUpgradeModal();
       updateWeaponSlotsHUD();
@@ -853,7 +848,7 @@
       const resCount = getResonanceCount(me);
       const pure15Count = me.inventory.filter(inv => inv.unlocked && !inv.tier1Special && inv.totalLv >= 15).length;
       const pure45Count = me.inventory.filter(inv => inv.unlocked && !inv.tier1Special && inv.totalLv >= 45).length;
-      const resPct = resCount * 10 + pure15Count * 16 + pure45Count * 12;
+      const resPct = resCount * 5 + pure15Count * 8 + pure45Count * 6;
       document.getElementById("upg-resonance-info").textContent =
         `무기공명: ${resCount}개 · 순수시너지: ${pure15Count}개 (전체화력 +${resPct}%)`;
 
@@ -1458,7 +1453,7 @@
       const resCount = isDownedPistol ? 0 : getResonanceCount(player);
       const pure15Count = isDownedPistol ? 0 : player.inventory.filter(it => it.unlocked && !it.tier1Special && it.totalLv >= 15).length;
       const pure45Count = isDownedPistol ? 0 : player.inventory.filter(it => it.unlocked && !it.tier1Special && it.totalLv >= 45).length;
-      const resMult = 1 + resCount * 0.10 + pure15Count * 0.16 + pure45Count * 0.12;
+      const resMult = 1 + resCount * 0.05 + pure15Count * 0.08 + pure45Count * 0.06;
       const effAtkLv = isDownedPistol ? 0 : inv.stats.atk;
       const effSpdLv = isDownedPistol ? 0 : inv.stats.spd;
       const effAreaLv = isDownedPistol ? 0 : inv.stats.area;
@@ -2560,6 +2555,53 @@
       }
     }
 
+    function spawnMedicHealingFieldMesh(player, hx, hz) {
+      if (player.healingZoneGroup) {
+        try { effectsGroup.remove(player.healingZoneGroup); } catch (e) {}
+        player.healingZoneGroup = null;
+      }
+      const grp = new THREE.Group();
+      grp.position.set(hx, 0.05, hz);
+
+      // 1. 외곽 발광 테두리 링
+      const ringGeo = new THREE.RingGeometry(4.7, 5.1, 40);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.rotation.x = -Math.PI / 2;
+      grp.add(ringMesh);
+
+      // 2. 내부 은은한 치유 안개 바닥 장판
+      const discGeo = new THREE.CircleGeometry(4.7, 36);
+      const discMat = new THREE.MeshBasicMaterial({ color: 0x059669, side: THREE.DoubleSide, transparent: true, opacity: 0.28 });
+      const discMesh = new THREE.Mesh(discGeo, discMat);
+      discMesh.rotation.x = -Math.PI / 2;
+      grp.add(discMesh);
+
+      // 3. 중앙 십자가(의료) 심볼
+      const crossMat = new THREE.MeshBasicMaterial({ color: 0x6ee7b7, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+      const crossV = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 2.6), crossMat);
+      crossV.rotation.x = -Math.PI / 2;
+      crossV.position.y = 0.02;
+      const crossH = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.7), crossMat);
+      crossH.rotation.x = -Math.PI / 2;
+      crossH.position.y = 0.02;
+      grp.add(crossV, crossH);
+
+      // 4. 공전하는 4개 나노 비트 구체
+      const orbMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
+      for (let i = 0; i < 4; i++) {
+        const ang = (i / 4) * Math.PI * 2;
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), orbMat);
+        orb.position.set(Math.cos(ang) * 4.9, 0.25, Math.sin(ang) * 4.9);
+        grp.add(orb);
+      }
+
+      effectsGroup.add(grp);
+      player.healingZoneGroup = grp;
+      player.healingDiscMat = discMat;
+      player.healingRingMat = ringMat;
+    }
+
     function triggerSpecializationActive(player) {
       if (!player || player.downed || !player.specialization) return;
       if (player.specCooldown > 0) {
@@ -2592,6 +2634,7 @@
         player.healingMistX = player.x;
         player.healingMistZ = player.z;
         SoundFX.play("revive");
+        spawnMedicHealingFieldMesh(player, player.x, player.z);
         spawnMissionStageVFX(player.x, player.z, 0x10b981, 5.0, 25, false);
       } else if (spec === "SCOUT") {
         player.specCooldown = 35.0;
@@ -2614,7 +2657,9 @@
         try {
           wsClient.send(JSON.stringify({
             type: "SPEC_ACTIVE",
-            playerId: player.id
+            playerId: player.id,
+            x: player.x,
+            z: player.z
           }));
         } catch (e) {}
       }

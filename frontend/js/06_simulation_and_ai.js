@@ -1522,8 +1522,19 @@
 
         if (p.specActiveTimer > 0) {
           p.specActiveTimer = Math.max(0, p.specActiveTimer - dt);
-          // 의무관 나노 치유 안개
+          // 의무관 나노 치유 안개 & 발광 치유 장판
           if (p.specialization === "MEDIC" && p.healingMistActive) {
+            if (p.healingZoneGroup) {
+              p.healingZoneGroup.rotation.y += dt * 0.45;
+              if (p.healingDiscMat) {
+                p.healingDiscMat.opacity = 0.25 + 0.12 * Math.sin(game.elapsedTime * 4.5);
+              }
+            }
+            if (Math.random() < 0.25) {
+              const ang = Math.random() * Math.PI * 2;
+              const r = Math.random() * 4.5;
+              spawnBloodParticles(p.healingMistX + Math.cos(ang) * r, 0.6, p.healingMistZ + Math.sin(ang) * r, 0x34d399, 1);
+            }
             game.players.forEach(other => {
               if (!other.downed && Math.hypot(other.x - p.healingMistX, other.z - p.healingMistZ) <= 5.0) {
                 other.hp = Math.min(other.maxHp, other.hp + 6.0 * dt);
@@ -1537,6 +1548,10 @@
           if (p.specActiveTimer <= 0) {
             p.overclockActive = false;
             p.healingMistActive = false;
+            if (p.healingZoneGroup) {
+              try { effectsGroup.remove(p.healingZoneGroup); } catch (e) {}
+              p.healingZoneGroup = null;
+            }
             p.cloakActive = false;
             if (p.visual && p.visual.body) {
               p.visual.body.material.transparent = false;
@@ -3019,6 +3034,7 @@
         }
         const ref = sym.refObj;
         const isGone = !ref || ref.done || ref.opened ||
+          (ref.openedBy && ref.openedBy[mySlotIndex]) ||
           (ref.charges !== undefined && ref.charges <= 0) ||
           (ref.hp !== undefined && ref.hp <= 0) ||
           (ref.active !== undefined && !ref.active) ||
@@ -4058,16 +4074,9 @@
           }
         });
 
-        // 본인(mySlotIndex)이 열었으면 로컬 시각적으로 반투명 처리
+        // 본인(mySlotIndex)이 열었으면 로컬 시각적으로 3D 모델 즉시 숨김 (탄약 드랍과 동일하게 개인 획득 시 소거)
         if (c.openedBy[mySlotIndex]) {
-          if (c.group) {
-            c.group.traverse(child => {
-              if (child.isMesh && child.material) {
-                child.material.transparent = true;
-                child.material.opacity = 0.35;
-              }
-            });
-          }
+          if (c.group) c.group.visible = false;
         }
 
         // 모든 살아있는 대원이 개방했으면 완전히 씬에서 제거

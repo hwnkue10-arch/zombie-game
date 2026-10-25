@@ -408,7 +408,7 @@
     function getWeaponMaxAmmo(player, wIdx) {
       const w = WEAPONS[wIdx];
       if (!w || w.infinite) return 999;
-      const resBonus = 1 + getResonanceCount(player) * 0.12;
+      const resBonus = 1 + getResonanceCount(player) * 0.06;
       return Math.round(w.maxAmmo * resBonus);
     }
 
@@ -582,7 +582,42 @@
       );
     }
 
-    function spawnPickup(x, z, kind, weaponIdx) {
+    function getSafePickupCoord(rawX, rawZ, roomIndex) {
+      let x = rawX;
+      let z = rawZ;
+      const rIdx = (roomIndex !== undefined && roomIndex >= 0) ? roomIndex : game.currentRoomIndex;
+      const room = game.rooms && game.rooms[rIdx];
+      if (room) {
+        const halfW = (room.hw || room.half || 45) - 3.8;
+        const halfD = (room.hd || room.half || 45) - 3.8;
+        x = Math.max(room.wx - halfW, Math.min(room.wx + halfW, x));
+        z = Math.max(room.wz - halfD, Math.min(room.wz + halfD, z));
+
+        if (Array.isArray(game.obstacles)) {
+          for (const ob of game.obstacles) {
+            const padW = (ob.hw || 1.5) + 1.3;
+            const padD = (ob.hd || 1.5) + 1.3;
+            if (Math.abs(x - ob.x) < padW && Math.abs(z - ob.z) < padD) {
+              const toCenterX = room.wx - x;
+              const toCenterZ = room.wz - z;
+              const dist = Math.hypot(toCenterX, toCenterZ);
+              if (dist > 0.1) {
+                x += (toCenterX / dist) * (padW + 1.2);
+                z += (toCenterZ / dist) * (padD + 1.2);
+              } else {
+                x += padW + 1.5;
+              }
+            }
+          }
+        }
+      }
+      return { x, z };
+    }
+
+    function spawnPickup(rawX, rawZ, kind, weaponIdx) {
+      const safe = getSafePickupCoord(rawX, rawZ);
+      const x = safe.x;
+      const z = safe.z;
       if (kind === "CORE") {
         // 바닥에 드랍되는 🧬변이 코어 — 플레이어가 직접 걸어가서 먹어야 획득됨!
         const cGroup = new THREE.Group();

@@ -515,6 +515,8 @@
             } else if (msg.type === "SPEC_ACTIVE" && game.running) {
               const p = game.players.find(pl => pl.id === msg.playerId);
               if (p && p.id !== mySlotIndex) {
+                if (msg.x !== undefined) p.x = msg.x;
+                if (msg.z !== undefined) p.z = msg.z;
                 triggerSpecializationActive(p);
               }
             } else if (msg.type === "REMOTE_FIRE" && game.running) {

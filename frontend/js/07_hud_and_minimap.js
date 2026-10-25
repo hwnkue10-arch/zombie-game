@@ -221,7 +221,7 @@
       const resCount = getResonanceCount(me);
       const pure15Count = me.inventory.filter(inv => inv.unlocked && !inv.tier1Special && inv.totalLv >= 15).length;
       const pure45Count = me.inventory.filter(inv => inv.unlocked && !inv.tier1Special && inv.totalLv >= 45).length;
-      const totalBonusPct = resCount * 10 + pure15Count * 16 + pure45Count * 12;
+      const totalBonusPct = resCount * 5 + pure15Count * 8 + pure45Count * 6;
       document.getElementById("hud-resonance-badge").textContent = `⚡+${totalBonusPct}%`;
       const ocBadge = document.getElementById("hud-overcharge-badge");
       if (ocBadge) {
@@ -361,7 +361,7 @@
         const getSequentialWaveSubText = (maxSteps) => {
           const remSec = Math.ceil(curRoom.sectorTimer || 0);
           const timerTag = curRoom.berserkActive ? `☣️독가스 확산` : `⏱️${remSec}s`;
-          if (compStg >= maxSteps) {
+          if (curRoom.cleared || compStg >= maxSteps || (curRoom.progress !== undefined && curRoom.targetVal && curRoom.progress >= curRoom.targetVal)) {
             return `🚪 탈출로 개방 완료 (전원 진입)`;
           }
           if (curRoom.index > 0 && !curRoom.lockedBehind) {
@@ -382,7 +382,11 @@
           return `🧭 ${hint} 이동 [F] · ${timerTag}`;
         };
 
-        if (curRoom.index > 0 && !curRoom.lockedBehind) {
+        if (curRoom.cleared) {
+          objText.textContent = "🚪 섹터 작전 완수! 출구 격벽 개방";
+          if (objSub) objSub.textContent = "개방된 전방 통로로 다음 섹터에 진입하십시오 (무기고 상시 정비 가능)";
+          objBar.style.width = "100%";
+        } else if (curRoom.index > 0 && !curRoom.lockedBehind) {
           const prevR = game.rooms[curRoom.index - 1];
           const remSec = prevR ? Math.max(0, Math.ceil(prevR.sectorTimer || 0)) : 0;
           objText.textContent = "🔒 후방 격벽 폐쇄 [F] (입구 콘솔)";
@@ -458,8 +462,13 @@
           }
           if (objSub) objSub.textContent = getSequentialWaveSubText(3);
         } else if (curRoom.condType === "GENERATORS") {
-          objText.textContent = `⚡ 발전기 가동 [F] (${curRoom.progress}/${curRoom.targetVal})`;
-          objBar.style.width = ((curRoom.progress / curRoom.targetVal) * 100) + "%";
+          if (curRoom.cleared || curRoom.progress >= curRoom.targetVal) {
+            objText.textContent = `⚡ 모든 발전기 가동 완료! 출구 격벽 개방`;
+            objBar.style.width = "100%";
+          } else {
+            objText.textContent = `⚡ 발전기 가동 [F] (${curRoom.progress}/${curRoom.targetVal})`;
+            objBar.style.width = ((curRoom.progress / curRoom.targetVal) * 100) + "%";
+          }
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.reqWaves || curRoom.targetVal);
         } else if (curRoom.condType === "PAYLOAD") {
           if (!me.carryingPayload && compStg < 1) {

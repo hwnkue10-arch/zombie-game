@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ===================================================================
-# BOXHEAD: THE CORE v3.1 — Server Launcher for Linux / macOS
+# BOXHEAD: THE CORE v3.6 — Server Launcher for Linux / macOS
 # ===================================================================
 
 echo "==================================================================="
-echo "  🎮 BOXHEAD: THE CORE v3.1 — Server Launcher"
+echo "  🎮 BOXHEAD: THE CORE v3.6 — Server Launcher"
 echo "==================================================================="
 
 if ! command -v node &> /dev/null; then

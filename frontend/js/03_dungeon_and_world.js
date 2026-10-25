@@ -394,7 +394,8 @@
       });
       game.crates.forEach(c => {
         const r = game.rooms[c.roomIndex];
-        if (c.group) c.group.visible = !!(r && r.unlocked && !c.opened);
+        const openedByMe = c.openedBy && c.openedBy[mySlotIndex];
+        if (c.group) c.group.visible = !!(r && r.unlocked && !c.opened && !openedByMe);
       });
       game.barrels.forEach(b => {
         if (b.roomIndex !== undefined && b.roomIndex >= 0) {
