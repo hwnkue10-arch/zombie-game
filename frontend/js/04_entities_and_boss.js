@@ -614,6 +614,112 @@
       return { x, z };
     }
 
+    function getSafeBossCoreCoord(preferredX, preferredZ, room, avoidPoints, minSeparation) {
+      const r = (room && room.wx !== undefined) ? room : (game.rooms && game.rooms[game.currentRoomIndex]);
+      if (!r) return { x: preferredX, z: preferredZ };
+
+      const minSep = (typeof minSeparation === "number") ? minSeparation : 13.0;
+      const avoids = Array.isArray(avoidPoints) ? avoidPoints : [];
+
+      // 외벽 두께(3.5m) 및 기둥과 충분한 여유 공간(7.5m) 확보
+      const wallMargin = 7.5;
+      const maxHw = Math.max(16, (r.hw || r.half || 45) - wallMargin);
+      const maxHd = Math.max(16, (r.hd || r.half || 45) - wallMargin);
+
+      const isClear = (cx, cz) => {
+        // 1. 방 내부 안전 구역 검사
+        if (Math.abs(cx - r.wx) > maxHw || Math.abs(cz - r.wz) > maxHd) return false;
+
+        // 2. 모든 장애물(외벽, 컨테이너, 서버 랙, 지게차, 기둥 등)과 최소 2.6m 이상 안전 이격 보장
+        if (Array.isArray(game.obstacles)) {
+          for (const ob of game.obstacles) {
+            const padW = (ob.hw || 1.5) + 2.6;
+            const padD = (ob.hd || 1.5) + 2.6;
+            if (Math.abs(cx - ob.x) < padW && Math.abs(cz - ob.z) < padD) {
+              return false;
+            }
+          }
+        }
+
+        // 3. 닫힌 격벽/방폭문과 3.0m 이상 안전 이격
+        if (Array.isArray(game.doors)) {
+          for (const d of game.doors) {
+            if (!d.open && Math.abs(cx - d.x) < (d.w / 2 + 3.0) && Math.abs(cz - d.z) < (d.d / 2 + 3.0)) {
+              return false;
+            }
+          }
+        }
+
+        // 4. 먼저 생성된 다른 코어/파일런과의 최소 거리 유지 (겹침 방지)
+        for (const ap of avoids) {
+          if (ap && typeof ap.x === "number" && typeof ap.z === "number") {
+            if (Math.hypot(cx - ap.x, cz - ap.z) < minSep) {
+              return false;
+            }
+          }
+        }
+
+        return true;
+      };
+
+      // 1) 목표 선호 위치가 이미 안전하다면 즉시 반환
+      let initX = Math.max(r.wx - maxHw, Math.min(r.wx + maxHw, preferredX));
+      let initZ = Math.max(r.wz - maxHd, Math.min(r.wz + maxHd, preferredZ));
+      if (isClear(initX, initZ)) {
+        return { x: Math.round(initX * 10) / 10, z: Math.round(initZ * 10) / 10 };
+      }
+
+      // 2) 벽이나 장애물에 걸리면 방 중앙(확정 개방 전투 구역) 방향으로 단계별 이동 탐색
+      const toCenterX = r.wx - initX;
+      const toCenterZ = r.wz - initZ;
+      const distToCenter = Math.hypot(toCenterX, toCenterZ);
+      if (distToCenter > 1.0) {
+        const dirX = toCenterX / distToCenter;
+        const dirZ = toCenterZ / distToCenter;
+        for (let step = 1.5; step <= distToCenter; step += 1.5) {
+          const candX = initX + dirX * step;
+          const candZ = initZ + dirZ * step;
+          if (isClear(candX, candZ)) {
+            return { x: Math.round(candX * 10) / 10, z: Math.round(candZ * 10) / 10 };
+          }
+        }
+      }
+
+      // 3) 방 중앙 기준 다각도 방사형 탐색
+      const radii = [12, 16, 20, 24, 28, 8];
+      const angles = [
+        0, Math.PI / 4, Math.PI / 2, 3 * Math.PI / 4,
+        Math.PI, 5 * Math.PI / 4, 3 * Math.PI / 2, 7 * Math.PI / 4,
+        Math.PI / 8, 3 * Math.PI / 8, 5 * Math.PI / 8, 7 * Math.PI / 8
+      ];
+      for (const rad of radii) {
+        for (const ang of angles) {
+          const candX = r.wx + Math.cos(ang) * rad;
+          const candZ = r.wz + Math.sin(ang) * rad;
+          if (isClear(candX, candZ)) {
+            return { x: Math.round(candX * 10) / 10, z: Math.round(candZ * 10) / 10 };
+          }
+        }
+      }
+
+      // 4) 확정 안전 스팟 폴백
+      const fallbacks = [
+        { x: r.wx - 14, z: r.wz - 14 },
+        { x: r.wx + 14, z: r.wz + 14 },
+        { x: r.wx - 14, z: r.wz + 14 },
+        { x: r.wx + 14, z: r.wz - 14 },
+        { x: r.wx, z: r.wz - 16 },
+        { x: r.wx, z: r.wz + 16 }
+      ];
+      for (const fb of fallbacks) {
+        if (isClear(fb.x, fb.z)) {
+          return fb;
+        }
+      }
+
+      return { x: r.wx - 10, z: r.wz - 10 };
+    }
+
     function spawnPickup(rawX, rawZ, kind, weaponIdx) {
       const safe = getSafePickupCoord(rawX, rawZ);
       const x = safe.x;

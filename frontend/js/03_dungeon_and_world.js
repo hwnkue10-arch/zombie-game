@@ -1118,9 +1118,16 @@
       const squadScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.55;
       const pylonHp = Math.round(13500 * squadScale);
       const angles = [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3];
+      const spawnedPylons = [];
       angles.forEach((ang, idx) => {
-        const px = room.wx + Math.cos(ang) * 16.5;
-        const pz = room.wz + Math.sin(ang) * 16.5;
+        const rawX = room.wx + Math.cos(ang) * 16.5;
+        const rawZ = room.wz + Math.sin(ang) * 16.5;
+        const safe = (typeof getSafeBossCoreCoord === "function")
+          ? getSafeBossCoreCoord(rawX, rawZ, room, spawnedPylons, 10.0)
+          : { x: rawX, z: rawZ };
+        spawnedPylons.push(safe);
+        const px = safe.x;
+        const pz = safe.z;
         const pMesh = new THREE.Mesh(
           new THREE.CylinderGeometry(1.2, 1.6, 6.2, 12),
           new THREE.MeshStandardMaterial({ color: 0xbe123c, emissive: 0x9f1239, emissiveIntensity: 0.9 })

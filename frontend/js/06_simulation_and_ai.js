@@ -3996,7 +3996,8 @@
 
           if (!removeBullet) {
             for (const pod of game.cystPods) {
-              if (Math.hypot(pod.x - b.x, pod.z - b.z) < 1.55) {
+              const podHitRad = pod.isMidBossShieldNode ? 2.2 : 1.85;
+              if (Math.hypot(pod.x - b.x, pod.z - b.z) < podHitRad) {
                 // 순차 웨이브 잠금된 미션 신경절은 해금 단계(unlockStage) 도달 전까지 피해 면역!
                 if (pod.isMissionHive && (pod.stepOrder || 1) > unlockStg) {
                   removeBullet = true;
@@ -4010,7 +4011,7 @@
           }
           if (!removeBullet) {
             for (const pyl of game.bloodPylons) {
-              if (Math.hypot(pyl.x - b.x, pyl.z - b.z) < 1.6) {
+              if (Math.hypot(pyl.x - b.x, pyl.z - b.z) < 2.2) {
                 pyl.hp -= b.damage;
                 if (!b.piercing) removeBullet = true;
                 break;

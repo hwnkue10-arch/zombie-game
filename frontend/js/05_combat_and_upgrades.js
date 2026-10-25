@@ -1680,7 +1680,7 @@
         const proj = px * nx + pz * nz;
         if (proj > 0 && proj < beamLen) {
           const perpDist = Math.hypot(px - proj * nx, pz - proj * nz);
-          if (perpDist <= 2.0) pod.hp -= damage * 1.4;
+          if (perpDist <= 2.4) pod.hp -= damage * 1.4;
         }
       }
 
@@ -1691,7 +1691,7 @@
         const proj = px * nx + pz * nz;
         if (proj > 0 && proj < beamLen) {
           const perpDist = Math.hypot(px - proj * nx, pz - proj * nz);
-          if (perpDist <= 2.2) pyl.hp -= damage * 1.5;
+          if (perpDist <= 2.4) pyl.hp -= damage * 1.5;
         }
       }
 
@@ -2067,9 +2067,14 @@
         if (zmb.mbShieldMesh) zmb.mbShieldMesh.material.opacity = 0.65;
         SoundFX.play("alarm");
         const r = game.rooms[zmb.roomIndex] || game.rooms[game.currentRoomIndex];
-        [[-9.5, -7.5], [9.5, 7.5]].forEach((off, idx) => {
-          const nx = Math.max(r.wx - r.half + 8, Math.min(r.wx + r.half - 8, zmb.x + off[0]));
-          const nz = Math.max(r.wz - r.half + 8, Math.min(r.wz + r.half - 8, zmb.z + off[1]));
+        const spawnedCores = [];
+        [[-11.5, -9.0], [11.5, 9.0]].forEach((off, idx) => {
+          const rawX = zmb.x + off[0];
+          const rawZ = zmb.z + off[1];
+          const safe = getSafeBossCoreCoord(rawX, rawZ, r, spawnedCores, 14.0);
+          spawnedCores.push(safe);
+          const nx = safe.x;
+          const nz = safe.z;
           const pGroup = new THREE.Group();
           const cMesh = new THREE.Mesh(
             new THREE.OctahedronGeometry(1.35, 1),
@@ -2272,20 +2277,25 @@
         b.lastPatternText = "🛡️ 핏빛 기둥 4개 파괴";
         SoundFX.play("alarm");
         const bossRoom = game.rooms[game.rooms.length - 1];
-        const off = bossRoom.half - 10;
+        const off = Math.min(bossRoom.hw || 45, bossRoom.hd || 45) - 12;
         const pylonScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.70;
         const pylonHp = Math.round(9200 * pylonScale);
+        const spawnedPylons = [];
         [[-off, -off], [off, -off], [-off, off], [off, off]].forEach((co, pIdx) => {
+          const safe = getSafeBossCoreCoord(bossRoom.wx + co[0], bossRoom.wz + co[1], bossRoom, spawnedPylons, 16.0);
+          spawnedPylons.push(safe);
+          const px = safe.x;
+          const pz = safe.z;
           const pMesh = new THREE.Mesh(
             new THREE.CylinderGeometry(1.1, 1.4, 5.5, 10),
             new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xbe123c, emissiveIntensity: 0.8 })
           );
-          pMesh.position.set(bossRoom.wx + co[0], 2.75, bossRoom.wz + co[1]);
+          pMesh.position.set(px, 2.75, pz);
           entitiesGroup.add(pMesh);
-          const pObj = { x: bossRoom.wx + co[0], z: bossRoom.wz + co[1], hp: pylonHp, maxHp: pylonHp, mesh: pMesh, isPylon: true };
+          const pObj = { x: px, z: pz, hp: pylonHp, maxHp: pylonHp, mesh: pMesh, isPylon: true };
           game.bloodPylons.push(pObj);
           registerWorldSymbol(
-            pObj.x, 3.8, pObj.z,
+            px, 3.8, pz,
             `🩸핏빛기둥#${pIdx + 1}[집중파괴]`,
             "bg-rose-950/90 border-rose-500 text-rose-200 animate-pulse",
             pObj, bossRoom.index
