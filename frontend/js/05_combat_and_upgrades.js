@@ -128,26 +128,26 @@
         }
       }
 
-      if (code === "KeyZ") {
+      if (code === "KeyQ") {
         if (e.repeat) return;
-        // [v3.4 퀵스왑] Z키: 이전 무기 순차 전환
+        // [v3.6 퀵스왑] Q키: 이전 무기 순차 전환
         cycleWeapon(me, -1);
         return;
-      } else if (code === "KeyX") {
+      } else if (code === "KeyE") {
         if (e.repeat) return;
-        // [v3.4 퀵스왑] X키: 다음 무기 순차 전환
+        // [v3.6 퀵스왑] E키: 다음 무기 순차 전환
         cycleWeapon(me, 1);
         return;
       } else if (code.startsWith("Digit")) {
         const num = parseInt(code.replace("Digit", ""), 10);
         if (num >= 1 && num <= 8) selectWeaponSlot(me, num - 1);
-      } else if (code === "KeyQ") {
+      } else if (code === "KeyZ") {
         if (e.repeat) return;
-        // [v3.2 조작 획일화] Q키 전담: 구급키트 / 나노 주사기
+        // [v3.6 조작 개편] Z키: 구급키트 / 나노 주사기 치료
         startSelfBandaging(me);
-      } else if (code === "KeyE") {
+      } else if (code === "KeyX") {
         if (e.repeat) return;
-        // [v3.2 조작 획일화] E키 전담: 아드레날린 스팀팩 (중복 R/G키 제거)
+        // [v3.6 조작 개편] X키: 아드레날린 스팀팩 폭주
         useAdrenalineStim(me);
       } else if (code === "Space") {
         triggerTacticalDash(me);
@@ -1571,7 +1571,7 @@
           wIdx,
           tier1Special: effTier1,
           awakened: effAwakened,
-          noFriendlyFire: isDownedPistol,
+          noFriendlyFire: isDownedPistol || player.role === "AI",
           isZombieProjectile: false,
           x: bulletMesh.position.x,
           z: bulletMesh.position.z,
@@ -1994,16 +1994,19 @@
       }
 
       if (game.friendlyFire) {
-        game.players.forEach(pl => {
-          if (pl.downed) return;
-          const distP = Math.hypot(pl.x - x, pl.z - z);
-          if (distP <= radius * 0.8) {
-            const ffMult = isAwakenedGrenade ? 0.08 : (isTier1Grenade ? 0.18 : 0.28);
-            const ffDmg = Math.round(maxDamage * ffMult);
-            game.totalFriendlyFireDmg += ffDmg;
-            damagePlayer(pl, ffDmg);
-          }
-        });
+        const attacker = game.players.find(p => p.id === attackerId);
+        if (!attacker || attacker.role !== "AI") {
+          game.players.forEach(pl => {
+            if (pl.downed) return;
+            const distP = Math.hypot(pl.x - x, pl.z - z);
+            if (distP <= radius * 0.8) {
+              const ffMult = isAwakenedGrenade ? 0.08 : (isTier1Grenade ? 0.18 : 0.28);
+              const ffDmg = Math.round(maxDamage * ffMult);
+              game.totalFriendlyFireDmg += ffDmg;
+              damagePlayer(pl, ffDmg);
+            }
+          });
+        }
       }
     }
 

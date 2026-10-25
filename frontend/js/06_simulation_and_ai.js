@@ -341,8 +341,11 @@
         }
       }
 
-      // 3. [안전 보장] 방 내부 바닥 산성 장판 즉시 제거
-      game.acidPools = game.acidPools.filter(a => a.roomIndex !== room.index);
+      // 3. [안전 보장] 방 내부 및 전체 바닥 잔존 산성 장판 즉시 제거
+      game.acidPools.forEach(pool => {
+        if (pool.mesh) effectsGroup.remove(pool.mesh);
+      });
+      game.acidPools = [];
 
       // 4. [안전 보장] 섹터 클리어 시 스쿼드 전원 체력 100% 완전 회복 + 12.0초간 완전 무적 보호 버퍼 부여
       game.players.forEach(p => {
@@ -967,9 +970,10 @@
             backDoor.mesh.material.emissive.setHex(0x450a0a);
           }
           game.players.forEach((pl, idx) => {
-            if (Math.abs(pl.x - nextR.wx) >= (nextR.hw || nextR.half) || Math.abs(pl.z - nextR.wz) >= (nextR.hd || nextR.half)) {
-              pl.x = meP.x + (idx - 1.5) * 1.5;
-              pl.z = meP.z + 1.2;
+            if (pl.id !== meP.id && (Math.abs(pl.x - nextR.wx) >= (nextR.hw || nextR.half) || Math.abs(pl.z - nextR.wz) >= (nextR.hd || nextR.half))) {
+              const ang = (idx / 4) * Math.PI * 2;
+              pl.x = meP.x + Math.cos(ang) * 2.8;
+              pl.z = meP.z + Math.sin(ang) * 2.8;
               if (pl.visual && pl.visual.group) pl.visual.group.position.set(pl.x, 0, pl.z);
             }
           });
@@ -3584,33 +3588,37 @@
           }
 
           if (!removeBullet && game.friendlyFire && !b.noFriendlyFire) {
-            for (const pl of game.players) {
-              if (pl.id !== b.ownerId && !pl.downed && Math.hypot(pl.x - b.x, pl.z - b.z) < 0.75) {
-                // [다목적 전술 드론: 탄약 요격 방어 모듈] 아군 오사 탄환을 착탄 직전 레이저로 즉시 요격 소멸!
-                if (pl.drone && pl.drone.unlocked && pl.drone.modules && pl.drone.modules.interceptor && (pl.drone.modules.interceptor.level || 0) >= 1 && (pl.drone.modules.interceptor.cooldown || 0) <= 0) {
-                  const intLv = pl.drone.modules.interceptor.level || 1;
-                  const cdTable = [0, 6.0, 3.5, 1.8, 0.6];
-                  pl.drone.modules.interceptor.cooldown = cdTable[intLv] || 6.0;
-                  removeBullet = true;
-                  SoundFX.play("pickup");
-                  spawnBloodParticles(b.x, 1.2, b.z, 0x38bdf8, 8); // Cyan laser parry sparks
-                  const safeBanner = document.getElementById("hud-safe-banner");
-                  if (safeBanner) {
-                    document.getElementById("hud-safe-banner-text").textContent = `⚡ [요격 드론] 팀킬 탄환 레이저 요격 방어!`;
-                    safeBanner.classList.remove("hidden");
-                    setTimeout(() => safeBanner.classList.add("hidden"), 1800);
+            const shooter = game.players.find(p => p.id === b.ownerId);
+            // AI 봇 아군 탄환은 절대 아군(플레이어)에게 오사 피해를 입히지 않음
+            if (!shooter || shooter.role !== "AI") {
+              for (const pl of game.players) {
+                if (pl.id !== b.ownerId && !pl.downed && Math.hypot(pl.x - b.x, pl.z - b.z) < 0.75) {
+                  // [다목적 전술 드론: 탄약 요격 방어 모듈] 아군 오사 탄환을 착탄 직전 레이저로 즉시 요격 소멸!
+                  if (pl.drone && pl.drone.unlocked && pl.drone.modules && pl.drone.modules.interceptor && (pl.drone.modules.interceptor.level || 0) >= 1 && (pl.drone.modules.interceptor.cooldown || 0) <= 0) {
+                    const intLv = pl.drone.modules.interceptor.level || 1;
+                    const cdTable = [0, 6.0, 3.5, 1.8, 0.6];
+                    pl.drone.modules.interceptor.cooldown = cdTable[intLv] || 6.0;
+                    removeBullet = true;
+                    SoundFX.play("pickup");
+                    spawnBloodParticles(b.x, 1.2, b.z, 0x38bdf8, 8); // Cyan laser parry sparks
+                    const safeBanner = document.getElementById("hud-safe-banner");
+                    if (safeBanner) {
+                      document.getElementById("hud-safe-banner-text").textContent = `⚡ [요격 드론] 팀킬 탄환 레이저 요격 방어!`;
+                      safeBanner.classList.remove("hidden");
+                      setTimeout(() => safeBanner.classList.add("hidden"), 1800);
+                    }
+                    break;
                   }
+                  if (b.explosiveRadius > 0) {
+                    triggerExplosion(b.x, b.z, b.explosiveRadius, b.damage, b.ownerId, b.awakened, 0, b.tier1Special);
+                  } else {
+                    const ffDmg = Math.max(4, Math.round(b.damage * 0.25));
+                    game.totalFriendlyFireDmg += ffDmg;
+                    damagePlayer(pl, ffDmg, false, false);
+                  }
+                  removeBullet = true;
                   break;
                 }
-                if (b.explosiveRadius > 0) {
-                  triggerExplosion(b.x, b.z, b.explosiveRadius, b.damage, b.ownerId, b.awakened, 0, b.tier1Special);
-                } else {
-                  const ffDmg = Math.max(4, Math.round(b.damage * 0.25));
-                  game.totalFriendlyFireDmg += ffDmg;
-                  damagePlayer(pl, ffDmg, false, false);
-                }
-                removeBullet = true;
-                break;
               }
             }
           }

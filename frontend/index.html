@@ -84,12 +84,12 @@
 
         <!-- Row 2: 4 Ergonomic Tactical Action Buttons with Clear Labels & Fixed Height (h-11) -->
         <div class="grid grid-cols-4 gap-1.5 text-xs font-mono-code">
-          <button id="btn-use-medkit" type="button" title="구급키트 / 나노 주사기 치료 [Q]" class="h-11 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/35 text-emerald-100 font-bold flex flex-col items-center justify-center leading-tight transition">
-            <span id="hud-medkit-label" class="text-[11px] text-emerald-300 font-sans font-bold">🩹 치료[Q]</span>
+          <button id="btn-use-medkit" type="button" title="구급키트 / 나노 주사기 치료 [Z]" class="h-11 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/35 text-emerald-100 font-bold flex flex-col items-center justify-center leading-tight transition">
+            <span id="hud-medkit-label" class="text-[11px] text-emerald-300 font-sans font-bold">🩹 치료[Z]</span>
             <span class="text-xs font-extrabold"><span id="hud-medkit-count">1</span><span class="text-slate-400 text-[10px]">/<span id="hud-medkit-max">1</span></span></span>
           </button>
-          <button id="btn-use-stim" type="button" title="아드레날린 스팀팩 [E]" class="h-11 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-500/35 text-amber-100 font-bold flex flex-col items-center justify-center leading-tight transition">
-            <span class="text-[11px] text-amber-300 font-sans font-bold">⚡ 스팀[E]</span>
+          <button id="btn-use-stim" type="button" title="아드레날린 스팀팩 [X]" class="h-11 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-500/35 text-amber-100 font-bold flex flex-col items-center justify-center leading-tight transition">
+            <span class="text-[11px] text-amber-300 font-sans font-bold">⚡ 스팀[X]</span>
             <span class="text-xs font-extrabold"><span id="hud-stim-count">1</span><span class="text-slate-400 text-[10px]">/<span id="hud-stim-max">1</span></span></span>
           </button>
           <button id="btn-dash" type="button" title="전술 회피·점프 월담 [Space / 우클릭]" class="h-11 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-400/35 text-indigo-100 font-bold flex flex-col items-center justify-center leading-tight transition">
@@ -167,8 +167,8 @@
 
           <!-- 6 Clear Utility Buttons with Readable Labels -->
           <div class="grid grid-cols-6 gap-1.5 w-full">
-            <button id="btn-open-upgrade" type="button" title="무기 강화소 [R]" class="h-9 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition flex items-center justify-center">
-              🔧<span class="hidden"> 무기 강화 / 탄약 조합 [R]</span>
+            <button id="btn-open-upgrade" type="button" title="무기고 단말기 [F]" class="h-9 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition flex items-center justify-center">
+              🔧<span class="hidden"> 무기 강화 / 탄약 조합 [F]</span>
             </button>
             <button id="btn-open-settings" type="button" title="환경설정 (3D 멀미 방지 / 그래픽 / 오디오) [O]" class="h-9 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-black transition flex items-center justify-center">
               ⚙️
@@ -318,7 +318,7 @@
       <div class="flex flex-col gap-2.5 border-b border-slate-800 pb-3 shrink-0">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-2.5">
-            <h3 class="text-base sm:text-lg font-black text-white">🔧 전술 무기고 정비 · 강화소 <span class="text-xs font-mono-code text-amber-300 ml-1">[단축키 R]</span></h3>
+            <h3 class="text-base sm:text-lg font-black text-white">🔧 전술 무기고 정비 · 강화소 <span class="text-xs font-mono-code text-amber-300 ml-1">[단말기 F 상호작용]</span></h3>
             <span id="upg-resonance-info" class="px-2.5 py-1 rounded-lg bg-cyan-950/90 border border-cyan-500/40 text-cyan-200 text-xs font-mono-code font-bold">
               숙련도 공명: 0개 (화력 +0%)
             </span>
@@ -556,9 +556,9 @@
               <div><b class="text-cyan-300">Shift 유지</b> : 스태미너 질주</div>
               <div><b class="text-sky-300">Space / 우클릭</b> : 점프·회피</div>
               <div><b class="text-rose-300">V</b> : 360° 기절·보스패링</div>
-              <div><b class="text-teal-300">Q / E</b> : 구급키트 / 스팀팩</div>
-              <div><b class="text-emerald-300">F 유지</b> : 상호작용·구출·힐</div>
-              <div><b class="text-fuchsia-300">Z/X·휠·1~8</b> : 무기교체 [R:무기고]</div>
+              <div><b class="text-teal-300">Z / X</b> : 구급키트 / 스팀팩</div>
+              <div><b class="text-emerald-300">F 유지</b> : 상호작용·무기고·구출</div>
+              <div><b class="text-fuchsia-300">Q / E · 휠 · 1~8</b> : 무기 교체 [F:무기고]</div>
             </div>
           </div>
 

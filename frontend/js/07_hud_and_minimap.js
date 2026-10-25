@@ -110,7 +110,7 @@
       const medMaxEl = document.getElementById("hud-medkit-max");
       if (medMaxEl) medMaxEl.textContent = getPlayerMaxMedkits(me);
       const medLabelEl = document.getElementById("hud-medkit-label");
-      if (medLabelEl) medLabelEl.textContent = isPlayerSyringeUpgraded(me) ? "[Q] 주사기" : "[Q] 치료";
+      if (medLabelEl) medLabelEl.textContent = isPlayerSyringeUpgraded(me) ? "[Z] 주사기" : "[Z] 치료";
 
       document.getElementById("hud-stim-count").textContent = me.stims;
       const stimMaxEl = document.getElementById("hud-stim-max");
