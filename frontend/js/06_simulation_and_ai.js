@@ -992,16 +992,22 @@
         if (!room || room.lockedBehind) return;
         room.lockedBehind = true;
 
+        // 1. 후방 격벽 문 물리적 폐쇄 및 붉은색 잠금
         const prevIdx = room.index - 1;
         const backDoor = game.doors.find(d => d.fromRoom === prevIdx && d.toRoom === room.index);
         if (backDoor) {
           backDoor.open = false;
           backDoor.lockedPermanently = true;
-          backDoor.mesh.position.y = 2.0;
-          backDoor.mesh.material.color.setHex(0x991b1b);
-          backDoor.mesh.material.emissive.setHex(0x450a0a);
+          if (backDoor.mesh) {
+            backDoor.mesh.position.y = 2.0;
+            if (backDoor.mesh.material && backDoor.mesh.material.color) {
+              backDoor.mesh.material.color.setHex(0x991b1b);
+              backDoor.mesh.material.emissive.setHex(0x450a0a);
+            }
+          }
         }
 
+        // 2. 콘솔 레버 내림 & 월드 심볼 소거
         if (room.bulkheadConsole) {
           room.bulkheadConsole.done = true;
           if (room.bulkheadConsole.lever) {
@@ -1012,6 +1018,7 @@
           }
         }
 
+        // 3. 지연 도착 대원 안전 합류
         const meP = game.players[mySlotIndex] || game.players[0];
         game.players.forEach((pl, idx) => {
           if (pl.id !== meP.id && (Math.abs(pl.x - room.wx) >= (room.hw || room.half) || Math.abs(pl.z - room.wz) >= (room.hd || room.half))) {
@@ -1033,7 +1040,7 @@
           } catch (e) {}
         }
 
-        // 이전 섹터 잔존 감염체 100% 완전 소멸
+        // 4. 이전 섹터 잔존 감염체 100% 완전 소멸
         for (let zi = game.zombies.length - 1; zi >= 0; zi--) {
           if (game.zombies[zi].roomIndex < room.index) {
             entitiesGroup.remove(game.zombies[zi].group);
@@ -1041,12 +1048,13 @@
           }
         }
 
+        // 5. 폭발 효과 & 사운드 & 파티클
         SoundFX.play("explosion");
-        shakeCamera(0.65, 0.45);
-        if (typeof spawnExplosionVFX === "function") {
-          spawnExplosionVFX(room.bulkheadConsole ? room.bulkheadConsole.x : room.wx, 1.5, room.bulkheadConsole ? room.bulkheadConsole.z : room.wz, 4.0);
+        if (typeof spawnMissionStageVFX === "function") {
+          spawnMissionStageVFX(room.bulkheadConsole ? room.bulkheadConsole.x : room.wx, room.bulkheadConsole ? room.bulkheadConsole.z : room.wz, 0xf59e0b, 8.5, 25, true);
         }
 
+        // 6. 붕괴 배너 정리
         const collapseBanner = document.getElementById("hud-collapse-banner");
         if (collapseBanner) collapseBanner.classList.add("hidden");
         const collapseMsg = document.getElementById("hud-collapse-msg");
@@ -1055,6 +1063,20 @@
         if (collapseTimerEl) collapseTimerEl.textContent = "";
         if (game.collapseState) game.collapseState.active = false;
 
+        // 7. [신규 섹터 작전 개시] 타이머 작동 및 3.5초 카운트다운 후 호드 웨이브 돌입!
+        game.wavePhase = "CALM";
+        game.waveTimer = 3.5;
+        SoundFX.play("alarm");
+
+        // 8. 1단계 미션 노드 생성 (없는 경우)
+        if (room.unlockStage === 0 && !room.isBossRoom && !room.hasMidBoss && room.condType !== "THERMITE") {
+          const hasNode = game.missionNodes.some(n => n.roomIndex === room.index && (n.stepOrder === 1 || n.genIndex === 1));
+          if (!hasNode && typeof spawnRandomMissionStepForRoom === "function") {
+            spawnRandomMissionStepForRoom(room, 1);
+          }
+        }
+
+        // 9. HUD 알림 배너
         const safeBanner = document.getElementById("hud-safe-banner");
         if (safeBanner) {
           if (room.hasMidBoss && !room.midBossAwakened) {
@@ -1070,7 +1092,7 @@
               "👑 후방 격벽 폐쇄 완료! 무기고 정비 완료 후 입구의 [F] 격벽 콘솔을 가동하십시오.";
           } else {
             document.getElementById("hud-safe-banner-text").textContent =
-              `🔒 후방 격벽 폐쇄 완료! 통로 영구 차단 & S${room.index + 1} 강화 상한 해금`;
+              `🔒 후방 격벽 폐쇄 완료! 통로 영구 차단 & S${room.index + 1} 작전이 개시됩니다! (3초 후 호드 웨이브)`;
           }
           safeBanner.classList.remove("hidden");
           setTimeout(() => safeBanner.classList.add("hidden"), 4500);
@@ -1093,27 +1115,20 @@
           relocateArmoryForCalmPhase(nextR);
           updateRoomVisibility();
 
-          // 다음 섹터 진입 시 1단계 미션 노드가 아직 없다면 즉시 배치하여 비콘 및 가시성 확보!
-          if (nextR.unlockStage === 0 && !nextR.isBossRoom && !nextR.hasMidBoss && nextR.condType !== "THERMITE") {
-            const hasNode = game.missionNodes.some(n => n.roomIndex === nextR.index && (n.stepOrder === 1 || n.genIndex === 1));
-            if (!hasNode && typeof spawnRandomMissionStepForRoom === "function") {
-              spawnRandomMissionStepForRoom(nextR, 1);
-            }
-          }
-
           const safeBanner = document.getElementById("hud-safe-banner");
           if (safeBanner && !nextR.lockedBehind) {
             document.getElementById("hud-safe-banner-text").textContent =
-              "🚪 섹터 진입! 입구 콘솔 [F]로 후방 격벽을 폐쇄하고 잔존 감염체를 소멸시키십시오.";
+              "🚪 섹터 진입! 입구 콘솔 [F]로 후방 격벽을 폐쇄하면 섹터 작전이 개시됩니다.";
             safeBanner.classList.remove("hidden");
             setTimeout(() => safeBanner.classList.add("hidden"), 4500);
           }
         }
       }
 
-      // 1c. 섹터 제한시간(260~440초) 초과 시 [🚨 타임아웃 페널티: 신경 독가스 살포 & 호드 광폭화(체력+75%·이속+35%·공격력+35%)]!
-      // (주의: 타임아웃 시 문은 절대 열리지 않으며, 반드시 미션을 완수해야만 탈출로가 개방됩니다!)
-      if (curRoom && !curRoom.cleared && !curRoom.isBossRoom) {
+      // 1c. 섹터 제한시간(260~440초) 초과 시 [🚨 타임아웃 페널티: 신경 독가스 살포 & 호드 광폭화]!
+      // [신규 규칙] 1섹터 이후(curRoom.index > 0)에서는 후방 격벽이 폐쇄(curRoom.lockedBehind === true)되어야 비로소 타이머가 작동!
+      const isAwaitingBulkhead = curRoom && curRoom.index > 0 && !curRoom.lockedBehind;
+      if (curRoom && !curRoom.cleared && !curRoom.isBossRoom && !isAwaitingBulkhead) {
         curRoom.sectorTimer = Math.max(0, (curRoom.sectorTimer || 260) - dt);
         if (curRoom.sectorTimer <= 0) {
           if (!curRoom.overtimeAlerted) {
@@ -1630,7 +1645,15 @@
       });
 
       // 4. 엄격한 순차 웨이브 방어 & 미션 요소 해금 + [v3.1] 소강기(CALM) 전용 팝업 무기고 + 스폰 구멍 중반 이후 확률 개방
-      game.waveTimer = (game.waveTimer || 6.0) - dt;
+      // [신규 규칙] 1섹터 이후(curRoom.index > 0)에서는 후방 격벽 폐쇄 전까지 웨이브 카운트다운을 정지하고 소강기(CALM) 정비 상태를 유지!
+      const curRoomWaitingBulkhead = curRoom && curRoom.index > 0 && !curRoom.lockedBehind;
+
+      if (!curRoomWaitingBulkhead) {
+        game.waveTimer = (game.waveTimer || 6.0) - dt;
+      } else {
+        game.wavePhase = "CALM";
+        game.waveTimer = 15.0;
+      }
       if (game.waveTimer <= 0) {
         if (game.wavePhase === "CALM") {
           game.wavePhase = "SURGE";
@@ -2131,12 +2154,14 @@
                 interactBar.style.width = "0%";
               } else {
                 interactTitle.textContent = "🔒 [F 홀드] 후방 격벽 긴급 폐쇄";
-                interactDesc.textContent = "후방 통로를 영구 차단하고 이전 구역 감염체를 소멸시킵니다. (0.8초)";
+                interactDesc.textContent = "후방 통로를 영구 차단하고 S" + (targetRoom.index + 1) + " 작전을 개시합니다. (0.8초)";
                 if (holdingF) {
                   nearMissionNode.holdTime = (nearMissionNode.holdTime || 0) + dt;
                   interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 0.8) * 100) + "%";
                   if (nearMissionNode.holdTime >= 0.8) {
                     closeAndLockBulkheadDoor(targetRoom);
+                    nearMissionNode.holdTime = 0;
+                    interactBar.style.width = "0%";
                   }
                 } else {
                   interactBar.style.width = "0%";

@@ -225,10 +225,10 @@
       document.getElementById("hud-resonance-badge").textContent = `⚡+${totalBonusPct}%`;
       const ocBadge = document.getElementById("hud-overcharge-badge");
       if (ocBadge) {
-        const isOc = (me.swapOverchargeTimer || 0) > 0;
+        const isOc = Boolean(me.overclockActive && me.specActiveTimer > 0);
         ocBadge.classList.toggle("hidden", !isOc);
         if (isOc) {
-          ocBadge.textContent = `⚡과충전 ${me.swapOverchargeTimer.toFixed(1)}s`;
+          ocBadge.textContent = `🔥과충전 ${me.specActiveTimer.toFixed(1)}s`;
         }
       }
 
@@ -280,6 +280,12 @@
           secTimerVal.className = "font-mono-code font-black text-lg text-rose-400 tracking-wider";
           if (secTimerTitle) secTimerTitle.textContent = "⚔️ 코어 결전";
           if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse";
+        } else if (curRoom.index > 0 && !curRoom.lockedBehind) {
+          secTimerVal.textContent = "격벽 대기";
+          secTimerVal.className = "font-mono-code font-black text-lg text-amber-400 tracking-wider animate-pulse";
+          if (secTimerTitle) secTimerTitle.textContent = "🔒 후방 격벽 폐쇄 필요";
+          if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
+          secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-amber-500/80 shadow-2xl backdrop-blur-md pointer-events-auto";
         } else {
           const remSec = Math.max(0, Math.ceil(curRoom.sectorTimer || 0));
           const tMins = String(Math.floor(remSec / 60)).padStart(2, "0");
@@ -338,6 +344,9 @@
           if (compStg >= maxSteps) {
             return `🚪 탈출로 개방 완료 (전원 진입)`;
           }
+          if (curRoom.index > 0 && !curRoom.lockedBehind) {
+            return "🚪 입구 콘솔에서 후방 격벽 폐쇄 필요";
+          }
           if (curRoom.waitingForWaveDefense) {
             const quota = curRoom.waveZombieQuota || 30;
             const spawned = curRoom.waveZombiesSpawned || 0;
@@ -353,7 +362,11 @@
           return `🧭 ${hint} 이동 [F] · ${timerTag}`;
         };
 
-        if (curRoom.waitingForWaveDefense) {
+        if (curRoom.index > 0 && !curRoom.lockedBehind) {
+          objText.textContent = "🔒 후방 격벽 폐쇄 [F] (입구 콘솔)";
+          if (objSub) objSub.textContent = "입구 콘솔을 당겨 후방을 차단하면 작전이 개시됩니다.";
+          objBar.style.width = "0%";
+        } else if (curRoom.waitingForWaveDefense) {
           const quota = curRoom.waveZombieQuota || 30;
           const spawned = curRoom.waveZombiesSpawned || 0;
           if (spawned < quota) {

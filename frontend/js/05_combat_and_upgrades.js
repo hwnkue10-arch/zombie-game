@@ -169,21 +169,7 @@
       if ((player.downed || player.carryingPayload) && slotIdx !== 0) return; // Forced Pistol when downed or carrying payload!
       if (player.inventory[slotIdx] && player.inventory[slotIdx].unlocked) {
         if (player.currentWeapon !== slotIdx) {
-          const prevIdx = player.currentWeapon;
           player.currentWeapon = slotIdx;
-
-          // [폭약통·방벽 등 설치물과 과충전 완전 분리]
-          // 설치형 무기(placeType)를 꺼내거나 설치물에서 바꿀 때는 과충전이 발동하지 않으며 즉시 0초로 초기화!
-          // 오직 사격 총기(Firearm) 상호 교체 시에만 2.5초간 퀵스왑 과충전 발동!
-          const prevW = WEAPONS[prevIdx];
-          const nextW = WEAPONS[slotIdx];
-          const isFirearm = (w) => w && !w.placeType;
-
-          if (isFirearm(prevW) && isFirearm(nextW)) {
-            player.swapOverchargeTimer = 2.5;
-          } else {
-            player.swapOverchargeTimer = 0;
-          }
         }
         updateWeaponSlotsHUD();
       }
@@ -1484,16 +1470,18 @@
       const pureBonus = isDownedPistol ? { dmgMult: 1.0, spdMult: 1.0, extraPierce: 0, armorIgnore: false, weakBonus: 0 } : getPureStatMasteryBonus(inv);
       const overdriveMult = (!isDownedPistol && effTranscended) ? 1.55 : ((!isDownedPistol && inv.totalLv >= 45) ? 1.35 : 1.0);
 
-      const atkMult = (1 + effAtkLv * 0.20) * resMult * (effTier1 ? 1.15 : 1.0) * pureBonus.dmgMult * overdriveMult;
-      const spdMult = isDownedPistol ? 0.85 : ((1 + effSpdLv * 0.10) * (pureBonus.spdMult || 1.0) * (effTranscended ? 1.25 : (inv.totalLv >= 45 ? 1.15 : 1.0)) * (player.stimBuffTimer > 0 ? 1.25 : 1.0) * (player.swapOverchargeTimer > 0 ? 1.25 : 1.0) * (player.frostTimer > 0 && player.stimBuffTimer <= 0 ? 0.75 : 1.0));
+      const isStrikerOvercharged = Boolean(player.specialization === "STRIKER" && player.overclockActive && player.specActiveTimer > 0);
+      const atkMult = (1 + effAtkLv * 0.20) * resMult * (effTier1 ? 1.15 : 1.0) * pureBonus.dmgMult * overdriveMult * (isStrikerOvercharged ? 1.25 : 1.0);
+      const spdMult = isDownedPistol ? 0.85 : ((1 + effSpdLv * 0.10) * (pureBonus.spdMult || 1.0) * (effTranscended ? 1.25 : (inv.totalLv >= 45 ? 1.15 : 1.0)) * (player.stimBuffTimer > 0 ? 1.25 : 1.0) * (player.frostTimer > 0 && player.stimBuffTimer <= 0 ? 0.75 : 1.0));
       const isPierceInArea = (wIdx === 0 || wIdx === 3);
       const rangeMult = isPierceInArea ? 1.15 : (1 + effAreaLv * 0.22);
-      const stunDur = isDownedPistol ? 0.15 : ((wDef.stun + effStunLv * 0.22) * (player.swapOverchargeTimer > 0 ? 1.35 : 1.0));
+      const stunDur = isDownedPistol ? 0.15 : ((wDef.stun + effStunLv * 0.22) * (isStrikerOvercharged ? 1.35 : 1.0));
       const knockVal = isDownedPistol ? 0.35 : (wDef.knockback * (1 + effStunLv * 0.28));
-      const pierceCount = isDownedPistol ? 1 : ((wDef.piercing ? 99 : 1) + (wDef.pierceBase || 0) + (isPierceInArea ? effAreaLv : 0) + (wIdx === 0 && effTier1 ? 1 : 0) + (wIdx === 0 && effAwakened ? 2 : 0) + (pureBonus.extraPierce || 0));
+      const strikerPierce = player.specialization === "STRIKER" ? (isStrikerOvercharged ? 2 : 1) : 0;
+      const pierceCount = isDownedPistol ? 1 : ((wDef.piercing ? 99 : 1) + (wDef.pierceBase || 0) + (isPierceInArea ? effAreaLv : 0) + (wIdx === 0 && effTier1 ? 1 : 0) + (wIdx === 0 && effAwakened ? 2 : 0) + (pureBonus.extraPierce || 0) + strikerPierce);
       const areaMult = isPierceInArea ? 1.05 : rangeMult;
 
-      player.fireCooldown = Math.max(0.030, (wDef.fireRate / spdMult) * (player.overclockActive ? 0.74 : 1.0));
+      player.fireCooldown = Math.max(0.030, (wDef.fireRate / spdMult) * (isStrikerOvercharged ? 0.74 : 1.0));
 
       if (player.id === mySlotIndex) {
         SoundFX.play(wDef.sound);
@@ -2584,7 +2572,8 @@
         player.specActiveTimer = 6.0;
         player.overclockActive = true;
         SoundFX.play("pickup");
-        spawnBloodParticles(player.x, 1.5, player.z, 0x38bdf8, 12);
+        spawnMissionStageVFX(player.x, player.z, 0xf59e0b, 3.5, 18, true);
+        spawnBloodParticles(player.x, 1.5, player.z, 0xef4444, 15);
       } else if (spec === "MEDIC") {
         player.specCooldown = 40.0;
         player.specActiveTimer = 7.0;
