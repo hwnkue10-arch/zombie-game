@@ -1313,8 +1313,18 @@
       requestAnimationFrame(animate);
       const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
       lastFrameTime = now;
-      if (game.running) updateSimulation(dt);
-      renderer.render(scene, camera);
+      if (game.running) {
+        try {
+          updateSimulation(dt);
+        } catch (simErr) {
+          console.error("Simulation error in frame:", simErr);
+        }
+      }
+      try {
+        renderer.render(scene, camera);
+      } catch (rendErr) {
+        console.error("Render error in frame:", rendErr);
+      }
     }
 
     let initializedAutoConnect = false;

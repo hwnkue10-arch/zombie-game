@@ -364,10 +364,16 @@
 
       room.cleared = true;
 
-      // 1. [안전 보장] 클리어 즉시 해당 방의 지향성 독가스 즉시 정지 및 비활성화
+      // 1. [안전 보장] 클리어 즉시 해당 방의 지향성 독가스 즉시 정지 및 비활성화, 전 구역 완전 정화 안전구역화
       room.gasWaveActive = false;
       room.gasWaveProgress = 0;
+      room.envCleared = true;
       if (room.gasMesh) room.gasMesh.visible = false;
+      if (room.envType === "TOXIC_FOG" || room.envType === "CRYO_LEAK") {
+        if (typeof addRoomSafeZone === "function") {
+          addRoomSafeZone(room, room.wx, room.wz, Math.max(room.hw || room.half, room.hd || room.half) * 1.5, "전 구역 완전 정화 안전지대");
+        }
+      }
 
       // 2. 해당 방 내부 바닥 잔존 산성 장판 즉시 제거
       game.acidPools = game.acidPools.filter(a => a.roomIndex !== room.index);
@@ -1170,7 +1176,7 @@
       //    -> 대신, 이전 방(prevRoom)의 제한시간(sectorTimer)이 0초를 향해 계속 감소합니다.
       //    -> 이전 방의 제한시간이 0초에 도달하면 기존 게임의 표준 '광폭화(Berserk Enrage)'가 정상 발동하여 스폰 구멍이 열리고 독가스가 확산됩니다.
       //    -> 플레이어가 신규 구역 입구 콘솔 [F]로 후방 격벽을 닫을 때까지 이전 구역의 광폭화 상태가 유지됩니다.
-      if (prevRoom && !prevRoom.lockedBehind) {
+      if (isAwaitingBulkhead && prevRoom) {
         prevRoom.sectorTimer = Math.max(0, (prevRoom.sectorTimer || 260) - dt);
         if (prevRoom.sectorTimer <= 0) {
           if (!prevRoom.overtimeAlerted) {
@@ -3179,44 +3185,46 @@
             if (d < minD) { minD = d; nearestIdx = idx; }
           });
           if (nearestIdx >= 0) {
-            bar.turretCooldown = bar.awakened ? 0.36 : 0.95;
             const zt = game.zombies[nearestIdx];
-            const dx = zt.x - bar.x, dz = zt.z - bar.z;
-            const dist = Math.hypot(dx, dz) || 1;
-            const nx = dx / dist, nz = dz / dist;
+            if (zt) {
+              bar.turretCooldown = bar.awakened ? 0.36 : 0.95;
+              const dx = zt.x - bar.x, dz = zt.z - bar.z;
+              const dist = Math.hypot(dx, dz) || 1;
+              const nx = dx / dist, nz = dz / dist;
 
-            // 포탑 탄환 발사 (기본 2마리 관통!)
-            const tMesh = new THREE.Mesh(
-              SHARED_GEO.pistolTracer,
-              new THREE.MeshBasicMaterial({ color: bar.awakened ? 0x22d3ee : 0xc084fc })
-            );
-            tMesh.position.set(bar.x, 1.95, bar.z);
-            tMesh.rotation.y = Math.atan2(nx, nz);
-            effectsGroup.add(tMesh);
-            game.bullets.push({
-              ownerId: bar.ownerId !== undefined ? bar.ownerId : mySlotIndex,
-              wIdx: 6,
-              tier1Special: bar.tier1Special,
-              awakened: bar.awakened,
-              noFriendlyFire: true,
-              isZombieProjectile: false,
-              x: bar.x, z: bar.z,
-              vx: nx * 42, vz: nz * 42,
-              damage: bar.turretDmg || 42,
-              weakMult: 1.15,
-              stun: bar.stunDur || 0.25,
-              knockback: 0.65,
-              explosiveRadius: 0,
-              pierceLeft: 2,
-              armorPen: !!bar.awakened,
-              piercing: true,
-              life: 0.45,
-              mesh: tMesh
-            });
+              // 포탑 탄환 발사 (기본 2마리 관통!)
+              const tMesh = new THREE.Mesh(
+                SHARED_GEO.pistolTracer,
+                new THREE.MeshBasicMaterial({ color: bar.awakened ? 0x22d3ee : 0xc084fc })
+              );
+              tMesh.position.set(bar.x, 1.95, bar.z);
+              tMesh.rotation.y = Math.atan2(nx, nz);
+              effectsGroup.add(tMesh);
+              game.bullets.push({
+                ownerId: bar.ownerId !== undefined ? bar.ownerId : mySlotIndex,
+                wIdx: 6,
+                tier1Special: bar.tier1Special,
+                awakened: bar.awakened,
+                noFriendlyFire: true,
+                isZombieProjectile: false,
+                x: bar.x, z: bar.z,
+                vx: nx * 42, vz: nz * 42,
+                damage: bar.turretDmg || 42,
+                weakMult: 1.15,
+                stun: bar.stunDur || 0.25,
+                knockback: 0.65,
+                explosiveRadius: 0,
+                pierceLeft: 2,
+                armorPen: !!bar.awakened,
+                piercing: true,
+                life: 0.45,
+                mesh: tMesh
+              });
 
-            bar.turretAmmo = Math.max(0, (bar.turretAmmo || 160) - 1);
-            if (bar.turretAmmo <= 0) {
-              bar.reloadTimer = 8.0; // 8초 냉각 후 100% 탄약으로 재장전!
+              bar.turretAmmo = Math.max(0, (bar.turretAmmo || 160) - 1);
+              if (bar.turretAmmo <= 0) {
+                bar.reloadTimer = 8.0; // 8초 냉각 후 100% 탄약으로 재장전!
+              }
             }
           }
         }
@@ -3263,6 +3271,7 @@
 
       for (let i = game.zombies.length - 1; i >= 0; i--) {
         const z = game.zombies[i];
+        if (!z) continue;
         z.attackCooldown = Math.max(0, z.attackCooldown - dt);
         if (z.mbGroggyTimer > 0) z.mbGroggyTimer = Math.max(0, z.mbGroggyTimer - dt);
 
@@ -3712,6 +3721,7 @@
 
       for (let i = game.bullets.length - 1; i >= 0; i--) {
         const b = game.bullets[i];
+        if (!b) continue;
         b.life -= dt;
         b.x += b.vx * dt;
         b.z += b.vz * dt;

@@ -2126,6 +2126,7 @@
       spawnBloodParticles(zmb.x, 1.1, zmb.z, 0xdc2626, 2);
 
       if (zmb.hp <= 0) {
+        const curR = game.rooms[game.currentRoomIndex];
         const wasStunned = zmb.stunTimer > 0;
         const wasFrozen = (zmb.freezeTimer || 0) > 0;
         const zx = zmb.x, zz = zmb.z;
@@ -2160,7 +2161,6 @@
         game.totalKills++;
         game.comboCount++;
         game.comboTimer = 5.5;
-        const curR = game.rooms[game.currentRoomIndex];
         const envMult = (curR && curR.envType === 'BLOOD_RAIN') ? 1.35 : 1.0;
 
         if (curR) {
