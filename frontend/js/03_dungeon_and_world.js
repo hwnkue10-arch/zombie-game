@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.2 — Frontend Module: 03_dungeon_and_world.js
+ * BOXHEAD: THE CORE v3.5 — Frontend Module: 03_dungeon_and_world.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */

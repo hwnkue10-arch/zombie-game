@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.3 — Hamachi Local Co-op Server (backend/server.js)
+ * BOXHEAD: THE CORE v3.5 — Hamachi Local Co-op Server (backend/server.js)
  * - Serves `frontend/` static files over HTTP on port 3000
  * - Hosts 4-Player WebSocket server on port 3000
  * - Works with `express` + `ws` (via `npm install`) AND includes a built-in
@@ -37,17 +37,17 @@ const MIME_TYPES = {
 function handleHttpRequest(req, res) {
   const safeUrl = (req.url || "/").split("?")[0];
 
-  if (safeUrl === "/api/status") {
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({
-      status: "ok",
-      version: "3.1.0",
-      gameRunning: roomManager.gameRunning,
-      connectedClients: roomManager.clients.size,
-      slots: roomManager.getPublicSlots()
-    }));
-    return;
-  }
+    if (safeUrl === "/api/status") {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({
+        status: "ok",
+        version: "3.5.0",
+        gameRunning: roomManager.gameRunning,
+        connectedClients: roomManager.clients.size,
+        slots: roomManager.getPublicSlots()
+      }));
+      return;
+    }
 
   let relPath = safeUrl === "/" ? "/index.html" : safeUrl;
   const filePath = path.normalize(path.join(FRONTEND_DIR, relPath));
@@ -220,7 +220,7 @@ function getNetworkAddresses() {
 server.listen(PORT, HOST, () => {
   const addrs = getNetworkAddresses();
   console.log("===================================================================");
-  console.log(" 🚀 BOXHEAD: THE CORE v3.3 — HAMACHI 4-PLAYER CO-OP SERVER READY");
+  console.log(" 🚀 BOXHEAD: THE CORE v3.5 — HAMACHI 4-PLAYER CO-OP SERVER READY");
   console.log("===================================================================");
   console.log(` • WebSocket Engine : ${attachedWsLibrary ? "ws (Node Package)" : "Native RFC-6455 Built-in Engine"}`);
   console.log(` • Host (방장 접속) : http://localhost:${PORT}`);

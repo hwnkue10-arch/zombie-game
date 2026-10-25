@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.3 — Frontend Module: 06_simulation_and_ai.js
+ * BOXHEAD: THE CORE v3.5 — Frontend Module: 06_simulation_and_ai.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */

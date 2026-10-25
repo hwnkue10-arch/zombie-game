@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.3 — Frontend Module: 01_audio_and_weapons.js
+ * BOXHEAD: THE CORE v3.5 — Frontend Module: 01_audio_and_weapons.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */

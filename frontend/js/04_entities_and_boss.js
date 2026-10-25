@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.3 — Frontend Module: 04_entities_and_boss.js
+ * BOXHEAD: THE CORE v3.5 — Frontend Module: 04_entities_and_boss.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */

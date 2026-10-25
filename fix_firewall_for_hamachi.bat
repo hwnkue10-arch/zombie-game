@@ -7,7 +7,7 @@ exit /b
 :ADMIN_TASK
 title BOXHEAD THE CORE - Firewall Setup
 echo ===================================================================
-echo   BOXHEAD: THE CORE v3.3 - Hamachi Firewall Setup
+echo   BOXHEAD: THE CORE v3.5 - Hamachi Firewall Setup
 echo ===================================================================
 echo.
 echo [1/2] Adding Firewall Inbound Rule for Port 3000...
