@@ -169,9 +169,21 @@
       if ((player.downed || player.carryingPayload) && slotIdx !== 0) return; // Forced Pistol when downed or carrying payload!
       if (player.inventory[slotIdx] && player.inventory[slotIdx].unlocked) {
         if (player.currentWeapon !== slotIdx) {
+          const prevIdx = player.currentWeapon;
           player.currentWeapon = slotIdx;
-          // Quick-Swap Overcharge Buff (2.5s of +25% fire rate & +35% stun when swapping!)
-          player.swapOverchargeTimer = 2.5;
+
+          // [폭약통·방벽 등 설치물과 과충전 완전 분리]
+          // 설치형 무기(placeType)를 꺼내거나 설치물에서 바꿀 때는 과충전이 발동하지 않으며 즉시 0초로 초기화!
+          // 오직 사격 총기(Firearm) 상호 교체 시에만 2.5초간 퀵스왑 과충전 발동!
+          const prevW = WEAPONS[prevIdx];
+          const nextW = WEAPONS[slotIdx];
+          const isFirearm = (w) => w && !w.placeType;
+
+          if (isFirearm(prevW) && isFirearm(nextW)) {
+            player.swapOverchargeTimer = 2.5;
+          } else {
+            player.swapOverchargeTimer = 0;
+          }
         }
         updateWeaponSlotsHUD();
       }

@@ -223,7 +223,14 @@
       const pure45Count = me.inventory.filter(inv => inv.unlocked && !inv.tier1Special && inv.totalLv >= 45).length;
       const totalBonusPct = resCount * 10 + pure15Count * 16 + pure45Count * 12;
       document.getElementById("hud-resonance-badge").textContent = `⚡+${totalBonusPct}%`;
-      document.getElementById("hud-overcharge-badge").classList.toggle("hidden", me.swapOverchargeTimer <= 0);
+      const ocBadge = document.getElementById("hud-overcharge-badge");
+      if (ocBadge) {
+        const isOc = (me.swapOverchargeTimer || 0) > 0;
+        ocBadge.classList.toggle("hidden", !isOc);
+        if (isOc) {
+          ocBadge.textContent = `⚡과충전 ${me.swapOverchargeTimer.toFixed(1)}s`;
+        }
+      }
 
       const squadList = document.getElementById("squad-members-list");
       if (squadList) {
