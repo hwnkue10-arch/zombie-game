@@ -1009,91 +1009,139 @@
         });
       }
 
-      // ==================== 1b) 다목적 전술 드론 모듈 강화 그리드 렌더링 ====================
+      // ==================== 1b) 다목적 전술 드론 본체 해금 & 모듈 베이 그리드 렌더링 ====================
       const droneGrid = document.getElementById("upgrade-drone-grid");
       if (droneGrid) {
         droneGrid.innerHTML = "";
         if (!me.drone) {
           me.drone = {
-            unlocked: true,
+            unlocked: false,
+            animState: "IDLE",
+            animTimer: 0,
+            targetMateId: null,
+            worldX: 0, worldY: 2.15, worldZ: 0,
             modules: {
-              magnet: { level: 1, maxLevel: 4 },
-              medi: { level: 1, maxLevel: 1, cooldown: 0, maxCooldown: 90.0, sectorRevivesUsed: 0 },
-              interceptor: { level: 1, maxLevel: 4, cooldown: 0 }
+              magnet: { level: 0, maxLevel: 4 },
+              medi: { level: 0, maxLevel: 1, cooldown: 0, maxCooldown: 90.0, sectorRevivesUsed: 0 },
+              interceptor: { level: 0, maxLevel: 4, cooldown: 0 }
             }
           };
         }
-        const modules = [
-          {
-            key: "magnet",
-            name: "🧲 자력 수거 모듈",
-            curLv: me.drone.modules.magnet.level || 1,
-            maxLv: 4,
-            costs: [0, 0, 800, 1600, 2800],
-            desc: "바닥의 탄약팩·부품·코어·회복약을 자석처럼 자동 견인 수거합니다.",
-            getStat: (lv) => `수거 반경: ${[0, 4.0, 6.0, 8.0, 10.0][lv]}m`
-          },
-          {
-            key: "interceptor",
-            name: "🛡️ 탄약 요격 방어 모듈",
-            curLv: me.drone.modules.interceptor.level || 1,
-            maxLv: 4,
-            costs: [0, 0, 1000, 2000, 3500],
-            desc: "아군 오사(팀킬) 탄환이 플레이어에게 닿기 직전 고에너지 레이저로 즉시 요격 소멸시킵니다.",
-            getStat: (lv) => `요격 쿨타임: ${[0, 6.0, 3.5, 1.8, 0.6][lv]}s`
-          },
-          {
-            key: "medi",
-            name: "💉 의무 나노 원격 소생",
-            curLv: 1,
-            maxLv: 1,
-            costs: [0, 0],
-            desc: "다운된 아군 발생 시 자동 비행하여 원격 소생 진행 (HP 30 회복 & 독가스/산성/출혈 치료).",
-            getStat: () => `쿨 90s · 구급키트 1개 소모 · 섹터당 2회`
-          }
-        ];
 
-        modules.forEach(m => {
-          const isMax = m.curLv >= m.maxLv;
-          const cost = isMax ? 0 : (m.costs[m.curLv + 1] || 1000);
-          const canUpg = nearArmory && !isMax && game.bioPoints >= cost;
-          const dCard = document.createElement("div");
-          dCard.className = "rounded-2xl p-2.5 border border-indigo-500/40 bg-slate-950/70 flex flex-col justify-between gap-2";
-          dCard.innerHTML = `
-            <div>
-              <div class="flex items-center justify-between pb-1 border-b border-slate-800">
-                <span class="text-xs font-black text-indigo-300">${m.name}</span>
-                <span class="text-[10px] font-mono-code font-bold px-1.5 py-0.5 rounded ${isMax ? "bg-amber-950 text-amber-300" : "bg-indigo-950 text-indigo-300"}">
-                  ${isMax ? "MAX Lv." + m.maxLv : "Lv." + m.curLv + " / " + m.maxLv}
-                </span>
+        if (!me.drone.unlocked) {
+          // [미해금 상태] 전술 드론 프레임 구매 유도 배너/버튼 렌더링
+          const chassisCost = 600;
+          const canBuyChassis = nearArmory && game.bioPoints >= chassisCost;
+          const lockCard = document.createElement("div");
+          lockCard.className = "col-span-1 md:col-span-3 rounded-2xl p-4 border border-indigo-500/50 bg-gradient-to-r from-slate-950 via-indigo-950/40 to-slate-950 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl";
+          lockCard.innerHTML = `
+            <div class="flex items-center gap-3.5">
+              <div class="w-12 h-12 rounded-2xl bg-indigo-950 border border-indigo-400 flex items-center justify-center text-2xl shadow-inner shrink-0">
+                🛸
               </div>
-              <div class="text-[11px] font-mono-code font-bold text-emerald-400 mt-1">${m.getStat(m.curLv)}</div>
-              <div class="text-[10px] text-slate-300 mt-1 leading-snug break-keep">${m.desc}</div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-black text-indigo-200">다목적 전술 드론 본체 프로토콜 해금</span>
+                  <span class="text-[10px] font-mono-code font-bold px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800">미보유</span>
+                </div>
+                <div class="text-xs text-slate-300 mt-0.5 leading-snug break-keep">
+                  해금 시 플레이어 어깨 상공에 전술 드론 3D 모델이 배치되며, <strong class="text-amber-300">자력 수거·원격 의무 소생·탄약 요격</strong> 모듈을 연구·장착할 수 있습니다.
+                </div>
+              </div>
             </div>
-            ${m.maxLv > 1 ? `
+            <button type="button" id="btn-unlock-drone-chassis" ${!canBuyChassis ? "disabled" : ""}
+                    class="w-full md:w-auto px-5 py-2.5 rounded-xl border text-xs font-black transition shrink-0 ${
+                      canBuyChassis
+                        ? "bg-indigo-600 hover:bg-indigo-500 border-indigo-300 text-white shadow-lg cursor-pointer animate-pulse"
+                        : "bg-slate-900 border-slate-800 text-slate-500 cursor-not-allowed"
+                    }">
+              🛸 전술 드론 본체 구매 (${chassisCost} BP)
+            </button>
+          `;
+          droneGrid.appendChild(lockCard);
+
+          const buyBtn = lockCard.querySelector("#btn-unlock-drone-chassis");
+          if (buyBtn) {
+            buyBtn.addEventListener("click", () => unlockDroneChassis(me));
+          }
+        } else {
+          // [해금 완료 상태] 3종 모듈 개별 연구·장착 베이 렌더링
+          const modules = [
+            {
+              key: "magnet",
+              name: "🧲 자력 수거 모듈",
+              curLv: me.drone.modules.magnet.level || 0,
+              maxLv: 4,
+              costs: [0, 250, 500, 850, 1300],
+              parts: [0, 0, 0, 1, 1],
+              desc: "바닥의 탄약팩·부품·코어·회복약을 자석처럼 자동 견인 수거합니다.",
+              getStat: (lv) => lv === 0 ? "비활성 (미장착)" : `수거 반경: ${[0, 4.0, 6.0, 8.0, 10.0][lv]}m`
+            },
+            {
+              key: "interceptor",
+              name: "🛡️ 탄약 요격 방어 모듈",
+              curLv: me.drone.modules.interceptor.level || 0,
+              maxLv: 4,
+              costs: [0, 350, 600, 950, 1500],
+              parts: [0, 0, 0, 1, 1],
+              desc: "아군 오사(팀킬) 탄환이 플레이어에게 닿기 직전 고에너지 레이저로 즉시 요격 소멸시킵니다.",
+              getStat: (lv) => lv === 0 ? "비활성 (미장착)" : `요격 쿨타임: ${[0, 6.0, 3.5, 1.8, 0.6][lv]}s`
+            },
+            {
+              key: "medi",
+              name: "💉 의무 나노 원격 소생",
+              curLv: me.drone.modules.medi.level || 0,
+              maxLv: 1,
+              costs: [0, 700],
+              parts: [0, 1],
+              desc: "다운된 아군 발생 시 드론이 시체로 직접 비행하여 원격 소생 (HP 30 회복 & 독가스/산성/출혈 치료).",
+              getStat: (lv) => lv === 0 ? "비활성 (미장착)" : `쿨 90s · 구급키트 1개 소모 · 섹터당 2회`
+            }
+          ];
+
+          modules.forEach(m => {
+            const isMax = m.curLv >= m.maxLv;
+            const nextLv = m.curLv + 1;
+            const cost = isMax ? 0 : (m.costs[nextLv] || 500);
+            const partReq = isMax ? 0 : (m.parts[nextLv] || 0);
+            const hasParts = (game.weaponParts || 0) >= partReq;
+            const canUpg = nearArmory && !isMax && game.bioPoints >= cost && hasParts;
+            const dCard = document.createElement("div");
+            dCard.className = "rounded-2xl p-2.5 border border-indigo-500/40 bg-slate-950/70 flex flex-col justify-between gap-2";
+            dCard.innerHTML = `
+              <div>
+                <div class="flex items-center justify-between pb-1 border-b border-slate-800">
+                  <span class="text-xs font-black text-indigo-300">${m.name}</span>
+                  <span class="text-[10px] font-mono-code font-bold px-1.5 py-0.5 rounded ${
+                    m.curLv === 0 ? "bg-slate-900 text-slate-400" : (isMax ? "bg-amber-950 text-amber-300" : "bg-indigo-950 text-indigo-300")
+                  }">
+                    ${isMax ? "MAX Lv." + m.maxLv : (m.curLv === 0 ? "미장착" : "Lv." + m.curLv + " / " + m.maxLv)}
+                  </span>
+                </div>
+                <div class="text-[11px] font-mono-code font-bold ${m.curLv === 0 ? "text-slate-500" : "text-emerald-400"} mt-1">
+                  ${m.getStat(m.curLv)}
+                </div>
+                <div class="text-[10px] text-slate-300 mt-1 leading-snug break-keep">${m.desc}</div>
+              </div>
               <button type="button" data-drone-upg="${m.key}" ${!canUpg ? "disabled" : ""}
                       class="w-full py-1.5 px-2 rounded-lg border text-xs font-extrabold transition ${
                         isMax
                           ? "bg-slate-900 border-slate-700 text-slate-500 cursor-not-allowed"
                           : (canUpg ? "bg-indigo-900/90 hover:bg-indigo-800 border-indigo-400 text-indigo-100 cursor-pointer" : "bg-slate-900 border-slate-800 text-slate-500 cursor-not-allowed")
                       }">
-                ${isMax ? "최대 레벨 도달" : `모듈 업그레이드 (${cost} BP)`}
+                ${isMax ? "최대 레벨 도달" : (m.curLv === 0 ? `모듈 연구·장착 (${cost} BP${partReq > 0 ? ` + ⚙️${partReq}` : ""})` : `모듈 업그레이드 (${cost} BP${partReq > 0 ? ` + ⚙️${partReq}` : ""})`)}
               </button>
-            ` : `
-              <div class="py-1 px-2 rounded-lg bg-slate-900/90 border border-slate-800 text-[10px] font-bold text-center text-teal-400">
-                상시 가동 중 (기본 탑재)
-              </div>
-            `}
-          `;
-          droneGrid.appendChild(dCard);
-        });
-
-        droneGrid.querySelectorAll("[data-drone-upg]").forEach(btn => {
-          btn.addEventListener("click", () => {
-            const key = btn.getAttribute("data-drone-upg");
-            upgradeDroneModule(me, key);
+            `;
+            droneGrid.appendChild(dCard);
           });
-        });
+
+          droneGrid.querySelectorAll("[data-drone-upg]").forEach(btn => {
+            btn.addEventListener("click", () => {
+              const key = btn.getAttribute("data-drone-upg");
+              upgradeDroneModule(me, key);
+            });
+          });
+        }
       }
 
       // ==================== 2) 8종 무기 해금 및 랜덤 스탯 강화 그리드 렌더링 ====================
@@ -2347,23 +2395,77 @@
     // =========================================================================
     // 16. DRONE UPGRADE & SPECIALIZATION SELECTION / SKILL HANDLERS
     // =========================================================================
-    function upgradeDroneModule(player, key) {
+    function unlockDroneChassis(player) {
       if (!player || !isPlayerNearArmory(player)) {
         SoundFX.play("deny");
         return;
       }
-      if (!player.drone || !player.drone.modules || !player.drone.modules[key]) return;
+      const cost = 600;
+      if (game.bioPoints < cost) {
+        SoundFX.play("deny");
+        return;
+      }
+      game.bioPoints -= cost;
+      if (!player.drone) {
+        player.drone = {
+          unlocked: false,
+          animState: "IDLE",
+          animTimer: 0,
+          targetMateId: null,
+          worldX: 0, worldY: 2.15, worldZ: 0,
+          modules: {
+            magnet: { level: 0, maxLevel: 4 },
+            medi: { level: 0, maxLevel: 1, cooldown: 0, maxCooldown: 90.0, sectorRevivesUsed: 0 },
+            interceptor: { level: 0, maxLevel: 4, cooldown: 0 }
+          }
+        };
+      }
+      player.drone.unlocked = true;
+      if (player.visual && player.visual.droneGroup) {
+        player.visual.droneGroup.visible = true;
+      }
+      SoundFX.play("upgrade");
+      const safeBanner = document.getElementById("hud-safe-banner");
+      if (safeBanner) {
+        document.getElementById("hud-safe-banner-text").textContent =
+          "🛸 다목적 전술 드론 프레임 해금 완료! 어깨 상공에 전술 드론이 배치되었습니다.";
+        safeBanner.classList.remove("hidden");
+        setTimeout(() => safeBanner.classList.add("hidden"), 3800);
+      }
+      renderUpgradeModal();
+      updateHUD();
+    }
+
+    function upgradeDroneModule(player, key) {
+      if (!player || !isPlayerNearArmory(player) || !player.drone || !player.drone.unlocked) {
+        SoundFX.play("deny");
+        return;
+      }
+      if (!player.drone.modules || !player.drone.modules[key]) return;
       const mod = player.drone.modules[key];
       if (mod.level >= mod.maxLevel) return;
 
-      const costs = key === "magnet" ? [0, 0, 800, 1600, 2800] : [0, 0, 1000, 2000, 3500];
-      const nextCost = costs[mod.level + 1] || 1000;
-      if (game.bioPoints < nextCost) {
+      const nextLv = mod.level + 1;
+      let bpCost = 0;
+      let partCost = 0;
+      if (key === "magnet") {
+        bpCost = [0, 250, 500, 850, 1300][nextLv] || 500;
+        partCost = [0, 0, 0, 1, 1][nextLv] || 0;
+      } else if (key === "interceptor") {
+        bpCost = [0, 350, 600, 950, 1500][nextLv] || 600;
+        partCost = [0, 0, 0, 1, 1][nextLv] || 0;
+      } else if (key === "medi") {
+        bpCost = 700;
+        partCost = 1;
+      }
+
+      if (game.bioPoints < bpCost || (game.weaponParts || 0) < partCost) {
         SoundFX.play("deny");
         return;
       }
 
-      game.bioPoints -= nextCost;
+      game.bioPoints -= bpCost;
+      if (partCost > 0) game.weaponParts = Math.max(0, (game.weaponParts || 0) - partCost);
       mod.level++;
       SoundFX.play("upgrade");
       renderUpgradeModal();

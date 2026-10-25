@@ -301,44 +301,8 @@
         });
       }
 
-      // 2. 바닥 위험 장판 내 플레이어 판정: 장판 외곽 안전 버퍼(0.5m) 적용 — 경계선 밖은 100% 안전 보장!
-      const playerBlastRadius = Math.max(3.0, (door.blastRadius || 6.0) - 0.5);
-      let localHitDmg = 0;
-      game.players.forEach(p => {
-        if (p.downed) return;
-        const dist = Math.hypot(p.x - hX, p.z - hZ);
-        if (dist <= playerBlastRadius) {
-          const falloff = 1 - (dist / playerBlastRadius) * 0.5; // 중심부 100%, 외곽 50%
-          const blastDmg = Math.round(30 * falloff);
-          damagePlayer(p, blastDmg, false, false); // 출혈(Bleed) 없이 즉발 피해만 부여하여 급사 차단!
-          if (p.id === mySlotIndex) localHitDmg = blastDmg;
-
-          // 폭발 충격파 넉백 (장판 중심에서 외곽으로)
-          const nx = (p.x - hX) / (dist || 1);
-          const nz = (p.z - hZ) / (dist || 1);
-          const kbDist = 3.6 * falloff;
-          const tx = p.x + nx * kbDist;
-          const tz = p.z + nz * kbDist;
-          if (!isPointBlockedByWall(tx, tz, 0.75)) {
-            p.x = tx;
-            p.z = tz;
-          }
-        }
-      });
-
-      if (localHitDmg > 0) {
-        const collapseBanner = document.getElementById("hud-collapse-banner");
-        if (collapseBanner) {
-          document.getElementById("hud-collapse-msg").textContent =
-            `💥 테르밋 폭발 피해 (-${localHitDmg} HP)`;
-          collapseBanner.classList.remove("hidden");
-          setTimeout(() => {
-            if (!game.collapseState.active) collapseBanner.classList.add("hidden");
-          }, 2800);
-        }
-      }
-
-      // 3. 폭발 반경(11.5m) 내 감염체 전원 폭사 데미지(2,800) 및 넉백!
+      // 2. 테르밋 방화벽 용융 폭발: 플레이어 피해 ZERO 보장 (작전 성공 기믹이므로 아군 피해 완전 면제!)
+      // 감염체(좀비)에게만 2,800의 치명적인 폭사 피해를 부여하여 출구 전방을 안전하게 확보합니다.
       const zombieBlastRadius = 11.5;
       for (let i = game.zombies.length - 1; i >= 0; i--) {
         const zmb = game.zombies[i];
@@ -380,9 +344,14 @@
       // 3. [안전 보장] 방 내부 바닥 산성 장판 즉시 제거
       game.acidPools = game.acidPools.filter(a => a.roomIndex !== room.index);
 
-      // 4. [안전 보장] 스쿼드 전원에게 4.0초간 환경/지속 피해 완전 무적 보호 버퍼 부여
+      // 4. [안전 보장] 섹터 클리어 시 스쿼드 전원 체력 100% 완전 회복 + 12.0초간 완전 무적 보호 버퍼 부여
       game.players.forEach(p => {
-        p.postClearGraceTimer = 4.0;
+        p.hp = p.maxHp;
+        p.bleedingTimer = 0;
+        p.acidTimer = 0;
+        p.shockTimer = 0;
+        p.frostTimer = 0;
+        p.postClearGraceTimer = 12.0;
         if (p.drone && p.drone.modules && p.drone.modules.medi) {
           p.drone.modules.medi.sectorRevivesUsed = 0; // 신규 섹터 진입 시 의무 드론 사용 횟수 리셋
         }
@@ -424,36 +393,9 @@
       if (game.rooms[nextIdx]) {
         const nextR = game.rooms[nextIdx];
         nextR.unlocked = true;
-        game.currentRoomIndex = nextIdx;
-        relocateArmoryForCalmPhase(nextR);
+        // [안전 보장] 플레이어가 실제로 문을 통과해 다음 섹터로 들어설 때까지 game.currentRoomIndex를 조기 변경하지 않음!
+        // 현재 방에서 무기고 이용, 잔여 파밍 및 정비를 100% 안전하게 누린 후 전진할 수 있습니다.
         updateRoomVisibility();
-
-        // [v3.5] 중간보스 섹터: 진입 즉시 스폰하지 않고, 중앙 생체 격리 캡슐에서 대기하며 스쿼드 전원 정비 후 [F] 단말기로 개시!
-        if (nextR.hasMidBoss && !nextR.midBossAwakened) {
-          const safeBanner = document.getElementById("hud-safe-banner");
-          if (safeBanner) {
-            document.getElementById("hud-safe-banner-text").textContent =
-              "⚠️ 중간보스 생체 캡슐 감지! 스쿼드 정비 후 [F] 단말기를 가동하십시오.";
-            safeBanner.classList.remove("hidden");
-            setTimeout(() => safeBanner.classList.add("hidden"), 4500);
-          }
-        }
-
-        if (nextR.isBossRoom) {
-          // [v3.5] 최종보스 섹터 진입 시: 0단계(스쿼드 최종 정비) 활성화 및 보스는 완전 동면 상태 유지
-          if (game.boss) {
-            game.boss.active = false;
-            game.boss.shielded = true;
-            if (game.boss.shieldMat) game.boss.shieldMat.opacity = 0.85;
-          }
-          const safeBanner = document.getElementById("hud-safe-banner");
-          if (safeBanner) {
-            document.getElementById("hud-safe-banner-text").textContent =
-              "👑 최종 결전지 도달! 무기고 정비 완료 후 입구의 [F] 격벽 콘솔을 가동하십시오.";
-            safeBanner.classList.remove("hidden");
-            setTimeout(() => safeBanner.classList.add("hidden"), 5000);
-          }
-        }
       }
 
       const collapseBanner = document.getElementById("hud-collapse-banner");
@@ -998,28 +940,25 @@
         checkRoomClear(curRoom);
       }
 
-      // 1b. 이전 섹터 원웨이(One-Way) 영구 격벽 봉쇄 (비정형 hw/hd 지원):
-      // 멀티플레이 시 방장 혼자 들어갔다고 문이 바로 닫히지 않도록, 생존 중인 모든 플레이어가 진입했거나 이전 섹터가 붕괴되었을 때만 후방 격벽 봉쇄!
-      const mePlayer = game.players[mySlotIndex] || game.players[0];
-      if (mePlayer && curRoom && curRoom.index > 0 && !curRoom.lockedBehind) {
-        const insideMarginX = (curRoom.hw || curRoom.half) - 3.5;
-        const insideMarginZ = (curRoom.hd || curRoom.half) - 3.5;
-        const prevIdx = curRoom.index - 1;
-        const prevRoom = game.rooms[prevIdx];
+      // 1b. 클리어된 섹터에서 플레이어가 다음 섹터 문을 넘어 실제로 진입했을 때 비로소 섹터 전환 및 후방 격벽 봉쇄!
+      if (curRoom && curRoom.cleared && game.rooms[curRoom.index + 1]) {
+        const nextR = game.rooms[curRoom.index + 1];
+        const nextIdx = nextR.index;
+        const insideMarginX = (nextR.hw || nextR.half) - 2.5;
+        const insideMarginZ = (nextR.hd || nextR.half) - 2.5;
+        const meP = game.players[mySlotIndex] || game.players[0];
         const activeHumans = game.players.filter(pl => !pl.downed && (pl.role === "LOCAL" || pl.role === "REMOTE"));
-        const allHumansInside = activeHumans.length > 0 && activeHumans.every(pl =>
-          Math.abs(pl.x - curRoom.wx) < insideMarginX && Math.abs(pl.z - curRoom.wz) < insideMarginZ
-        );
-        const meInsideAndCollapsed = (prevRoom && prevRoom.collapsed) &&
-          Math.abs(mePlayer.x - curRoom.wx) < insideMarginX && Math.abs(mePlayer.z - curRoom.wz) < insideMarginZ;
+        const humanEntered = (activeHumans.length > 0)
+          ? activeHumans.some(pl => Math.abs(pl.x - nextR.wx) < insideMarginX && Math.abs(pl.z - nextR.wz) < insideMarginZ)
+          : (meP && Math.abs(meP.x - nextR.wx) < insideMarginX && Math.abs(meP.z - nextR.wz) < insideMarginZ);
 
-        if (allHumansInside || meInsideAndCollapsed) {
-          curRoom.lockedBehind = true;
-          if (prevRoom) {
-            prevRoom.gasWaveActive = false;
-            if (prevRoom.gasMesh) prevRoom.gasMesh.visible = false;
-          }
-          const backDoor = game.doors.find(d => d.fromRoom === prevIdx && d.toRoom === curRoom.index);
+        if (humanEntered && !nextR.lockedBehind) {
+          game.currentRoomIndex = nextIdx;
+          relocateArmoryForCalmPhase(nextR);
+          updateRoomVisibility();
+
+          nextR.lockedBehind = true;
+          const backDoor = game.doors.find(d => d.fromRoom === curRoom.index && d.toRoom === nextIdx);
           if (backDoor) {
             backDoor.open = false;
             backDoor.lockedPermanently = true;
@@ -1028,9 +967,9 @@
             backDoor.mesh.material.emissive.setHex(0x450a0a);
           }
           game.players.forEach((pl, idx) => {
-            if (Math.abs(pl.x - curRoom.wx) >= (curRoom.hw || curRoom.half) || Math.abs(pl.z - curRoom.wz) >= (curRoom.hd || curRoom.half)) {
-              pl.x = mePlayer.x + (idx - 1.5) * 1.5;
-              pl.z = mePlayer.z + 1.2;
+            if (Math.abs(pl.x - nextR.wx) >= (nextR.hw || nextR.half) || Math.abs(pl.z - nextR.wz) >= (nextR.hd || nextR.half)) {
+              pl.x = meP.x + (idx - 1.5) * 1.5;
+              pl.z = meP.z + 1.2;
               if (pl.visual && pl.visual.group) pl.visual.group.position.set(pl.x, 0, pl.z);
             }
           });
@@ -1039,14 +978,14 @@
             try {
               wsClient.send(JSON.stringify({
                 type: "SECTOR_LOCK_TELEPORT",
-                roomIdx: curRoom.index,
-                destX: curRoom.wx,
-                destZ: curRoom.wz
+                roomIdx: nextR.index,
+                destX: nextR.wx,
+                destZ: nextR.wz
               }));
             } catch (e) {}
           }
           for (let zi = game.zombies.length - 1; zi >= 0; zi--) {
-            if (game.zombies[zi].roomIndex < curRoom.index) {
+            if (game.zombies[zi].roomIndex < nextR.index) {
               entitiesGroup.remove(game.zombies[zi].group);
               game.zombies.splice(zi, 1);
             }
@@ -1062,10 +1001,23 @@
 
           const safeBanner = document.getElementById("hud-safe-banner");
           if (safeBanner) {
-            document.getElementById("hud-safe-banner-text").textContent =
-              `🔒 후방 격벽 봉쇄! S${curRoom.index + 1} 강화 상한(총 Lv.${getSectorMaxStatLv() * 5}/50) 해금`;
+            if (nextR.hasMidBoss && !nextR.midBossAwakened) {
+              document.getElementById("hud-safe-banner-text").textContent =
+                "⚠️ 중간보스 생체 캡슐 감지! 스쿼드 정비 후 [F] 단말기를 가동하십시오.";
+            } else if (nextR.isBossRoom) {
+              if (game.boss) {
+                game.boss.active = false;
+                game.boss.shielded = true;
+                if (game.boss.shieldMat) game.boss.shieldMat.opacity = 0.85;
+              }
+              document.getElementById("hud-safe-banner-text").textContent =
+                "👑 최종 결전지 도달! 무기고 정비 완료 후 입구의 [F] 격벽 콘솔을 가동하십시오.";
+            } else {
+              document.getElementById("hud-safe-banner-text").textContent =
+                `🔒 후방 격벽 봉쇄! S${nextR.index + 1} 강화 상한(총 Lv.${getSectorMaxStatLv() * 5}/50) 해금`;
+            }
             safeBanner.classList.remove("hidden");
-            setTimeout(() => safeBanner.classList.add("hidden"), 4200);
+            setTimeout(() => safeBanner.classList.add("hidden"), 4500);
           }
         }
       }
@@ -1341,48 +1293,165 @@
           p.tempShield = Math.max(0, p.tempShield - 18 * dt);
         }
 
-        // 다목적 전술 드론 업데이트
-        if (p.drone && p.drone.modules) {
-          if (p.drone.modules.interceptor) {
-            p.drone.modules.interceptor.cooldown = Math.max(0, (p.drone.modules.interceptor.cooldown || 0) - dt);
+        // 다목적 전술 드론 시스템 (미해금 시 3D 모델 비활성화 & 기능 정지)
+        if (p.drone && p.drone.unlocked) {
+          if (p.visual && p.visual.droneGroup) {
+            p.visual.droneGroup.visible = true;
           }
-          if (p.drone.modules.medi) {
-            p.drone.modules.medi.cooldown = Math.max(0, (p.drone.modules.medi.cooldown || 0) - dt);
-            // 의무 드론 원격 소생 (18m 반경, 구급키트 1개 소모, 90초 쿨타임, 섹터당 최대 2회)
-            if (!p.downed && p.drone.modules.medi.cooldown <= 0 && (p.drone.modules.medi.sectorRevivesUsed || 0) < 2 && p.medkits >= 1) {
-              const downedMate = game.players.find(other => other.id !== p.id && other.downed && Math.hypot(other.x - p.x, other.z - p.z) <= 18.0);
-              if (downedMate) {
-                p.drone.modules.medi.cooldown = 90.0;
-                p.drone.modules.medi.sectorRevivesUsed = (p.drone.modules.medi.sectorRevivesUsed || 0) + 1;
-                p.medkits = Math.max(0, p.medkits - 1);
-                downedMate.downed = false;
-                downedMate.hp = 30;
-                downedMate.bleedingTimer = 0;
-                downedMate.acidTimer = 0;
-                downedMate.shockTimer = 0;
-                downedMate.frostTimer = 0;
-                downedMate.visual.body.rotation.x = 0;
-                downedMate.visual.body.position.y = 1.0;
-                downedMate.visual.head.position.set(0, 1.85, 0);
-                SoundFX.play("revive");
-                spawnBloodParticles(downedMate.x, 1.5, downedMate.z, 0x10b981, 18);
-                const safeBanner = document.getElementById("hud-safe-banner");
-                if (safeBanner) {
-                  document.getElementById("hud-safe-banner-text").textContent =
-                    `💉 [의무 드론] ${downedMate.name} 원격 소생 완료! (잔여 쿨타임 90초)`;
-                  safeBanner.classList.remove("hidden");
-                  setTimeout(() => safeBanner.classList.add("hidden"), 4000);
+
+          if (p.drone.modules) {
+            if (p.drone.modules.interceptor) {
+              p.drone.modules.interceptor.cooldown = Math.max(0, (p.drone.modules.interceptor.cooldown || 0) - dt);
+            }
+            if (p.drone.modules.medi) {
+              p.drone.modules.medi.cooldown = Math.max(0, (p.drone.modules.medi.cooldown || 0) - dt);
+
+              // 의무 드론 원격 소생 (18m 반경, 레벨 1 이상 연구 시 가동, 구급키트 1개 소모, 90초 쿨타임, 섹터당 최대 2회)
+              const mediLv = p.drone.modules.medi.level || 0;
+              if (
+                !p.downed &&
+                mediLv >= 1 &&
+                p.drone.modules.medi.cooldown <= 0 &&
+                (p.drone.modules.medi.sectorRevivesUsed || 0) < 2 &&
+                p.medkits >= 1 &&
+                (!p.drone.animState || p.drone.animState === "IDLE")
+              ) {
+                const downedMate = game.players.find(other =>
+                  other.id !== p.id && other.downed && Math.hypot(other.x - p.x, other.z - p.z) <= 18.0
+                );
+                if (downedMate) {
+                  p.drone.modules.medi.cooldown = 90.0;
+                  p.drone.modules.medi.sectorRevivesUsed = (p.drone.modules.medi.sectorRevivesUsed || 0) + 1;
+                  p.medkits = Math.max(0, p.medkits - 1);
+                  p.drone.animState = "FLYING_OUT";
+                  p.drone.targetMateId = downedMate.id;
+                  p.drone.worldX = p.x + 0.92;
+                  p.drone.worldY = 2.15;
+                  p.drone.worldZ = p.z - 0.45;
+
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      `🛸 [의무 드론] ${downedMate.name} 구출을 위해 비행 출격!`;
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 3000);
+                  }
                 }
               }
             }
           }
-        }
 
-        if (p.visual && p.visual.droneGroup) {
-          p.visual.droneGroup.position.y = 2.15 + Math.sin(Date.now() * 0.005 + p.id) * 0.08;
-          if (p.visual.droneEye) {
-            const isParryReady = (!p.drone || !p.drone.modules || !p.drone.modules.interceptor || p.drone.modules.interceptor.cooldown <= 0);
+          // 드론 시각적 위치 및 비행(원격 소생 출격/복귀) 상태 머신
+          const dState = p.drone.animState || "IDLE";
+          const defaultSocketX = p.x + 0.92;
+          const defaultSocketY = 2.15 + Math.sin(Date.now() * 0.005 + p.id) * 0.08;
+          const defaultSocketZ = p.z - 0.45;
+
+          if (dState === "IDLE") {
+            p.drone.worldX = defaultSocketX;
+            p.drone.worldY = defaultSocketY;
+            p.drone.worldZ = defaultSocketZ;
+            if (p.visual && p.visual.droneGroup) {
+              p.visual.droneGroup.position.set(0.92, 2.15 + Math.sin(Date.now() * 0.005 + p.id) * 0.08, -0.45);
+            }
+          } else if (dState === "FLYING_OUT") {
+            const mate = game.players.find(m => m.id === p.drone.targetMateId);
+            if (!mate || !mate.downed) {
+              p.drone.animState = "FLYING_BACK";
+            } else {
+              const targetX = mate.x;
+              const targetY = 1.85;
+              const targetZ = mate.z;
+              const dx = targetX - p.drone.worldX;
+              const dy = targetY - p.drone.worldY;
+              const dz = targetZ - p.drone.worldZ;
+              const dist = Math.hypot(dx, dz) || 1;
+              const speed = 16.5;
+              const step = Math.min(dist, speed * dt);
+              p.drone.worldX += (dx / dist) * step;
+              p.drone.worldY += dy * Math.min(1.0, dt * 8);
+              p.drone.worldZ += (dz / dist) * step;
+
+              if (p.visual && p.visual.droneGroup) {
+                p.visual.droneGroup.position.set(p.drone.worldX - p.x, p.drone.worldY, p.drone.worldZ - p.z);
+              }
+              if (dist <= 0.65) {
+                p.drone.animState = "REVIVING";
+                p.drone.animTimer = 1.1;
+                SoundFX.play("empty");
+              }
+            }
+          } else if (dState === "REVIVING") {
+            const mate = game.players.find(m => m.id === p.drone.targetMateId);
+            if (!mate || !mate.downed) {
+              p.drone.animState = "FLYING_BACK";
+            } else {
+              p.drone.worldX = mate.x;
+              p.drone.worldY = 1.85 + Math.sin(Date.now() * 0.01) * 0.05;
+              p.drone.worldZ = mate.z;
+
+              if (p.visual && p.visual.droneGroup) {
+                p.visual.droneGroup.position.set(p.drone.worldX - p.x, p.drone.worldY, p.drone.worldZ - p.z);
+              }
+              // 나노 소생 빔 및 녹색 치유 파티클 방사
+              if (Math.random() < 0.6) {
+                spawnBloodParticles(mate.x, 1.2, mate.z, 0x10b981, 2);
+              }
+              p.drone.animTimer -= dt;
+              if (p.drone.animTimer <= 0) {
+                mate.downed = false;
+                mate.hp = 35;
+                mate.bleedingTimer = 0;
+                mate.acidTimer = 0;
+                mate.shockTimer = 0;
+                mate.frostTimer = 0;
+                mate.visual.body.rotation.x = 0;
+                mate.visual.body.position.y = 1.0;
+                mate.visual.head.position.set(0, 1.85, 0);
+                SoundFX.play("revive");
+                spawnBloodParticles(mate.x, 1.5, mate.z, 0x10b981, 22);
+
+                const safeBanner = document.getElementById("hud-safe-banner");
+                if (safeBanner) {
+                  document.getElementById("hud-safe-banner-text").textContent =
+                    `💉 [의무 드론] ${mate.name} 원격 소생 성공! (잔여 쿨타임 90초)`;
+                  safeBanner.classList.remove("hidden");
+                  setTimeout(() => safeBanner.classList.add("hidden"), 3800);
+                }
+                p.drone.animState = "FLYING_BACK";
+              }
+            }
+          } else if (dState === "FLYING_BACK") {
+            const targetX = defaultSocketX;
+            const targetY = defaultSocketY;
+            const targetZ = defaultSocketZ;
+            const dx = targetX - p.drone.worldX;
+            const dy = targetY - p.drone.worldY;
+            const dz = targetZ - p.drone.worldZ;
+            const dist = Math.hypot(dx, dz) || 1;
+            const speed = 18.0;
+            const step = Math.min(dist, speed * dt);
+            p.drone.worldX += (dx / dist) * step;
+            p.drone.worldY += dy * Math.min(1.0, dt * 8);
+            p.drone.worldZ += (dz / dist) * step;
+
+            if (p.visual && p.visual.droneGroup) {
+              p.visual.droneGroup.position.set(p.drone.worldX - p.x, p.drone.worldY, p.drone.worldZ - p.z);
+            }
+            if (dist <= 0.65) {
+              p.drone.animState = "IDLE";
+              SoundFX.play("pickup");
+            }
+          }
+
+          if (p.visual && p.visual.droneEye) {
+            const isParryReady = (!p.drone.modules.interceptor || (p.drone.modules.interceptor.level || 0) === 0 || p.drone.modules.interceptor.cooldown <= 0);
             p.visual.droneEye.material.color.setHex(isParryReady ? 0x38bdf8 : 0xef4444);
+          }
+        } else {
+          // 미해금 시 3D 모델 비표시
+          if (p.visual && p.visual.droneGroup) {
+            p.visual.droneGroup.visible = false;
           }
         }
 
@@ -3518,7 +3587,7 @@
             for (const pl of game.players) {
               if (pl.id !== b.ownerId && !pl.downed && Math.hypot(pl.x - b.x, pl.z - b.z) < 0.75) {
                 // [다목적 전술 드론: 탄약 요격 방어 모듈] 아군 오사 탄환을 착탄 직전 레이저로 즉시 요격 소멸!
-                if (pl.drone && pl.drone.modules && pl.drone.modules.interceptor && (pl.drone.modules.interceptor.cooldown || 0) <= 0) {
+                if (pl.drone && pl.drone.unlocked && pl.drone.modules && pl.drone.modules.interceptor && (pl.drone.modules.interceptor.level || 0) >= 1 && (pl.drone.modules.interceptor.cooldown || 0) <= 0) {
                   const intLv = pl.drone.modules.interceptor.level || 1;
                   const cdTable = [0, 6.0, 3.5, 1.8, 0.6];
                   pl.drone.modules.interceptor.cooldown = cdTable[intLv] || 6.0;
@@ -3707,8 +3776,9 @@
 
       // [다목적 전술 드론: 자력 수거 모듈] 주변 아이템(탄약, 회복약, 스팀팩, 부품, 코어)을 플레이어에게 자동 견인!
       game.players.forEach(p => {
-        if (p.downed || !p.drone || !p.drone.modules || !p.drone.modules.magnet) return;
-        const magLv = p.drone.modules.magnet.level || 1;
+        if (p.downed || !p.drone || !p.drone.unlocked || !p.drone.modules || !p.drone.modules.magnet) return;
+        const magLv = p.drone.modules.magnet.level || 0;
+        if (magLv <= 0) return;
         const magRadius = [0, 4.0, 6.0, 8.0, 10.0][magLv] || 4.0;
         game.pickups.forEach(pk => {
           const dist = Math.hypot(p.x - pk.x, p.z - pk.z);

@@ -255,6 +255,7 @@
       rightRep.position.set(0.34, -0.06, -0.05);
       droneGroup.add(droneBody, droneEye, leftWing, rightWing, leftRep, rightRep);
       droneGroup.position.set(0.92, 2.15, -0.45);
+      droneGroup.visible = false; // 기본 미해금 상태 -> 구매 시에만 어깨 상공에 출현!
       group.add(droneGroup);
 
       return { group, body, head, leftLeg, rightLeg, gunMesh, ringMat, flashLight, footLight, flashCone, payloadPack, pbCrystal, thermitePack, droneGroup, droneEye };
@@ -374,11 +375,17 @@
           firstShotAssassination: false,
           canPassThroughZombies: false,
           drone: {
-            unlocked: true,
+            unlocked: false,
+            animState: "IDLE",
+            animTimer: 0,
+            targetMateId: null,
+            worldX: 0,
+            worldY: 2.15,
+            worldZ: 0,
             modules: {
-              magnet: { level: 1, maxLevel: 4 },
-              medi: { level: 1, maxLevel: 1, cooldown: 0, maxCooldown: 90.0, sectorRevivesUsed: 0 },
-              interceptor: { level: 1, maxLevel: 4, cooldown: 0 }
+              magnet: { level: 0, maxLevel: 4 },
+              medi: { level: 0, maxLevel: 1, cooldown: 0, maxCooldown: 90.0, sectorRevivesUsed: 0 },
+              interceptor: { level: 0, maxLevel: 4, cooldown: 0 }
             },
             state: "IDLE"
           },

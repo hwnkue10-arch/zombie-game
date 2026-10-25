@@ -176,27 +176,49 @@
 
       // [다목적 전술 드론 카드 HUD 업데이트]
       const droneCard = document.getElementById("hud-drone-card");
-      if (droneCard && me.drone && me.drone.modules) {
-        const magLv = (me.drone.modules.magnet && me.drone.modules.magnet.level) || 1;
-        const magRad = [0, 4, 6, 8, 10][magLv] || 4;
-        const intLv = (me.drone.modules.interceptor && me.drone.modules.interceptor.level) || 1;
-        const intCd = [0, 6.0, 3.5, 1.8, 0.6][intLv] || 6.0;
-        const mediCd = (me.drone.modules.medi && me.drone.modules.medi.cooldown) || 0;
-        const droneSummEl = document.getElementById("hud-drone-summary");
-        if (droneSummEl) {
-          droneSummEl.textContent = `🧲수거 ${magRad}m · 🛡️요격 ${intCd}s · 💉의무`;
-        }
-        const droneStatEl = document.getElementById("hud-drone-status");
-        if (droneStatEl) {
-          if (me.drone.modules.interceptor && me.drone.modules.interceptor.cooldown > 0) {
-            droneStatEl.textContent = `🛡️ 요격 쿨다운 (${me.drone.modules.interceptor.cooldown.toFixed(1)}s)`;
-            droneStatEl.className = "text-[10px] font-mono-code text-cyan-300";
-          } else if (mediCd > 0) {
-            droneStatEl.textContent = `💉 의무 쿨다운 (${mediCd.toFixed(0)}s)`;
-            droneStatEl.className = "text-[10px] font-mono-code text-teal-300";
-          } else {
-            droneStatEl.textContent = "가동 준비 완료 (대기 중)";
-            droneStatEl.className = "text-[10px] font-mono-code text-emerald-400";
+      if (droneCard) {
+        if (!me.drone || !me.drone.unlocked) {
+          const droneSummEl = document.getElementById("hud-drone-summary");
+          if (droneSummEl) {
+            droneSummEl.textContent = "🔒 무기고에서 드론 프레임 해금 필요";
+          }
+          const droneStatEl = document.getElementById("hud-drone-status");
+          if (droneStatEl) {
+            droneStatEl.textContent = "미보유 (무기고 600 BP)";
+            droneStatEl.className = "text-[10px] font-mono-code text-slate-500";
+          }
+        } else if (me.drone.modules) {
+          const magLv = (me.drone.modules.magnet && me.drone.modules.magnet.level) || 0;
+          const magRad = [0, 4, 6, 8, 10][magLv] || 0;
+          const intLv = (me.drone.modules.interceptor && me.drone.modules.interceptor.level) || 0;
+          const intCd = [0, 6.0, 3.5, 1.8, 0.6][intLv] || 0;
+          const mediLv = (me.drone.modules.medi && me.drone.modules.medi.level) || 0;
+          const mediCd = (me.drone.modules.medi && me.drone.modules.medi.cooldown) || 0;
+          const droneSummEl = document.getElementById("hud-drone-summary");
+          if (droneSummEl) {
+            const magTxt = magLv > 0 ? `🧲수거 ${magRad}m` : `🧲수거(미가동)`;
+            const intTxt = intLv > 0 ? `🛡️요격 ${intCd}s` : `🛡️요격(미가동)`;
+            const medTxt = mediLv > 0 ? `💉의무(원격)` : `💉의무(미가동)`;
+            droneSummEl.textContent = `${magTxt} · ${intTxt} · ${medTxt}`;
+          }
+          const droneStatEl = document.getElementById("hud-drone-status");
+          if (droneStatEl) {
+            if (me.drone.animState && me.drone.animState !== "IDLE") {
+              droneStatEl.textContent = `🛸 원격 소생 비행/치유 중...`;
+              droneStatEl.className = "text-[10px] font-mono-code text-emerald-400 animate-pulse";
+            } else if (intLv > 0 && me.drone.modules.interceptor && me.drone.modules.interceptor.cooldown > 0) {
+              droneStatEl.textContent = `🛡️ 요격 재충전 (${me.drone.modules.interceptor.cooldown.toFixed(1)}s)`;
+              droneStatEl.className = "text-[10px] font-mono-code text-cyan-300";
+            } else if (mediLv > 0 && mediCd > 0) {
+              droneStatEl.textContent = `💉 의무 쿨다운 (${mediCd.toFixed(0)}s)`;
+              droneStatEl.className = "text-[10px] font-mono-code text-teal-300";
+            } else if (magLv === 0 && intLv === 0 && mediLv === 0) {
+              droneStatEl.textContent = "모듈 미장착 (무기고 업그레이드)";
+              droneStatEl.className = "text-[10px] font-mono-code text-amber-400";
+            } else {
+              droneStatEl.textContent = "가동 준비 완료 (대기 중)";
+              droneStatEl.className = "text-[10px] font-mono-code text-emerald-400";
+            }
           }
         }
       }

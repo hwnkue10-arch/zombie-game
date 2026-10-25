@@ -485,9 +485,18 @@
                   p.specialization = msg.specialization;
                 }
                 if (msg.tempShield !== undefined) p.tempShield = msg.tempShield;
-                if (p.drone && p.drone.modules) {
-                  if (msg.droneMagnetLv) p.drone.modules.magnet.level = msg.droneMagnetLv;
-                  if (msg.droneIntLv) p.drone.modules.interceptor.level = msg.droneIntLv;
+                if (p.drone) {
+                  if (msg.droneUnlocked !== undefined) {
+                    p.drone.unlocked = !!msg.droneUnlocked;
+                    if (p.visual && p.visual.droneGroup) {
+                      p.visual.droneGroup.visible = !!msg.droneUnlocked;
+                    }
+                  }
+                  if (p.drone.modules) {
+                    if (msg.droneMagnetLv !== undefined) p.drone.modules.magnet.level = msg.droneMagnetLv;
+                    if (msg.droneIntLv !== undefined) p.drone.modules.interceptor.level = msg.droneIntLv;
+                    if (msg.droneMediLv !== undefined) p.drone.modules.medi.level = msg.droneMediLv;
+                  }
                 }
               }
             } else if (msg.type === "SPEC_CHOSEN" && game.running) {
@@ -929,8 +938,10 @@
           currentWeapon: me.currentWeapon,
           walkCycle: Math.round(me.walkCycle * 10) / 10,
           specialization: me.specialization || null,
-          droneMagnetLv: (me.drone && me.drone.modules && me.drone.modules.magnet) ? me.drone.modules.magnet.level : 1,
-          droneIntLv: (me.drone && me.drone.modules && me.drone.modules.interceptor) ? me.drone.modules.interceptor.level : 1
+          droneUnlocked: !!(me.drone && me.drone.unlocked),
+          droneMagnetLv: (me.drone && me.drone.modules && me.drone.modules.magnet) ? (me.drone.modules.magnet.level || 0) : 0,
+          droneIntLv: (me.drone && me.drone.modules && me.drone.modules.interceptor) ? (me.drone.modules.interceptor.level || 0) : 0,
+          droneMediLv: (me.drone && me.drone.modules && me.drone.modules.medi) ? (me.drone.modules.medi.level || 0) : 0
         }));
       } catch (e) {}
     }, 50);
