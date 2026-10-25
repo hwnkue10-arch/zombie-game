@@ -1,25 +1,20 @@
 @echo off
-setlocal
-cd /d "%~dp0"
-title BOXHEAD: THE CORE - 방화벽 규칙 원상복구 (삭제)
-
-:: Check for Administrator permissions
 net session >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-    echo [안내] 관리자 권한이 필요합니다. 관리자 권한 승인 창이 뜨면 '예'를 눌러주세요.
-    powershell -Command "Start-Process '%~f0' -Verb RunAs"
-    exit /b
-)
+if %ERRORLEVEL% equ 0 goto :ADMIN_TASK
+powershell -Command "Start-Process '%~f0' -Verb RunAs"
+exit /b
 
+:ADMIN_TASK
+title BOXHEAD THE CORE - Remove Firewall Rule
 echo ===================================================================
-echo   BOXHEAD: THE CORE - 방화벽 규칙 원상복구 (제거)
+echo   BOXHEAD: THE CORE - Remove Firewall Rule (Port 3000)
 echo ===================================================================
 echo.
-echo [1/1] 3000번 포트 방화벽 허용 규칙 삭제 중...
-netsh advfirewall firewall delete rule name="Boxhead Game Server (Port 3000)" >nul 2>&1
-
+echo Removing Firewall Rule for Port 3000...
+netsh advfirewall firewall delete rule name="Boxhead_Port_3000" >nul 2>&1
 echo.
-echo  -> [완료] 방화벽 규칙이 깨끗하게 삭제되어 원래 상태로 복원되었습니다!
+echo ===================================================================
+echo   [SUCCESS] Firewall rule removed! Restored to original state.
 echo ===================================================================
 echo.
 pause
