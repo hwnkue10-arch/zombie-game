@@ -14,7 +14,6 @@ const PACKET_TYPES = {
   ROOM_FULL: "ROOM_FULL",
   KICK_PLAYER: "KICK_PLAYER",
   KICKED: "KICKED",
-  TOGGLE_SLOT_ROLE: "TOGGLE_SLOT_ROLE",
 
   // Session Lifecycle
   START_GAME: "START_GAME",
@@ -34,7 +33,6 @@ const PACKET_TYPES = {
 };
 
 const SQUAD_COLORS = [0x3b82f6, 0x10b981, 0xf59e0b, 0xec4899];
-const DEFAULT_AI_NAMES = ["HOST_P1", "ALPHA_AI", "BRAVO_AI", "CHARLIE_AI"];
 
 function createDefaultSlots() {
   return [
@@ -48,6 +46,5 @@ function createDefaultSlots() {
 module.exports = {
   PACKET_TYPES,
   SQUAD_COLORS,
-  DEFAULT_AI_NAMES,
   createDefaultSlots
 };

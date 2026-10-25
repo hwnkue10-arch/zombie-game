@@ -301,8 +301,44 @@
         });
       }
 
-      // 2. 테르밋 방화벽 용융 폭발: 플레이어 피해 ZERO 보장 (작전 성공 기믹이므로 아군 피해 완전 면제!)
-      // 감염체(좀비)에게만 2,800의 치명적인 폭사 피해를 부여하여 출구 전방을 안전하게 확보합니다.
+      // 2. 바닥 위험 장판 내 플레이어 판정: 장판 외곽 안전 버퍼(0.5m) 적용 — 경계선 밖은 100% 안전 보장!
+      const playerBlastRadius = Math.max(3.0, (door.blastRadius || 6.0) - 0.5);
+      let localHitDmg = 0;
+      game.players.forEach(p => {
+        if (p.downed) return;
+        const dist = Math.hypot(p.x - hX, p.z - hZ);
+        if (dist <= playerBlastRadius) {
+          const falloff = 1 - (dist / playerBlastRadius) * 0.5; // 중심부 100%, 외곽 50%
+          const blastDmg = Math.round(30 * falloff);
+          damagePlayer(p, blastDmg, false, false);
+          if (p.id === mySlotIndex) localHitDmg = blastDmg;
+
+          // 폭발 충격파 넉백 (장판 중심에서 외곽으로)
+          const nx = (p.x - hX) / (dist || 1);
+          const nz = (p.z - hZ) / (dist || 1);
+          const kbDist = 3.6 * falloff;
+          const tx = p.x + nx * kbDist;
+          const tz = p.z + nz * kbDist;
+          if (!isPointBlockedByWall(tx, tz, 0.75)) {
+            p.x = tx;
+            p.z = tz;
+          }
+        }
+      });
+
+      if (localHitDmg > 0) {
+        const collapseBanner = document.getElementById("hud-collapse-banner");
+        if (collapseBanner) {
+          document.getElementById("hud-collapse-msg").textContent =
+            `💥 테르밋 폭발 피해 (-${localHitDmg} HP)`;
+          collapseBanner.classList.remove("hidden");
+          setTimeout(() => {
+            if (!game.collapseState.active) collapseBanner.classList.add("hidden");
+          }, 2800);
+        }
+      }
+
+      // 3. 폭발 반경(11.5m) 내 감염체 전원 폭사 데미지(2,800) 및 넉백!
       const zombieBlastRadius = 11.5;
       for (let i = game.zombies.length - 1; i >= 0; i--) {
         const zmb = game.zombies[i];
@@ -328,35 +364,18 @@
 
       room.cleared = true;
 
-      // 1. [안전 보장] 클리어 즉시 해당 방의 지향성 독가스 즉시 정지 및 비활성화 (급사 원천 차단)
+      // 1. [안전 보장] 클리어 즉시 해당 방의 지향성 독가스 즉시 정지 및 비활성화
       room.gasWaveActive = false;
       room.gasWaveProgress = 0;
       if (room.gasMesh) room.gasMesh.visible = false;
 
-      // 2. [안전 보장] 방 내부 잔존 일반 감염체 전원 즉시 소탕 (미션 완료 후 후방 기습 끔살 원천 차단)
-      for (let i = game.zombies.length - 1; i >= 0; i--) {
-        const zmb = game.zombies[i];
-        if (zmb.roomIndex === room.index && !zmb.spec.isMidBoss) {
-          damageZombie(i, 99999, 0, 0, 1.0, 99);
-        }
-      }
+      // 2. 해당 방 내부 바닥 잔존 산성 장판 즉시 제거
+      game.acidPools = game.acidPools.filter(a => a.roomIndex !== room.index);
 
-      // 3. [안전 보장] 방 내부 및 전체 바닥 잔존 산성 장판 즉시 제거
-      game.acidPools.forEach(pool => {
-        if (pool.mesh) effectsGroup.remove(pool.mesh);
-      });
-      game.acidPools = [];
-
-      // 4. [안전 보장] 섹터 클리어 시 스쿼드 전원 체력 100% 완전 회복 + 12.0초간 완전 무적 보호 버퍼 부여
+      // 3. 신규 섹터 진입 시 의무 드론 사용 횟수 리셋
       game.players.forEach(p => {
-        p.hp = p.maxHp;
-        p.bleedingTimer = 0;
-        p.acidTimer = 0;
-        p.shockTimer = 0;
-        p.frostTimer = 0;
-        p.postClearGraceTimer = 12.0;
         if (p.drone && p.drone.modules && p.drone.modules.medi) {
-          p.drone.modules.medi.sectorRevivesUsed = 0; // 신규 섹터 진입 시 의무 드론 사용 횟수 리셋
+          p.drone.modules.medi.sectorRevivesUsed = 0;
         }
       });
 
@@ -961,18 +980,6 @@
           updateRoomVisibility();
 
           nextR.lockedBehind = true;
-          nextR.enteredTime = game.elapsedTime;
-
-          // [안전 보장] 신규 섹터 진입 시 신규 소강기(CALM 22초) 보장 및 전 대원 6.0초 무적 안전 정비 버퍼 부여!
-          game.wavePhase = "CALM";
-          game.waveTimer = 22.0;
-          game.players.forEach(pl => {
-            pl.postClearGraceTimer = 6.0;
-            pl.bleedingTimer = 0;
-            pl.acidTimer = 0;
-            pl.shockTimer = 0;
-            pl.frostTimer = 0;
-          });
 
           const backDoor = game.doors.find(d => d.fromRoom === curRoom.index && d.toRoom === nextIdx);
           if (backDoor) {
@@ -1031,7 +1038,7 @@
                 "👑 최종 결전지 도달! 무기고 정비 완료 후 입구의 [F] 격벽 콘솔을 가동하십시오.";
             } else {
               document.getElementById("hud-safe-banner-text").textContent =
-                `🛡️ S${nextR.index + 1} 진입! 6초 안전 정비 버퍼 & 강화 상한(총 Lv.${getSectorMaxStatLv() * 5}/50) 해금`;
+                `🔒 후방 격벽 봉쇄! S${nextR.index + 1} 강화 상한(총 Lv.${getSectorMaxStatLv() * 5}/50) 해금`;
             }
             safeBanner.classList.remove("hidden");
             setTimeout(() => safeBanner.classList.add("hidden"), 4500);
@@ -1269,11 +1276,15 @@
         if (p.visual && p.visual.flashCone) {
           p.visual.flashCone.visible = false;
         }
-        if (!p.downed && curRoom && curRoom.envType === "TOXIC_FOG" && !curRoom.envCleared && !curRoom.cleared) {
+        const insideCurRoom = curRoom && (
+          Math.abs(p.x - curRoom.wx) <= ((curRoom.hw || curRoom.half) + 1.0) &&
+          Math.abs(p.z - curRoom.wz) <= ((curRoom.hd || curRoom.half) + 1.0)
+        );
+        if (!p.downed && insideCurRoom && curRoom.envType === "TOXIC_FOG" && !curRoom.envCleared && !curRoom.cleared) {
           damagePlayer(p, 1.45 * dt, false, false);
         }
         // [v3.3] 냉각 가스 누출(CRYO_LEAK) 섹터 환경피해 및 동상(causesFrost = true) 부여
-        if (!p.downed && curRoom && curRoom.envType === "CRYO_LEAK" && !curRoom.envCleared && !curRoom.cleared) {
+        if (!p.downed && insideCurRoom && curRoom.envType === "CRYO_LEAK" && !curRoom.envCleared && !curRoom.cleared) {
           damagePlayer(p, 1.2 * dt, false, false, false, true);
         }
         p.dashActiveTimer = Math.max(0, p.dashActiveTimer - dt);
@@ -1679,14 +1690,7 @@
 
             if (packSize > 0) {
               curRoom.waveZombiesSpawned = (curRoom.waveZombiesSpawned || 0) + packSize;
-              // [입구 급사 방지] 섹터 진입 후 15초간은 진입 격벽 14m 이내의 구멍에서 스폰하지 않고 방 중앙/원거리 구멍 우선 선택
-              let candidateHoles = activeHoles;
-              const backDoor = game.doors.find(d => d.toRoom === curRoom.index);
-              if (backDoor && (game.elapsedTime - (curRoom.enteredTime || 0)) < 15.0) {
-                const farHoles = activeHoles.filter(h => Math.hypot(h.x - backDoor.x, h.z - backDoor.z) >= 14.0);
-                if (farHoles.length > 0) candidateHoles = farHoles;
-              }
-              const hole = candidateHoles[Math.floor(Math.random() * candidateHoles.length)];
+              const hole = activeHoles[Math.floor(Math.random() * activeHoles.length)];
 
               const hw = curRoom.hw || curRoom.half;
               const hd = curRoom.hd || curRoom.half;
@@ -2658,8 +2662,6 @@
           if (p.netTargetRotY !== undefined) {
             p.rotY = p.netTargetRotY;
           }
-        } else if (p.role === "AI") {
-          updateAISquadMember(p, dt);
         }
 
         const jumpY = p.dashActiveTimer > 0 ? Math.sin((p.dashActiveTimer / 0.34) * Math.PI) * 1.55 : 0;
@@ -2726,137 +2728,6 @@
         sym.el.style.left = ((vec.x * 0.5 + 0.5) * window.innerWidth) + "px";
         sym.el.style.top = ((-vec.y * 0.5 + 0.5) * window.innerHeight) + "px";
       });
-    }
-
-    function updateAISquadMember(ai, dt) {
-      const targetRoom = game.rooms[game.currentRoomIndex];
-      if (!targetRoom) return;
-
-      // [v3.2 AI 전술 지능 대폭 강화] 섹터 진행에 맞춰 AI의 기본 무기(권총/산탄총/UZI/소총) 스탯도 자동 성장하여 후반부에 쓸모없는 짐이 되지 않도록 보정!
-      const targetLv = Math.min(8, Math.floor((game.currentRoomIndex || 0) * 0.85));
-      if (ai.inventory && ai.inventory[0] && ai.inventory[0].stats.atk < targetLv) {
-        const wUnlockIdx = (ai.id === 1) ? 1 : (ai.id === 2 ? 2 : 3);
-        if (game.currentRoomIndex >= 1 && ai.inventory[wUnlockIdx]) {
-          ai.inventory[wUnlockIdx].unlocked = true;
-          ai.inventory[wUnlockIdx].ammo = Math.max(ai.inventory[wUnlockIdx].ammo, WEAPONS[wUnlockIdx].startAmmo);
-        }
-        [0, wUnlockIdx].forEach(wi => {
-          const inv = ai.inventory[wi];
-          if (!inv) return;
-          inv.stats.atk = targetLv;
-          inv.stats.spd = Math.floor(targetLv * 0.7);
-          inv.stats.stun = Math.floor(targetLv * 0.6);
-          inv.totalLv = inv.stats.atk + inv.stats.spd + inv.stats.stun;
-        });
-      }
-
-      if (!ai.downed) {
-        // 1) 체력 위급(45 이하) 시 스스로 붕대 치료 또는 스팀팩 투여
-        if (ai.hp <= 45 && ai.medkits > 0 && ai.bandagingTimer <= 0) {
-          startSelfBandaging(ai);
-        } else if (ai.hp <= 55 && ai.stims > 0 && ai.stimBuffTimer <= 0) {
-          useAdrenalineStim(ai);
-        }
-
-        // 2) 주변에 좀비 3마리 이상 밀집 포위 시 360° 기절 밀치기(Bash) 또는 전술 회피(Dash) 자율 발동!
-        let closeZombies = 0;
-        game.zombies.forEach(z => {
-          if (Math.hypot(z.x - ai.x, z.z - ai.z) < 3.4) closeZombies++;
-        });
-        if (closeZombies >= 3 && (ai.bashCooldown || 0) <= 0) {
-          triggerMeleeBash(ai);
-        } else if (closeZombies >= 4 && ai.dashCooldown <= 0) {
-          triggerTacticalDash(ai);
-        }
-
-        // 3) 산성 장판 회피
-        const onAcid = game.acidPools.find(pool => Math.hypot(ai.x - pool.x, ai.z - pool.z) < pool.radius + 0.6);
-        if (onAcid) {
-          const escX = ai.x - onAcid.x || 1;
-          const escZ = ai.z - onAcid.z || 1;
-          const escLen = Math.hypot(escX, escZ) || 1;
-          moveEntityWithCollision(ai, (escX / escLen) * 8.5 * dt, (escZ / escLen) * 8.5 * dt, 0.55);
-        }
-
-        // 4) 빈사 팀원 최우선 구출 (벽 끼임 시 스마트 우회)
-        const downedMate = game.players.find(m => m.id !== ai.id && m.downed);
-        if (downedMate) {
-          const dist = Math.hypot(downedMate.x - ai.x, downedMate.z - ai.z);
-          if (dist > 2.2) {
-            const nx = (downedMate.x - ai.x) / dist;
-            const nz = (downedMate.z - ai.z) / dist;
-            moveZombieSmart({ x: ai.x, z: ai.z, radius: 0.55, group: ai.visual.group, slideDir: ai.slideDir || 0, slideTimer: ai.slideTimer || 0 }, nx, nz, 8.4, dt, downedMate);
-            ai.x = ai.visual.group.position.x;
-            ai.z = ai.visual.group.position.z;
-            ai.rotY = Math.atan2(nx, nz);
-            ai.walkCycle += dt * 10;
-            return;
-          } else {
-            downedMate.reviveProgress += dt * 0.95;
-            if (downedMate.reviveProgress >= game.reviveDuration) completeRevive(downedMate);
-            return;
-          }
-        }
-      }
-
-      const leader = game.players[mySlotIndex] || game.players[0];
-      const anchorX = leader && !leader.downed ? leader.x : targetRoom.wx;
-      const anchorZ = leader && !leader.downed ? leader.z : targetRoom.wz;
-      const angle = (ai.id * Math.PI) / 2;
-      const goalX = anchorX + Math.cos(angle) * 4.2;
-      const goalZ = anchorZ + Math.sin(angle) * 4.2;
-      const distGoal = Math.hypot(goalX - ai.x, goalZ - ai.z);
-
-      let moveSpeed = ai.downed ? 2.2 : 8.2;
-      if (ai.currentWeapon === 2 && !ai.downed) moveSpeed *= 1.16;
-      if (distGoal > 18.0 && !ai.downed) {
-        // 벽 뒤에 완전히 고립된 경우 리더 근처로 전술 합류
-        ai.x = anchorX + Math.cos(angle) * 2.5;
-        ai.z = anchorZ + Math.sin(angle) * 2.5;
-      } else if (distGoal > 2.4) {
-        const prevX = ai.x, prevZ = ai.z;
-        const nx = (goalX - ai.x) / distGoal;
-        const nz = (goalZ - ai.z) / distGoal;
-        moveEntityWithCollision(ai, nx * moveSpeed * dt, nz * moveSpeed * dt, 0.55);
-        if (Math.hypot(ai.x - prevX, ai.z - prevZ) < moveSpeed * dt * 0.35) {
-          // 장애물 벽면 미끄러지기 우회
-          moveEntityWithCollision(ai, -nz * moveSpeed * dt, nx * moveSpeed * dt, 0.55);
-        }
-        ai.walkCycle += dt * 10;
-      }
-
-      let bestTarget = null;
-      let bestDist = 22.0;
-      game.zombies.forEach(z => {
-        const d = Math.hypot(z.x - ai.x, z.z - ai.z);
-        if (d < bestDist) { bestDist = d; bestTarget = z; }
-      });
-      if (!bestTarget) {
-        const shieldPod = game.cystPods.find(p => p.hp > 0 && p.isMidBossShieldNode);
-        if (shieldPod) bestTarget = shieldPod;
-      }
-      if (!bestTarget && game.bloodPylons.length > 0) {
-        bestTarget = game.bloodPylons[0];
-      }
-      if (!bestTarget && game.boss && game.boss.active && !game.boss.dead) {
-        bestTarget = game.boss;
-      }
-
-      // 주무기 탄약 보유 시 주무기 장착, 소진 시 권총 전환
-      if (!ai.downed && ai.inventory) {
-        const prefW = (ai.id === 1) ? 1 : (ai.id === 2 ? 2 : 3);
-        if (ai.inventory[prefW] && ai.inventory[prefW].unlocked && ai.inventory[prefW].ammo > 0) {
-          ai.currentWeapon = prefW;
-        } else {
-          ai.currentWeapon = 0;
-        }
-      }
-
-      if (bestTarget && ai.fireCooldown <= 0 && ai.bandagingTimer <= 0) {
-        const aimAngle = Math.atan2(bestTarget.x - ai.x, bestTarget.z - ai.z);
-        ai.rotY = aimAngle;
-        fireWeapon(ai, Math.sin(aimAngle), Math.cos(aimAngle));
-      }
     }
 
     function completeRevive(targetPlayer) {
@@ -3610,37 +3481,33 @@
           }
 
           if (!removeBullet && game.friendlyFire && !b.noFriendlyFire) {
-            const shooter = game.players.find(p => p.id === b.ownerId);
-            // AI 봇 아군 탄환은 절대 아군(플레이어)에게 오사 피해를 입히지 않음
-            if (!shooter || shooter.role !== "AI") {
-              for (const pl of game.players) {
-                if (pl.id !== b.ownerId && !pl.downed && Math.hypot(pl.x - b.x, pl.z - b.z) < 0.75) {
-                  // [다목적 전술 드론: 탄약 요격 방어 모듈] 아군 오사 탄환을 착탄 직전 레이저로 즉시 요격 소멸!
-                  if (pl.drone && pl.drone.unlocked && pl.drone.modules && pl.drone.modules.interceptor && (pl.drone.modules.interceptor.level || 0) >= 1 && (pl.drone.modules.interceptor.cooldown || 0) <= 0) {
-                    const intLv = pl.drone.modules.interceptor.level || 1;
-                    const cdTable = [0, 6.0, 3.5, 1.8, 0.6];
-                    pl.drone.modules.interceptor.cooldown = cdTable[intLv] || 6.0;
-                    removeBullet = true;
-                    SoundFX.play("pickup");
-                    spawnBloodParticles(b.x, 1.2, b.z, 0x38bdf8, 8); // Cyan laser parry sparks
-                    const safeBanner = document.getElementById("hud-safe-banner");
-                    if (safeBanner) {
-                      document.getElementById("hud-safe-banner-text").textContent = `⚡ [요격 드론] 팀킬 탄환 레이저 요격 방어!`;
-                      safeBanner.classList.remove("hidden");
-                      setTimeout(() => safeBanner.classList.add("hidden"), 1800);
-                    }
-                    break;
-                  }
-                  if (b.explosiveRadius > 0) {
-                    triggerExplosion(b.x, b.z, b.explosiveRadius, b.damage, b.ownerId, b.awakened, 0, b.tier1Special);
-                  } else {
-                    const ffDmg = Math.max(4, Math.round(b.damage * 0.25));
-                    game.totalFriendlyFireDmg += ffDmg;
-                    damagePlayer(pl, ffDmg, false, false);
-                  }
+            for (const pl of game.players) {
+              if (pl.id !== b.ownerId && !pl.downed && Math.hypot(pl.x - b.x, pl.z - b.z) < 0.75) {
+                // [다목적 전술 드론: 탄약 요격 방어 모듈] 아군 오사 탄환을 착탄 직전 레이저로 즉시 요격 소멸!
+                if (pl.drone && pl.drone.unlocked && pl.drone.modules && pl.drone.modules.interceptor && (pl.drone.modules.interceptor.level || 0) >= 1 && (pl.drone.modules.interceptor.cooldown || 0) <= 0) {
+                  const intLv = pl.drone.modules.interceptor.level || 1;
+                  const cdTable = [0, 6.0, 3.5, 1.8, 0.6];
+                  pl.drone.modules.interceptor.cooldown = cdTable[intLv] || 6.0;
                   removeBullet = true;
+                  SoundFX.play("pickup");
+                  spawnBloodParticles(b.x, 1.2, b.z, 0x38bdf8, 8); // Cyan laser parry sparks
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent = `⚡ [요격 드론] 팀킬 탄환 레이저 요격 방어!`;
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 1800);
+                  }
                   break;
                 }
+                if (b.explosiveRadius > 0) {
+                  triggerExplosion(b.x, b.z, b.explosiveRadius, b.damage, b.ownerId, b.awakened, 0, b.tier1Special);
+                } else {
+                  const ffDmg = Math.max(4, Math.round(b.damage * 0.25));
+                  game.totalFriendlyFireDmg += ffDmg;
+                  damagePlayer(pl, ffDmg, false, false);
+                }
+                removeBullet = true;
+                break;
               }
             }
           }

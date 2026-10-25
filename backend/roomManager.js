@@ -6,7 +6,7 @@
  */
 "use strict";
 
-const { PACKET_TYPES, DEFAULT_AI_NAMES, createDefaultSlots } = require("./protocol");
+const { PACKET_TYPES, createDefaultSlots } = require("./protocol");
 
 class RoomManager {
   constructor() {
@@ -164,17 +164,6 @@ class RoomManager {
     this.broadcastLobbyState();
   }
 
-  handleToggleSlotRole(client, msg) {
-    const sender = this.clients.get(client);
-    if (!sender || sender.slotId !== 0) return;
-    const targetSlot = parseInt(msg.slotId, 10);
-    if (isNaN(targetSlot) || targetSlot <= 0 || targetSlot >= 4) return;
-    if (this.slots[targetSlot].role === "REMOTE") return;
-    this.slots[targetSlot].role = this.slots[targetSlot].role === "AI" ? "EMPTY" : "AI";
-    this.slots[targetSlot].name = this.slots[targetSlot].role === "AI" ? DEFAULT_AI_NAMES[targetSlot] : `EMPTY_${targetSlot + 1}`;
-    this.broadcastLobbyState();
-  }
-
   handleStartGame(client, msg) {
     this.gameRunning = true;
     this.currentSeed = msg.seed || Math.floor(1000 + Math.random() * 9000);
@@ -213,9 +202,6 @@ class RoomManager {
         break;
       case PACKET_TYPES.KICK_PLAYER:
         this.handleKickPlayer(client, msg);
-        break;
-      case PACKET_TYPES.TOGGLE_SLOT_ROLE:
-        this.handleToggleSlotRole(client, msg);
         break;
       case PACKET_TYPES.START_GAME:
         this.handleStartGame(client, msg);

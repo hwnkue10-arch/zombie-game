@@ -266,7 +266,7 @@
       const offsets = [[0, 0], [-3.5, -3.0], [3.5, -3.0], [0, -5.0]];
 
       lobbySlots.forEach((slot, idx) => {
-        if (slot.role === "EMPTY" || slot.role === "AI") return;
+        if (slot.role === "EMPTY") return;
         const visual = createBoxheadCharacterMesh(slot.color);
         const sx = startRoom.wx + offsets[idx][0];
         const sz = startRoom.wz + offsets[idx][1];
@@ -539,7 +539,7 @@
         radius: 0.55 * s,
         roomIndex,
         stunTimer: 0,
-        attackCooldown: 1.2, // [안전 보장] 스폰 즉시 0프레임 공격 방지: 1.2초 공격 선딜레이 부여
+        attackCooldown: 0,
         rangedCooldown: 2.0,
         group
       };

@@ -1572,7 +1572,7 @@
           wIdx,
           tier1Special: effTier1,
           awakened: effAwakened,
-          noFriendlyFire: isDownedPistol || player.role === "AI",
+          noFriendlyFire: isDownedPistol,
           isZombieProjectile: false,
           x: bulletMesh.position.x,
           z: bulletMesh.position.z,
@@ -1911,9 +1911,7 @@
           if (pl.downed) return;
           const distP = Math.hypot(pl.x - barrel.x, pl.z - barrel.z);
           if (distP <= expRadius * 0.7) {
-            // [안전 보장] 배럴 폭발 아군 피해 상한: 최대 20 HP (1타 즉사/끔살 원천 차단)
-            const rawDmg = Math.round(finalDmg * 0.10);
-            const ffDmg = Math.min(20, Math.max(5, rawDmg));
+            const ffDmg = Math.round(finalDmg * 0.22);
             game.totalFriendlyFireDmg += ffDmg;
             damagePlayer(pl, ffDmg);
           }
@@ -1997,20 +1995,16 @@
       }
 
       if (game.friendlyFire) {
-        const attacker = game.players.find(p => p.id === attackerId);
-        if (!attacker || attacker.role !== "AI") {
-          game.players.forEach(pl => {
-            if (pl.downed) return;
-            const distP = Math.hypot(pl.x - x, pl.z - z);
-            if (distP <= radius * 0.8) {
-              const ffMult = isAwakenedGrenade ? 0.08 : (isTier1Grenade ? 0.18 : 0.28);
-              // [안전 보장] 수류탄/폭발 오사 피해 상한: 최대 25 HP
-              const ffDmg = Math.min(25, Math.max(4, Math.round(maxDamage * ffMult)));
-              game.totalFriendlyFireDmg += ffDmg;
-              damagePlayer(pl, ffDmg);
-            }
-          });
-        }
+        game.players.forEach(pl => {
+          if (pl.downed) return;
+          const distP = Math.hypot(pl.x - x, pl.z - z);
+          if (distP <= radius * 0.8) {
+            const ffMult = isAwakenedGrenade ? 0.08 : (isTier1Grenade ? 0.18 : 0.28);
+            const ffDmg = Math.round(maxDamage * ffMult);
+            game.totalFriendlyFireDmg += ffDmg;
+            damagePlayer(pl, ffDmg);
+          }
+        });
       }
     }
 
@@ -2314,7 +2308,7 @@
     }
 
     function damagePlayer(player, dmg, causesBleed, causesAcid, causesShock, causesFrost) {
-      if (player.downed || player.dashActiveTimer > 0 || (player.postClearGraceTimer > 0) || !game.running) return;
+      if (player.downed || player.dashActiveTimer > 0 || !game.running) return;
 
       // Cancel self-bandaging if hit hard
       if (player.bandagingTimer > 0 && dmg > 8) {
@@ -2332,7 +2326,9 @@
 
       // [v3.2 케블라 방탄 외골격] 받는 모든 피해 영구 경감 (-6%/Lv, 최대 -30%)
       const red = getPlayerDmgReduction(player);
-      let rem = Math.max(1, Math.round(inDmg * (1 - red)));
+      const isDoT = (dmg < 3.5);
+      // [급사 버그 완벽 수정] 독가스/동상/출혈 등 dt 단위 지속 피해는 실수치 그대로 차감 (Math.max(1)로 1프레임당 1HP씩 60~144 DPS 초고속 급사하던 버그 원천 박멸!)
+      let rem = isDoT ? (inDmg * (1 - red)) : Math.max(1, Math.round(inDmg * (1 - red)));
 
       // [선봉장 결사 요새 임시 쉴드] 쉴드로 먼저 흡수!
       if (player.tempShield > 0) {
@@ -2348,7 +2344,6 @@
         rem -= absorbed;
       }
       player.hp = Math.max(0, player.hp - rem);
-      console.log(`[DAMAGE] Player #${player.id} took ${rem} dmg (raw: ${dmg}). Remaining HP: ${player.hp}/${player.maxHp}`);
 
       // [v3.2] 스팀팩 폭주 중에는 모든 상태이상 및 군중제어 완전 면역!
       if (player.stimBuffTimer <= 0) {
@@ -2358,15 +2353,17 @@
         if (causesFrost) player.frostTimer = 4.0;
       }
 
-      spawnBloodParticles(player.x, 1.2, player.z, 0xef4444, 2);
+      if (!isDoT) {
+        spawnBloodParticles(player.x, 1.2, player.z, 0xef4444, 2);
 
-      if (player.id === mySlotIndex && userSettings.damageVignette) {
-        const vig = document.getElementById("damage-vignette");
-        if (vig) {
-          vig.style.opacity = "0.85";
-          setTimeout(() => {
-            if (!player.downed && vig) vig.style.opacity = "0";
-          }, 240);
+        if (player.id === mySlotIndex && userSettings.damageVignette) {
+          const vig = document.getElementById("damage-vignette");
+          if (vig) {
+            vig.style.opacity = "0.85";
+            setTimeout(() => {
+              if (!player.downed && vig) vig.style.opacity = "0";
+            }, 240);
+          }
         }
       }
 
