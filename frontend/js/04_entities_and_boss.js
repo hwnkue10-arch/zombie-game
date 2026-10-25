@@ -539,7 +539,7 @@
         radius: 0.55 * s,
         roomIndex,
         stunTimer: 0,
-        attackCooldown: 0,
+        attackCooldown: 1.2, // [안전 보장] 스폰 즉시 0프레임 공격 방지: 1.2초 공격 선딜레이 부여
         rangedCooldown: 2.0,
         group
       };
@@ -616,6 +616,42 @@
         return;
       }
 
+      if (kind === "BP_BOX") {
+        // [v3.5 신규 드랍] 필드 생체 BP 박스 (바이오 크레딧 보관함)
+        const bpGroup = new THREE.Group();
+        const goldBox = new THREE.Mesh(
+          new THREE.BoxGeometry(0.85, 0.65, 0.85),
+          new THREE.MeshStandardMaterial({
+            color: 0xf59e0b,
+            emissive: 0xd97706,
+            emissiveIntensity: 0.85,
+            metalness: 0.8,
+            roughness: 0.25
+          })
+        );
+        goldBox.position.y = 0.55;
+        bpGroup.add(goldBox);
+
+        const goldBand = new THREE.Mesh(
+          new THREE.BoxGeometry(0.92, 0.18, 0.92),
+          new THREE.MeshBasicMaterial({ color: 0xfef08a })
+        );
+        goldBand.position.y = 0.55;
+        bpGroup.add(goldBand);
+
+        bpGroup.position.set(x, 0, z);
+        entitiesGroup.add(bpGroup);
+        const pkObj = { x, z, kind: "BP_BOX", mesh: bpGroup, isPickup: true };
+        game.pickups.push(pkObj);
+        pkObj.sym = registerWorldSymbol(
+          x, 1.9, z,
+          "🪙생체BP상자[획득]",
+          "bg-yellow-950/95 border-amber-400 text-amber-200 animate-pulse",
+          pkObj, game.currentRoomIndex
+        );
+        return;
+      }
+
       const colorMap = {
         AMMO_PACK: 0x38bdf8,
         AMMO_LIGHT: 0x38bdf8,
@@ -647,10 +683,24 @@
           "bg-amber-950/95 border-amber-400 text-amber-200",
           pkObj, game.currentRoomIndex
         );
-      } else if (kind === "AMMO_PACK" && targetW) {
+      } else if (kind === "MEDKIT") {
         pkObj.sym = registerWorldSymbol(
           x, 1.85, z,
-          `📦${targetW.name}탄약`,
+          "🩹구급키트[획득]",
+          "bg-emerald-950/95 border-emerald-400 text-emerald-200",
+          pkObj, game.currentRoomIndex
+        );
+      } else if (kind === "STIM") {
+        pkObj.sym = registerWorldSymbol(
+          x, 1.85, z,
+          "⚡스팀팩[획득]",
+          "bg-yellow-950/95 border-yellow-400 text-yellow-200",
+          pkObj, game.currentRoomIndex
+        );
+      } else if (kind === "AMMO_PACK") {
+        pkObj.sym = registerWorldSymbol(
+          x, 1.85, z,
+          targetW ? `📦${targetW.name}탄약` : "📦범용탄약팩[획득]",
           "bg-slate-900/90 border-sky-400/80 text-sky-200",
           pkObj, game.currentRoomIndex
         );

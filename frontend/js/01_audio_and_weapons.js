@@ -424,8 +424,24 @@
         reqRooms: [0, 2, 5, 7],
         costs: [1200, 4800, 18000, 48000],
         partsCosts: [0, 0, 1, 1]
+      },
+      sprintSpeed: {
+        key: "sprintSpeed",
+        category: "MOBILITY",
+        icon: "👟",
+        name: "기동 전술화 (기동력 증강)",
+        desc: "기본 이동속도 및 Shift 질주 속도 +7% 증가 (최대 +21% 기동력)",
+        maxLv: 3,
+        reqRooms: [0, 2, 5],
+        costs: [1500, 6000, 22000],
+        partsCosts: [0, 1, 1]
       }
     };
+
+    function getPlayerMoveSpeedBonus(player) {
+      const upg = (player && player.suitUpgrades && player.suitUpgrades.sprintSpeed) || 0;
+      return upg * 0.07;
+    }
 
     function getPlayerMaxHp(player) {
       const upg = (player && player.suitUpgrades && player.suitUpgrades.maxHp) || 0;

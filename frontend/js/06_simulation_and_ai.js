@@ -961,6 +961,19 @@
           updateRoomVisibility();
 
           nextR.lockedBehind = true;
+          nextR.enteredTime = game.elapsedTime;
+
+          // [안전 보장] 신규 섹터 진입 시 신규 소강기(CALM 22초) 보장 및 전 대원 6.0초 무적 안전 정비 버퍼 부여!
+          game.wavePhase = "CALM";
+          game.waveTimer = 22.0;
+          game.players.forEach(pl => {
+            pl.postClearGraceTimer = 6.0;
+            pl.bleedingTimer = 0;
+            pl.acidTimer = 0;
+            pl.shockTimer = 0;
+            pl.frostTimer = 0;
+          });
+
           const backDoor = game.doors.find(d => d.fromRoom === curRoom.index && d.toRoom === nextIdx);
           if (backDoor) {
             backDoor.open = false;
@@ -1018,7 +1031,7 @@
                 "👑 최종 결전지 도달! 무기고 정비 완료 후 입구의 [F] 격벽 콘솔을 가동하십시오.";
             } else {
               document.getElementById("hud-safe-banner-text").textContent =
-                `🔒 후방 격벽 봉쇄! S${nextR.index + 1} 강화 상한(총 Lv.${getSectorMaxStatLv() * 5}/50) 해금`;
+                `🛡️ S${nextR.index + 1} 진입! 6초 안전 정비 버퍼 & 강화 상한(총 Lv.${getSectorMaxStatLv() * 5}/50) 해금`;
             }
             safeBanner.classList.remove("hidden");
             setTimeout(() => safeBanner.classList.add("hidden"), 4500);
@@ -1666,7 +1679,14 @@
 
             if (packSize > 0) {
               curRoom.waveZombiesSpawned = (curRoom.waveZombiesSpawned || 0) + packSize;
-              const hole = activeHoles[Math.floor(Math.random() * activeHoles.length)];
+              // [입구 급사 방지] 섹터 진입 후 15초간은 진입 격벽 14m 이내의 구멍에서 스폰하지 않고 방 중앙/원거리 구멍 우선 선택
+              let candidateHoles = activeHoles;
+              const backDoor = game.doors.find(d => d.toRoom === curRoom.index);
+              if (backDoor && (game.elapsedTime - (curRoom.enteredTime || 0)) < 15.0) {
+                const farHoles = activeHoles.filter(h => Math.hypot(h.x - backDoor.x, h.z - backDoor.z) >= 14.0);
+                if (farHoles.length > 0) candidateHoles = farHoles;
+              }
+              const hole = candidateHoles[Math.floor(Math.random() * candidateHoles.length)];
 
               const hw = curRoom.hw || curRoom.half;
               const hd = curRoom.hd || curRoom.half;
@@ -2566,6 +2586,8 @@
             let moveSpeed = p.downed ? 2.5 : 9.2;
             if (p.specialization === "SCOUT") moveSpeed *= 1.15; // 척후병 기본 이동속도 +15%
             if (p.cloakActive) moveSpeed *= 1.20; // 척후병 은신 가동 중 이동속도 +20%
+            const bootsBonus = (typeof getPlayerMoveSpeedBonus === "function") ? getPlayerMoveSpeedBonus(p) : 0;
+            if (bootsBonus > 0) moveSpeed *= (1 + bootsBonus); // [기동 전술화 강화] 이동 및 질주 속도 보너스
             // 나노 주사기 개조 시에는 자가 치료 중에도 이동속도 감속이 전혀 없음!
             if (p.bandagingTimer > 0 && !isPlayerSyringeUpgraded(p)) moveSpeed *= 0.42;
             if (p.carryingPayload) moveSpeed *= 0.78;
@@ -3823,6 +3845,17 @@
             if (pk.kind === "MEDKIT") tp.medkits = Math.min(getPlayerMaxMedkits(tp), tp.medkits + 1);
             else if (pk.kind === "STIM") tp.stims = Math.min(getPlayerMaxStims(tp), tp.stims + 1);
             else if (pk.kind === "PART") game.weaponParts = (game.weaponParts || 0) + 1;
+            else if (pk.kind === "BP_BOX") {
+              const bpGain = Math.round(75 + (game.currentRoomIndex || 0) * 45);
+              game.bioPoints = (game.bioPoints || 0) + bpGain;
+              const safeBanner = document.getElementById("hud-safe-banner");
+              if (safeBanner) {
+                document.getElementById("hud-safe-banner-text").textContent =
+                  `🪙 생체 BP 상자 수거! (+${bpGain} BP)`;
+                safeBanner.classList.remove("hidden");
+                setTimeout(() => safeBanner.classList.add("hidden"), 3000);
+              }
+            }
             else {
               const strikerMult = (tp.specialization === "STRIKER") ? 1.35 : 1.0; // 돌격수 탄약팩 획득량 +35%
               if (pk.wIdx !== undefined && tp.inventory[pk.wIdx]) {

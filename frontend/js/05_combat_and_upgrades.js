@@ -902,7 +902,7 @@
       if (suitGrid) {
         suitGrid.innerHTML = "";
         if (!me.suitUpgrades) {
-          me.suitUpgrades = { maxHp: 0, armorPlating: 0, medkitCap: 0, stimCap: 0, maxStamina: 0, staminaRegen: 0, dashCd: 0, bashCd: 0, syringe: 0 };
+          me.suitUpgrades = { maxHp: 0, armorPlating: 0, medkitCap: 0, stimCap: 0, maxStamina: 0, staminaRegen: 0, dashCd: 0, bashCd: 0, sprintSpeed: 0, syringe: 0 };
         }
 
         const catSurvival = (typeof SUIT_CATEGORIES === "object" && SUIT_CATEGORIES.SURVIVAL) || { name: "💖 생존 & 방호 외골격", icon: "💖", desc: "체력 증강 및 피격 피해 감쇄", border: "border-rose-500/50", badge: "bg-rose-950/80 text-rose-300 border-rose-400/50" };
@@ -912,7 +912,7 @@
         const categoryGroups = [
           { groupDef: catSurvival, keys: ["maxHp", "armorPlating"] },
           { groupDef: catMedical,  keys: ["medkitCap", "stimCap", "syringe"] },
-          { groupDef: catMobility, keys: ["maxStamina", "staminaRegen", "dashCd", "bashCd"] }
+          { groupDef: catMobility, keys: ["maxStamina", "staminaRegen", "dashCd", "bashCd", "sprintSpeed"] }
         ];
 
         categoryGroups.forEach(cg => {
@@ -953,6 +953,7 @@
             else if (sKey === "staminaRegen") statNowText = `초당 +${getPlayerStaminaRegen(me)}/s`;
             else if (sKey === "dashCd") statNowText = `점프 소모 ${getPlayerJumpStaminaCost(me)} ST`;
             else if (sKey === "bashCd") statNowText = `쿨 ${getPlayerBashCooldownMax(me).toFixed(2)}s · 반경 ${getPlayerBashRadius(me).toFixed(1)}m`;
+            else if (sKey === "sprintSpeed") statNowText = `이동/질주 +${Math.round(getPlayerMoveSpeedBonus(me) * 100)}%`;
             else if (sKey === "syringe") statNowText = curLv > 0 ? "자가0.6s(무감속)·아군0.4s" : "기본: 자가2.8s·아군1.8s";
 
             const costText = `${cost.toLocaleString()}BP${partCost > 0 ? ` + ⚙️${partCost}개` : ""}`;
@@ -1910,7 +1911,9 @@
           if (pl.downed) return;
           const distP = Math.hypot(pl.x - barrel.x, pl.z - barrel.z);
           if (distP <= expRadius * 0.7) {
-            const ffDmg = Math.round(finalDmg * 0.22);
+            // [안전 보장] 배럴 폭발 아군 피해 상한: 최대 20 HP (1타 즉사/끔살 원천 차단)
+            const rawDmg = Math.round(finalDmg * 0.10);
+            const ffDmg = Math.min(20, Math.max(5, rawDmg));
             game.totalFriendlyFireDmg += ffDmg;
             damagePlayer(pl, ffDmg);
           }
@@ -2001,7 +2004,8 @@
             const distP = Math.hypot(pl.x - x, pl.z - z);
             if (distP <= radius * 0.8) {
               const ffMult = isAwakenedGrenade ? 0.08 : (isTier1Grenade ? 0.18 : 0.28);
-              const ffDmg = Math.round(maxDamage * ffMult);
+              // [안전 보장] 수류탄/폭발 오사 피해 상한: 최대 25 HP
+              const ffDmg = Math.min(25, Math.max(4, Math.round(maxDamage * ffMult)));
               game.totalFriendlyFireDmg += ffDmg;
               damagePlayer(pl, ffDmg);
             }
@@ -2187,16 +2191,23 @@
           triggerExplosion(zx, zz, 4.0, 58, -1, false);
         }
 
-        // [v3.2 탄약 드랍 개편] 보유(해금) 무기 전용 탄약팩 드랍 (전체 1.0% 드랍 확립)
+        // [v3.2 탄약 드랍 개편] 보유(해금) 무기 전용 탄약팩 드랍 (전체 1.0% 드랍 확립) + [v3.5] 생체 BP 박스 (0.8% 드랍)
         const isElite = (zmb.typeKey === "GOLIATH" || zmb.typeKey === "DEVIL");
         const partChance = isElite ? 0.001 : 0.0;
+        const bpBoxChance = 0.008; // 0.8% 드랍율 (0.5% ~ 1.0% 지정 범위)
         const ammoDropChance = 0.010; // 1.0%
         const r = Math.random();
         if (r < ammoDropChance) {
           spawnPickup(zx, zz, "AMMO_PACK", getDropWeapon());
-        } else if (r < ammoDropChance + partChance) spawnPickup(zx, zz, "PART");
-        else if (r < ammoDropChance + partChance + 0.0018) spawnPickup(zx, zz, "MEDKIT");
-        else if (r < ammoDropChance + partChance + 0.0032) spawnPickup(zx, zz, "STIM");
+        } else if (r < ammoDropChance + partChance) {
+          spawnPickup(zx, zz, "PART");
+        } else if (r < ammoDropChance + partChance + bpBoxChance) {
+          spawnPickup(zx, zz, "BP_BOX");
+        } else if (r < ammoDropChance + partChance + bpBoxChance + 0.0018) {
+          spawnPickup(zx, zz, "MEDKIT");
+        } else if (r < ammoDropChance + partChance + bpBoxChance + 0.0032) {
+          spawnPickup(zx, zz, "STIM");
+        }
       }
     }
 
@@ -2337,6 +2348,7 @@
         rem -= absorbed;
       }
       player.hp = Math.max(0, player.hp - rem);
+      console.log(`[DAMAGE] Player #${player.id} took ${rem} dmg (raw: ${dmg}). Remaining HP: ${player.hp}/${player.maxHp}`);
 
       // [v3.2] 스팀팩 폭주 중에는 모든 상태이상 및 군중제어 완전 면역!
       if (player.stimBuffTimer <= 0) {
@@ -2360,6 +2372,7 @@
 
       if (player.hp <= 0) {
         player.downed = true;
+        console.warn(`[DOWNED] Player #${player.id} has been downed!`);
         player.bandagingTimer = 0;
         player.carryingPayload = false;
         player.reviveProgress = 0;
