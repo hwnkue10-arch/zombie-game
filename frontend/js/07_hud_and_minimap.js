@@ -282,20 +282,28 @@
           if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse";
         } else if (curRoom.index > 0 && !curRoom.lockedBehind) {
           const prevR = game.rooms[curRoom.index - 1];
-          const remSec = prevR ? Math.max(0, Math.ceil(prevR.sectorTimer || 0)) : 0;
-          const tMins = String(Math.floor(remSec / 60)).padStart(2, "0");
-          const tSecs = String(remSec % 60).padStart(2, "0");
-          secTimerVal.textContent = `${tMins}:${tSecs}`;
-
-          if (remSec <= 0 || (prevR && prevR.berserkActive)) {
-            secTimerVal.className = "font-mono-code font-black text-xl text-rose-500 tracking-wider animate-ping";
-            if (secTimerTitle) secTimerTitle.textContent = "☣️ 이전 구역 광폭화! (후방 격벽 폐쇄 필수)";
-            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-red-600 animate-ping";
-            secTimerCont.className = "hud-glass-red rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-red-500 shadow-2xl backdrop-blur-md pointer-events-auto";
+          if (prevR && prevR.berserkActive) {
+            const p2Sec = Math.max(0, Math.ceil(prevR.phase2Timer !== undefined ? prevR.phase2Timer : 30));
+            secTimerVal.textContent = `00:${String(p2Sec).padStart(2, "0")}`;
+            if (p2Sec <= 0 || prevR.phase2Berserk) {
+              secTimerVal.className = "font-mono font-black text-2xl text-red-500 tracking-wider";
+              if (secTimerTitle) secTimerTitle.textContent = "💀 2차 광폭화 진행 중! (체력 8배)";
+              if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-red-600";
+              secTimerCont.className = "hud-glass-red rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-red-500 shadow-2xl backdrop-blur-md pointer-events-auto";
+            } else {
+              secTimerVal.className = "font-mono font-black text-2xl text-rose-500 tracking-wider";
+              if (secTimerTitle) secTimerTitle.textContent = `⚠️ 2차 광폭화 카운트다운 (${p2Sec}s)`;
+              if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+              secTimerCont.className = "hud-glass-red rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-rose-500 shadow-2xl backdrop-blur-md pointer-events-auto";
+            }
           } else {
-            secTimerVal.className = "font-mono-code font-black text-xl text-amber-400 tracking-wider animate-pulse";
+            const remSec = prevR ? Math.max(0, Math.ceil(prevR.sectorTimer || 0)) : 0;
+            const tMins = String(Math.floor(remSec / 60)).padStart(2, "0");
+            const tSecs = String(remSec % 60).padStart(2, "0");
+            secTimerVal.textContent = `${tMins}:${tSecs}`;
+            secTimerVal.className = "font-mono font-black text-2xl text-amber-300 tracking-wider";
             if (secTimerTitle) secTimerTitle.textContent = "⏱️ 이전 구역 제한시간 (격벽 폐쇄 대기)";
-            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400";
             secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-amber-500/80 shadow-2xl backdrop-blur-md pointer-events-auto";
           }
         } else {
@@ -305,24 +313,24 @@
           secTimerVal.textContent = `${tMins}:${tSecs}`;
 
           if (curRoom.berserkActive || remSec <= 0) {
-            secTimerVal.className = "font-mono-code font-black text-xl text-rose-500 tracking-wider animate-pulse";
+            secTimerVal.className = "font-mono font-black text-2xl text-rose-500 tracking-wider";
             if (secTimerTitle) secTimerTitle.textContent = "☣️ 제한시간 초과 (광폭화)";
-            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-red-600 animate-ping";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-red-600";
             secTimerCont.className = "hud-glass-red rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-red-500 shadow-2xl backdrop-blur-md pointer-events-auto";
           } else if (remSec <= 30) {
-            secTimerVal.className = "font-mono-code font-black text-xl text-rose-400 tracking-wider animate-pulse";
+            secTimerVal.className = "font-mono font-black text-2xl text-rose-400 tracking-wider";
             if (secTimerTitle) secTimerTitle.textContent = "⚠️ 시간 임박";
-            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-rose-500";
             secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-rose-500/80 shadow-2xl backdrop-blur-md pointer-events-auto";
           } else if (remSec <= 60) {
-            secTimerVal.className = "font-mono-code font-black text-xl text-amber-400 tracking-wider";
+            secTimerVal.className = "font-mono font-black text-2xl text-amber-400 tracking-wider";
             if (secTimerTitle) secTimerTitle.textContent = "⏱️ 시간 경고";
-            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400";
             secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-amber-500/60 shadow-2xl backdrop-blur-md pointer-events-auto";
           } else {
-            secTimerVal.className = "font-mono-code font-black text-xl text-emerald-400 tracking-wider";
+            secTimerVal.className = "font-mono font-black text-2xl text-emerald-400 tracking-wider";
             if (secTimerTitle) secTimerTitle.textContent = "⏱️ 섹터 제한시간";
-            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse";
+            if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
             secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-slate-700/80 shadow-2xl backdrop-blur-md pointer-events-auto";
           }
         }
@@ -379,9 +387,14 @@
           const remSec = prevR ? Math.max(0, Math.ceil(prevR.sectorTimer || 0)) : 0;
           objText.textContent = "🔒 후방 격벽 폐쇄 [F] (입구 콘솔)";
           if (objSub) {
-            objSub.textContent = (remSec <= 0 || (prevR && prevR.berserkActive))
-              ? "🚨 이전 구역 광폭화 진행 중! 콘솔을 당겨 후방 격벽을 폐쇄하세요!"
-              : `⏱️ 이전 구역 제한시간: ${remSec}초 (만료 시 광폭화 호드 난입)`;
+            if (prevR && prevR.phase2Berserk) {
+              objSub.textContent = "💀 2차 광폭화 진행 중! (체력 8배) 즉시 콘솔을 당겨 후방 격벽을 폐쇄하세요!";
+            } else if (prevR && prevR.berserkActive) {
+              const p2Sec = Math.max(0, Math.ceil(prevR.phase2Timer !== undefined ? prevR.phase2Timer : 30));
+              objSub.textContent = `⚠️ 2차 광폭화(체력 8배) 임박: ${p2Sec}초! 서둘러 콘솔로 후방 격벽을 폐쇄하세요!`;
+            } else {
+              objSub.textContent = `⏱️ 이전 구역 제한시간: ${remSec}초 (만료 시 광폭화 호드 난입)`;
+            }
           }
           objBar.style.width = "0%";
         } else if (curRoom.waitingForWaveDefense) {

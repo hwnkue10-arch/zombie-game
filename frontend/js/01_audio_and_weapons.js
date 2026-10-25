@@ -288,7 +288,12 @@
     // 섹터별 스탯 최대 레벨 상한 계산 (총 10섹터 기준: 섹터 1 = 스탯당 1Lv(총 5Lv) ... 섹터 10 = 스탯당 10Lv(총 50Lv))
     function getSectorMaxStatLv() {
       const totalR = Math.max(1, game.totalRooms || 10);
-      const curS = Math.min(totalR, (game.currentRoomIndex || 0) + 1);
+      let curS = (game.currentRoomIndex || 0) + 1;
+      const curR = game.rooms && game.rooms[game.currentRoomIndex];
+      // 다음 구역 진입 통로가 열렸거나 이동 가능한 경우 상한을 다음 섹터 수준으로 즉시 개방
+      if (curR && curR.cleared && game.doors && game.doors.some(d => d.fromRoom === curR.index && d.open)) {
+        curS = Math.min(totalR, curS + 1);
+      }
       return Math.min(10, Math.max(1, Math.ceil((curS * 10) / totalR)));
     }
 
@@ -305,8 +310,13 @@
 
     // 섹터 진행에 따라 좀비 마리당 획득 BP와 스폰량이 증가하므로, 탄약·회복템·설치물 보충 가격도 섹터 티어에 맞춰 자동 재조정!
     // S1(x1.0) -> S2(x1.5) -> S3(x2.2) -> S4(x3.2) -> S5(x4.5) -> S6(x6.2) -> S7(x8.5) -> S8(x11.2) -> S9+(x14.5)
+    // [어뷰징 방지] 다음 섹터 진입문이 열리면 물가(상점 가격)는 즉시 다음 섹터 기준으로 상향 스케일링!
     function getSectorSupplyMult() {
-      const s = Math.max(0, game.currentRoomIndex || 0);
+      let s = Math.max(0, game.currentRoomIndex || 0);
+      const curR = game.rooms && game.rooms[game.currentRoomIndex];
+      if (curR && curR.cleared && game.doors && game.doors.some(d => d.fromRoom === curR.index && d.open)) {
+        s = Math.min((game.totalRooms || 10) - 1, s + 1);
+      }
       const multTable = [1.0, 1.5, 2.2, 3.2, 4.5, 6.2, 8.5, 11.2, 14.5, 16.0];
       return multTable[Math.min(multTable.length - 1, s)];
     }

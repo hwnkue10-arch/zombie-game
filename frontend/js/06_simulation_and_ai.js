@@ -774,6 +774,154 @@
     let camFocusZ = 0;
     let camInitialized = false;
 
+    function closeAndLockBulkheadDoor(room) {
+      if (!room || room.lockedBehind) return;
+      try {
+        room.lockedBehind = true;
+
+        // 1. 후방 격벽 문 물리적 폐쇄 및 붉은색 잠금
+        const prevIdx = room.index - 1;
+        const backDoor = game.doors.find(d => d.fromRoom === prevIdx && d.toRoom === room.index);
+        if (backDoor) {
+          backDoor.open = false;
+          backDoor.lockedPermanently = true;
+          if (backDoor.mesh) {
+            backDoor.mesh.position.y = 2.0;
+            if (backDoor.mesh.material) {
+              try {
+                if (Array.isArray(backDoor.mesh.material)) {
+                  backDoor.mesh.material.forEach(m => {
+                    if (m && m.color) m.color.setHex(0x991b1b);
+                    if (m && m.emissive) m.emissive.setHex(0x450a0a);
+                  });
+                } else {
+                  if (backDoor.mesh.material.color) backDoor.mesh.material.color.setHex(0x991b1b);
+                  if (backDoor.mesh.material.emissive) backDoor.mesh.material.emissive.setHex(0x450a0a);
+                }
+              } catch (e) {}
+            }
+          }
+        }
+
+        // 이전 섹터 광폭화, 2차 광폭화 및 독가스 확산 영구 정지 & 격리
+        if (prevIdx >= 0 && game.rooms[prevIdx]) {
+          const prevR = game.rooms[prevIdx];
+          prevR.berserkActive = false;
+          prevR.phase2Berserk = false;
+          prevR.phase2Timer = undefined;
+          prevR.gasWaveActive = false;
+          if (prevR.gasMesh) prevR.gasMesh.visible = false;
+        }
+
+        // 2. 콘솔 레버 내림 & 월드 심볼 소거
+        if (room.bulkheadConsole) {
+          room.bulkheadConsole.done = true;
+          if (room.bulkheadConsole.lever) {
+            room.bulkheadConsole.lever.rotation.z = -Math.PI / 4;
+          }
+          if (room.bulkheadConsole.sym && room.bulkheadConsole.sym.el) {
+            room.bulkheadConsole.sym.el.style.display = "none";
+          }
+        }
+
+        // 3. 지연 도착 대원 안전 합류
+        const meP = game.players[mySlotIndex] || game.players[0];
+        game.players.forEach((pl, idx) => {
+          if (pl.id !== meP.id && (Math.abs(pl.x - room.wx) >= (room.hw || room.half) || Math.abs(pl.z - room.wz) >= (room.hd || room.half))) {
+            const ang = (idx / 4) * Math.PI * 2;
+            pl.x = meP.x + Math.cos(ang) * 2.8;
+            pl.z = meP.z + Math.sin(ang) * 2.8;
+            if (pl.visual && pl.visual.group) pl.visual.group.position.set(pl.x, 0, pl.z);
+          }
+        });
+
+        if (wsClient && wsClient.readyState === WebSocket.OPEN && !isRemoteClient) {
+          try {
+            wsClient.send(JSON.stringify({
+              type: "SECTOR_LOCK_TELEPORT",
+              roomIdx: room.index,
+              destX: room.wx,
+              destZ: room.wz
+            }));
+          } catch (e) {}
+        }
+
+        // 4. 이전 섹터 잔존 감염체 처리:
+        // - 이미 문을 통과하여 신규 방(room) 내부에 진입한 감염체는 생존 유지!
+        // - 아직 문 이전(이전 구역)에 머물러 있는 감염체만 100% 완전 소멸
+        const hw = room.hw || room.half || 45;
+        const hd = room.hd || room.half || 45;
+        for (let zi = game.zombies.length - 1; zi >= 0; zi--) {
+          const zmb = game.zombies[zi];
+          if (!zmb) continue;
+          if (zmb.roomIndex < room.index) {
+            const hasCrossedDoor = Math.abs(zmb.x - room.wx) <= (hw + 2.0) && Math.abs(zmb.z - room.wz) <= (hd + 2.0);
+            if (hasCrossedDoor) {
+              zmb.roomIndex = room.index;
+            } else {
+              try {
+                if (zmb.iceBlock && zmb.group) zmb.group.remove(zmb.iceBlock);
+                if (zmb.group && entitiesGroup) entitiesGroup.remove(zmb.group);
+              } catch (e) {}
+              game.zombies.splice(zi, 1);
+            }
+          }
+        }
+
+        // 5. 폭발 효과 & 사운드 & 파티클
+        try { SoundFX.play("explosion"); } catch (e) {}
+        if (typeof spawnMissionStageVFX === "function") {
+          spawnMissionStageVFX(room.bulkheadConsole ? room.bulkheadConsole.x : room.wx, room.bulkheadConsole ? room.bulkheadConsole.z : room.wz, 0xf59e0b, 8.5, 25, true);
+        }
+
+        // 6. 붕괴 배너 정리
+        const collapseBanner = document.getElementById("hud-collapse-banner");
+        if (collapseBanner) collapseBanner.classList.add("hidden");
+        const collapseMsg = document.getElementById("hud-collapse-msg");
+        if (collapseMsg) collapseMsg.textContent = "";
+        const collapseTimerEl = document.getElementById("hud-collapse-timer");
+        if (collapseTimerEl) collapseTimerEl.textContent = "";
+        if (game.collapseState) game.collapseState.active = false;
+
+        // 7. [신규 섹터 작전 개시] 타이머 작동 및 3.5초 카운트다운 후 호드 웨이브 돌입!
+        game.wavePhase = "CALM";
+        game.waveTimer = 3.5;
+        try { SoundFX.play("alarm"); } catch (e) {}
+
+        // 8. 1단계 미션 노드 생성 (없는 경우)
+        if (room.unlockStage === 0 && !room.isBossRoom && !room.hasMidBoss && room.condType !== "THERMITE") {
+          const hasNode = game.missionNodes.some(n => n.roomIndex === room.index && (n.stepOrder === 1 || n.genIndex === 1));
+          if (!hasNode && typeof spawnRandomMissionStepForRoom === "function") {
+            try { spawnRandomMissionStepForRoom(room, 1); } catch (e) { console.error(e); }
+          }
+        }
+
+        // 9. HUD 알림 배너
+        const safeBanner = document.getElementById("hud-safe-banner");
+        if (safeBanner) {
+          const bannerTextEl = document.getElementById("hud-safe-banner-text");
+          if (bannerTextEl) {
+            if (room.hasMidBoss && !room.midBossAwakened) {
+              bannerTextEl.textContent = "⚠️ 후방 격벽 폐쇄 완료! 중간보스 생체 캡슐 감지! 스쿼드 정비 후 [F] 단말기를 가동하십시오.";
+            } else if (room.isBossRoom) {
+              if (game.boss) {
+                game.boss.active = false;
+                game.boss.shielded = true;
+                if (game.boss.shieldMat) game.boss.shieldMat.opacity = 0.85;
+              }
+              bannerTextEl.textContent = "👑 후방 격벽 폐쇄 완료! 무기고 정비 완료 후 입구의 [F] 격벽 콘솔을 가동하십시오.";
+            } else {
+              bannerTextEl.textContent = `🔒 후방 격벽 폐쇄 완료! 통로 영구 차단 & S${room.index + 1} 작전이 개시됩니다! (3초 후 호드 웨이브)`;
+            }
+          }
+          safeBanner.classList.remove("hidden");
+          setTimeout(() => safeBanner.classList.add("hidden"), 4500);
+        }
+      } catch (err) {
+        console.error("Critical error in closeAndLockBulkheadDoor:", err);
+      }
+    }
+
     function updateSimulation(dt) {
       if (!game.running) return;
       game.elapsedTime += dt;
@@ -990,125 +1138,6 @@
         checkRoomClear(curRoom);
       }
 
-      function closeAndLockBulkheadDoor(room) {
-        if (!room || room.lockedBehind) return;
-        room.lockedBehind = true;
-
-        // 1. 후방 격벽 문 물리적 폐쇄 및 붉은색 잠금
-        const prevIdx = room.index - 1;
-        const backDoor = game.doors.find(d => d.fromRoom === prevIdx && d.toRoom === room.index);
-        if (backDoor) {
-          backDoor.open = false;
-          backDoor.lockedPermanently = true;
-          if (backDoor.mesh) {
-            backDoor.mesh.position.y = 2.0;
-            if (backDoor.mesh.material && backDoor.mesh.material.color) {
-              backDoor.mesh.material.color.setHex(0x991b1b);
-              backDoor.mesh.material.emissive.setHex(0x450a0a);
-            }
-          }
-        }
-
-        // 이전 섹터 광폭화 및 독가스 확산 영구 정지 & 격리
-        if (prevIdx >= 0 && game.rooms[prevIdx]) {
-          const prevR = game.rooms[prevIdx];
-          prevR.berserkActive = false;
-          prevR.gasWaveActive = false;
-          if (prevR.gasMesh) prevR.gasMesh.visible = false;
-        }
-
-        // 2. 콘솔 레버 내림 & 월드 심볼 소거
-        if (room.bulkheadConsole) {
-          room.bulkheadConsole.done = true;
-          if (room.bulkheadConsole.lever) {
-            room.bulkheadConsole.lever.rotation.z = -Math.PI / 4;
-          }
-          if (room.bulkheadConsole.sym && room.bulkheadConsole.sym.el) {
-            room.bulkheadConsole.sym.el.style.display = "none";
-          }
-        }
-
-        // 3. 지연 도착 대원 안전 합류
-        const meP = game.players[mySlotIndex] || game.players[0];
-        game.players.forEach((pl, idx) => {
-          if (pl.id !== meP.id && (Math.abs(pl.x - room.wx) >= (room.hw || room.half) || Math.abs(pl.z - room.wz) >= (room.hd || room.half))) {
-            const ang = (idx / 4) * Math.PI * 2;
-            pl.x = meP.x + Math.cos(ang) * 2.8;
-            pl.z = meP.z + Math.sin(ang) * 2.8;
-            if (pl.visual && pl.visual.group) pl.visual.group.position.set(pl.x, 0, pl.z);
-          }
-        });
-
-        if (wsClient && wsClient.readyState === WebSocket.OPEN && !isRemoteClient) {
-          try {
-            wsClient.send(JSON.stringify({
-              type: "SECTOR_LOCK_TELEPORT",
-              roomIdx: room.index,
-              destX: room.wx,
-              destZ: room.wz
-            }));
-          } catch (e) {}
-        }
-
-        // 4. 이전 섹터 잔존 감염체 100% 완전 소멸
-        for (let zi = game.zombies.length - 1; zi >= 0; zi--) {
-          if (game.zombies[zi].roomIndex < room.index) {
-            entitiesGroup.remove(game.zombies[zi].group);
-            game.zombies.splice(zi, 1);
-          }
-        }
-
-        // 5. 폭발 효과 & 사운드 & 파티클
-        SoundFX.play("explosion");
-        if (typeof spawnMissionStageVFX === "function") {
-          spawnMissionStageVFX(room.bulkheadConsole ? room.bulkheadConsole.x : room.wx, room.bulkheadConsole ? room.bulkheadConsole.z : room.wz, 0xf59e0b, 8.5, 25, true);
-        }
-
-        // 6. 붕괴 배너 정리
-        const collapseBanner = document.getElementById("hud-collapse-banner");
-        if (collapseBanner) collapseBanner.classList.add("hidden");
-        const collapseMsg = document.getElementById("hud-collapse-msg");
-        if (collapseMsg) collapseMsg.textContent = "";
-        const collapseTimerEl = document.getElementById("hud-collapse-timer");
-        if (collapseTimerEl) collapseTimerEl.textContent = "";
-        if (game.collapseState) game.collapseState.active = false;
-
-        // 7. [신규 섹터 작전 개시] 타이머 작동 및 3.5초 카운트다운 후 호드 웨이브 돌입!
-        game.wavePhase = "CALM";
-        game.waveTimer = 3.5;
-        SoundFX.play("alarm");
-
-        // 8. 1단계 미션 노드 생성 (없는 경우)
-        if (room.unlockStage === 0 && !room.isBossRoom && !room.hasMidBoss && room.condType !== "THERMITE") {
-          const hasNode = game.missionNodes.some(n => n.roomIndex === room.index && (n.stepOrder === 1 || n.genIndex === 1));
-          if (!hasNode && typeof spawnRandomMissionStepForRoom === "function") {
-            spawnRandomMissionStepForRoom(room, 1);
-          }
-        }
-
-        // 9. HUD 알림 배너
-        const safeBanner = document.getElementById("hud-safe-banner");
-        if (safeBanner) {
-          if (room.hasMidBoss && !room.midBossAwakened) {
-            document.getElementById("hud-safe-banner-text").textContent =
-              "⚠️ 후방 격벽 폐쇄 완료! 중간보스 생체 캡슐 감지! 스쿼드 정비 후 [F] 단말기를 가동하십시오.";
-          } else if (room.isBossRoom) {
-            if (game.boss) {
-              game.boss.active = false;
-              game.boss.shielded = true;
-              if (game.boss.shieldMat) game.boss.shieldMat.opacity = 0.85;
-            }
-            document.getElementById("hud-safe-banner-text").textContent =
-              "👑 후방 격벽 폐쇄 완료! 무기고 정비 완료 후 입구의 [F] 격벽 콘솔을 가동하십시오.";
-          } else {
-            document.getElementById("hud-safe-banner-text").textContent =
-              `🔒 후방 격벽 폐쇄 완료! 통로 영구 차단 & S${room.index + 1} 작전이 개시됩니다! (3초 후 호드 웨이브)`;
-          }
-          safeBanner.classList.remove("hidden");
-          setTimeout(() => safeBanner.classList.add("hidden"), 4500);
-        }
-      }
-
       // 1b. 클리어된 섹터에서 플레이어가 다음 섹터에 진입했을 때 부드러운 섹터 전환
       if (curRoom && curRoom.cleared && game.rooms[curRoom.index + 1]) {
         const nextR = game.rooms[curRoom.index + 1];
@@ -1181,6 +1210,41 @@
                 "☣️ 이전 구역 제한시간 초과! 독가스 확산 & 호드 광폭화! 후방 격벽을 폐쇄하십시오!";
               collapseBanner.classList.remove("hidden");
             }
+          }
+        }
+
+        // [v3.5 신규 2차 광폭화 시스템]
+        // 조건: 후방 격벽 미폐쇄(isAwaitingBulkhead) AND 이전 구역 광폭화(prevRoom.berserkActive) (둘 다 참일 때!)
+        if (prevRoom.berserkActive) {
+          if (prevRoom.phase2Timer === undefined) {
+            prevRoom.phase2Timer = 30.0; // 30초 카운트다운 부여!
+          }
+          prevRoom.phase2Timer = Math.max(0, prevRoom.phase2Timer - dt);
+
+          if (prevRoom.phase2Timer <= 0 && !prevRoom.phase2Berserk) {
+            prevRoom.phase2Berserk = true;
+            SoundFX.play("alarm");
+            const collapseBanner = document.getElementById("hud-collapse-banner");
+            if (collapseBanner) {
+              document.getElementById("hud-collapse-msg").textContent =
+                "💀 2차 광폭화 발동! 체력 8배 강화 감염체 급습! 즉시 격벽을 폐쇄하십시오!";
+              collapseBanner.classList.remove("hidden");
+            }
+
+            // 현재 생존 감염체 2차 광폭화 (체력 8배 적용!)
+            game.zombies.forEach(z => {
+              if (!z.phase2Enraged && !z.spec.isNutrientHost && !z.spec.isMidBoss) {
+                z.phase2Enraged = true;
+                z.maxHp = Math.round(z.maxHp * 8);
+                z.hp = Math.round(z.hp * 8);
+                z.speed *= 1.15;
+                if (z.group) z.group.scale.multiplyScalar(1.2);
+                if (z.skinMat) {
+                  z.skinMat.emissive.setHex(0x991b1b);
+                  z.skinMat.emissiveIntensity = 1.0;
+                }
+              }
+            });
           }
         }
       }
@@ -1914,16 +1978,20 @@
                 const zSpawned = spawnZombie(zType, zx, zz, targetRoom.index);
                 if (targetRoom.berserkActive && zSpawned) {
                   zSpawned.berserkEnraged = true;
-                  const hpMult = 1.75;
+                  let hpMult = 1.75;
+                  if (targetRoom.phase2Berserk) {
+                    zSpawned.phase2Enraged = true;
+                    hpMult = 1.75 * 8; // 2차 광폭화 시 기존 대비 8배 체력!
+                  }
                   zSpawned.maxHp = Math.round(zSpawned.maxHp * hpMult);
                   zSpawned.hp = zSpawned.maxHp;
-                  zSpawned.speed *= 1.35;
+                  zSpawned.speed *= targetRoom.phase2Berserk ? 1.45 : 1.35;
                   if (zSpawned.group) {
-                    zSpawned.group.scale.multiplyScalar(1.15);
+                    zSpawned.group.scale.multiplyScalar(targetRoom.phase2Berserk ? 1.3 : 1.15);
                   }
                   if (zSpawned.skinMat) {
-                    zSpawned.skinMat.emissive.setHex(0xef4444);
-                    zSpawned.skinMat.emissiveIntensity = 0.85;
+                    zSpawned.skinMat.emissive.setHex(targetRoom.phase2Berserk ? 0x991b1b : 0xef4444);
+                    zSpawned.skinMat.emissiveIntensity = targetRoom.phase2Berserk ? 1.0 : 0.85;
                   }
                 }
               }
@@ -2210,8 +2278,8 @@
               const targetRoom = game.rooms[nearMissionNode.roomIndex];
               const livingHumans = game.players.filter(pl => !pl.downed && (pl.role === "LOCAL" || pl.role === "REMOTE"));
               const allInside = targetRoom && livingHumans.length > 0 && livingHumans.every(pl =>
-                Math.abs(pl.x - targetRoom.wx) <= (targetRoom.hw || targetRoom.half) &&
-                Math.abs(pl.z - targetRoom.wz) <= (targetRoom.hd || targetRoom.half)
+                Math.abs(pl.x - targetRoom.wx) <= ((targetRoom.hw || targetRoom.half) + 3.0) &&
+                Math.abs(pl.z - targetRoom.wz) <= ((targetRoom.hd || targetRoom.half) + 3.0)
               );
 
               if (targetRoom && targetRoom.lockedBehind) {
@@ -3880,28 +3948,54 @@
     }
 
     function updateCratesAndPickups(dt) {
+      // 1. 개인 보급상자: 각 플레이어가 개별적으로 상자를 개방하여 본인 몫의 탄약/부품 보급을 받음!
       for (let i = game.crates.length - 1; i >= 0; i--) {
         const c = game.crates[i];
-        if (c.opened) continue;
-        const touchingPlayer = game.players.find(p => !p.downed && Math.hypot(p.x - c.x, p.z - c.z) < 2.1);
-        if (touchingPlayer) {
-          c.opened = true;
-          entitiesGroup.remove(c.group);
-          SoundFX.play("pickup");
-          grantSupplyReward(touchingPlayer, false);
-          // [v3.2 무기 해금 설계] 각 섹터의 1번 보급상자(청색)는 ⚙️무기 부품 +1개 100% 확정 지급, 2번 보급상자는 50% 확률 지급!
-          const getsPart = (c.crateOrder === 0) || (Math.random() < 0.50);
-          if (getsPart) {
-            game.weaponParts = (game.weaponParts || 0) + 1;
-            const safeBanner = document.getElementById("hud-safe-banner");
-            if (safeBanner) {
-              document.getElementById("hud-safe-banner-text").textContent =
-                `📦 보급상자 개방! 탄약 보급 & ⚙️무기부품 +1개 (보유: ${game.weaponParts}개)`;
-              safeBanner.classList.remove("hidden");
-              setTimeout(() => safeBanner.classList.add("hidden"), 3800);
+        if (!c.openedBy) c.openedBy = {};
+
+        game.players.forEach(p => {
+          if (p.downed || c.openedBy[p.id]) return;
+          if (Math.hypot(p.x - c.x, p.z - c.z) < 2.1) {
+            c.openedBy[p.id] = true;
+            grantSupplyReward(p, false);
+
+            if (p.id === mySlotIndex) {
+              SoundFX.play("pickup");
+              const getsPart = (c.crateOrder === 0) || (Math.random() < 0.50);
+              if (getsPart) {
+                game.weaponParts = (game.weaponParts || 0) + 1;
+              }
+              const safeBanner = document.getElementById("hud-safe-banner");
+              if (safeBanner) {
+                document.getElementById("hud-safe-banner-text").textContent =
+                  getsPart
+                    ? `📦 개인 보급상자 개방! 탄약 보급 & ⚙️무기부품 +1개 (보유: ${game.weaponParts}개)`
+                    : `📦 개인 보급상자 개방! 탄약 보급 완료`;
+                safeBanner.classList.remove("hidden");
+                setTimeout(() => safeBanner.classList.add("hidden"), 3800);
+              }
+              if (!document.getElementById("upgrade-modal").classList.contains("hidden")) renderUpgradeModal();
             }
           }
-          if (!document.getElementById("upgrade-modal").classList.contains("hidden")) renderUpgradeModal();
+        });
+
+        // 본인(mySlotIndex)이 열었으면 로컬 시각적으로 반투명 처리
+        if (c.openedBy[mySlotIndex]) {
+          if (c.group) {
+            c.group.traverse(child => {
+              if (child.isMesh && child.material) {
+                child.material.transparent = true;
+                child.material.opacity = 0.35;
+              }
+            });
+          }
+        }
+
+        // 모든 살아있는 대원이 개방했으면 완전히 씬에서 제거
+        const allLivingCrated = game.players.filter(pl => !pl.downed).every(pl => c.openedBy[pl.id]);
+        if (allLivingCrated) {
+          try { entitiesGroup.remove(c.group); } catch (e) {}
+          game.crates.splice(i, 1);
         }
       }
 
@@ -3912,6 +4006,7 @@
         if (magLv <= 0) return;
         const magRadius = [0, 4.0, 6.0, 8.0, 10.0][magLv] || 4.0;
         game.pickups.forEach(pk => {
+          if (pk.collectedBy && pk.collectedBy[p.id]) return;
           const dist = Math.hypot(p.x - pk.x, p.z - pk.z);
           if (dist <= magRadius && dist > 0.35) {
             const pullSpd = 13.5;
@@ -3926,83 +4021,115 @@
         });
       });
 
+      // 2. 개인 드랍 아이템(탄약팩, 구급키트, 스팀팩, 변이코어, BP박스): 모든 대원이 각자의 몫을 독립 수거!
       for (let i = game.pickups.length - 1; i >= 0; i--) {
         const pk = game.pickups[i];
-        pk.mesh.rotation.y += dt * 2.5;
-        const tp = game.players.find(p => !p.downed && Math.hypot(p.x - pk.x, p.z - pk.z) < 1.85);
-        if (tp) {
-          if (pk.kind === "CORE") {
-            game.coreSamples = (game.coreSamples || 0) + 1;
-            SoundFX.play("revive");
-            const safeBanner = document.getElementById("hud-safe-banner");
-            if (safeBanner) {
-              document.getElementById("hud-safe-banner-text").textContent =
-                `🧬 변이 코어 획득! (보유 코어: ${game.coreSamples}개)`;
-              safeBanner.classList.remove("hidden");
-              setTimeout(() => safeBanner.classList.add("hidden"), 4000);
+        if (!pk.collectedBy) pk.collectedBy = {};
+        if (pk.mesh) pk.mesh.rotation.y += dt * 2.5;
+
+        // 내가 이미 수거한 아이템은 내 시야에서 숨김 처리
+        if (pk.collectedBy[mySlotIndex]) {
+          if (pk.mesh) pk.mesh.visible = false;
+          if (pk.sym && pk.sym.el) pk.sym.el.style.display = "none";
+        }
+
+        game.players.forEach(tp => {
+          if (tp.downed || pk.collectedBy[tp.id]) return;
+          if (Math.hypot(tp.x - pk.x, tp.z - pk.z) < 1.85) {
+            pk.collectedBy[tp.id] = true;
+
+            if (tp.id === mySlotIndex) {
+              if (pk.mesh) pk.mesh.visible = false;
+              if (pk.sym && pk.sym.el) pk.sym.el.style.display = "none";
             }
-          } else {
-            SoundFX.play("pickup");
-            if (pk.kind === "MEDKIT") tp.medkits = Math.min(getPlayerMaxMedkits(tp), tp.medkits + 1);
-            else if (pk.kind === "STIM") tp.stims = Math.min(getPlayerMaxStims(tp), tp.stims + 1);
-            else if (pk.kind === "PART") game.weaponParts = (game.weaponParts || 0) + 1;
-            else if (pk.kind === "BP_BOX") {
-              const bpGain = Math.round(75 + (game.currentRoomIndex || 0) * 45);
-              game.bioPoints = (game.bioPoints || 0) + bpGain;
-              const safeBanner = document.getElementById("hud-safe-banner");
-              if (safeBanner) {
-                document.getElementById("hud-safe-banner-text").textContent =
-                  `🪙 생체 BP 상자 수거! (+${bpGain} BP)`;
-                safeBanner.classList.remove("hidden");
-                setTimeout(() => safeBanner.classList.add("hidden"), 3000);
-              }
-            }
-            else {
-              const strikerMult = (tp.specialization === "STRIKER") ? 1.35 : 1.0; // 돌격수 탄약팩 획득량 +35%
-              if (pk.wIdx !== undefined && tp.inventory[pk.wIdx]) {
-                // 특정 무기 전용 탄약팩 습득: 해당 무기만 보충
-                const targetW = pk.wIdx;
-                const inv = tp.inventory[targetW];
-                const maxA = getWeaponMaxAmmo(tp, targetW);
-                const packRatio = (targetW === 2 || targetW === 3) ? 0.75 : 0.6;
-                const bonus = (targetW === 2 ? (WEAPONS[2].ammoRefillBonus || 1.5) : 1.0);
-                const gained = Math.ceil(WEAPONS[targetW].packAmmo * packRatio * bonus * strikerMult);
-                if (inv.ammo >= maxA) {
-                  // [v3.3] 만석 시 바닥에 라벨이 방치되는 현상 원천 해결: 20 BP로 자동 환전 흡수!
-                  game.bioPoints = (game.bioPoints || 0) + 20;
-                } else {
-                  inv.ammo = Math.min(maxA, inv.ammo + gained);
+
+            if (pk.kind === "CORE") {
+              if (tp.id === mySlotIndex) {
+                game.coreSamples = (game.coreSamples || 0) + 1;
+                SoundFX.play("revive");
+                const safeBanner = document.getElementById("hud-safe-banner");
+                if (safeBanner) {
+                  document.getElementById("hud-safe-banner-text").textContent =
+                    `🧬 변이 코어 획득! (보유 코어: ${game.coreSamples}개)`;
+                  safeBanner.classList.remove("hidden");
+                  setTimeout(() => safeBanner.classList.add("hidden"), 4000);
                 }
-              } else {
-                // 범용 탄약팩 (보급상자/콤보 달성 시 전 총기 보충)
-                let anyRefilled = false;
-                tp.inventory.forEach((inv, wIdx) => {
-                  if (inv.unlocked && !WEAPONS[wIdx].infinite) {
-                    const maxA = getWeaponMaxAmmo(tp, wIdx);
-                    if (inv.ammo < maxA) anyRefilled = true;
-                    const packRatio = (wIdx === 2 || wIdx === 3) ? 0.75 : 0.5;
-                    const bonus = (wIdx === 2 ? (WEAPONS[2].ammoRefillBonus || 1.5) : 1.0);
-                    inv.ammo = Math.min(maxA, inv.ammo + Math.ceil(WEAPONS[wIdx].packAmmo * packRatio * bonus * strikerMult));
+              }
+            } else {
+              if (tp.id === mySlotIndex) SoundFX.play("pickup");
+              if (pk.kind === "MEDKIT") tp.medkits = Math.min(getPlayerMaxMedkits(tp), tp.medkits + 1);
+              else if (pk.kind === "STIM") tp.stims = Math.min(getPlayerMaxStims(tp), tp.stims + 1);
+              else if (pk.kind === "PART") {
+                if (tp.id === mySlotIndex) game.weaponParts = (game.weaponParts || 0) + 1;
+              }
+              else if (pk.kind === "BP_BOX") {
+                const curR = game.rooms && game.rooms[game.currentRoomIndex];
+                const effIdx = (curR && curR.index > 0 && !curR.lockedBehind) ? (curR.index - 1) : (game.currentRoomIndex || 0);
+                const prevRoom = (curR && curR.index > 0 && !curR.lockedBehind) ? game.rooms[curR.index - 1] : null;
+                const isBerserkNow = (curR && curR.berserkActive) || (prevRoom && prevRoom.berserkActive);
+                const berserkMult = isBerserkNow ? 0.20 : 1.0;
+                const bpGain = Math.max(1, Math.round((75 + effIdx * 45) * berserkMult));
+                if (tp.id === mySlotIndex) {
+                  game.bioPoints = (game.bioPoints || 0) + bpGain;
+                  const safeBanner = document.getElementById("hud-safe-banner");
+                  if (safeBanner) {
+                    document.getElementById("hud-safe-banner-text").textContent =
+                      `🪙 개인 생체 BP 상자 수거! (+${bpGain} BP)`;
+                    safeBanner.classList.remove("hidden");
+                    setTimeout(() => safeBanner.classList.add("hidden"), 3000);
                   }
-                });
-                if (!anyRefilled) {
-                  game.bioPoints = (game.bioPoints || 0) + 40;
                 }
               }
+              else {
+                const strikerMult = (tp.specialization === "STRIKER") ? 1.35 : 1.0;
+                if (pk.wIdx !== undefined && tp.inventory[pk.wIdx]) {
+                  const targetW = pk.wIdx;
+                  const inv = tp.inventory[targetW];
+                  const maxA = getWeaponMaxAmmo(tp, targetW);
+                  const packRatio = (targetW === 2 || targetW === 3) ? 0.75 : 0.6;
+                  const bonus = (targetW === 2 ? (WEAPONS[2].ammoRefillBonus || 1.5) : 1.0);
+                  const gained = Math.ceil(WEAPONS[targetW].packAmmo * packRatio * bonus * strikerMult);
+                  if (inv.ammo >= maxA) {
+                    if (tp.id === mySlotIndex) game.bioPoints = (game.bioPoints || 0) + 20;
+                  } else {
+                    inv.ammo = Math.min(maxA, inv.ammo + gained);
+                  }
+                } else {
+                  let anyRefilled = false;
+                  tp.inventory.forEach((inv, wIdx) => {
+                    if (inv.unlocked && !WEAPONS[wIdx].infinite) {
+                      const maxA = getWeaponMaxAmmo(tp, wIdx);
+                      if (inv.ammo < maxA) anyRefilled = true;
+                      const packRatio = (wIdx === 2 || wIdx === 3) ? 0.75 : 0.5;
+                      const bonus = (wIdx === 2 ? (WEAPONS[2].ammoRefillBonus || 1.5) : 1.0);
+                      inv.ammo = Math.min(maxA, inv.ammo + Math.ceil(WEAPONS[wIdx].packAmmo * packRatio * bonus * strikerMult));
+                    }
+                  });
+                  if (!anyRefilled && tp.id === mySlotIndex) {
+                    game.bioPoints = (game.bioPoints || 0) + 40;
+                  }
+                }
+              }
+            }
+
+            if (tp.id === mySlotIndex) {
+              updateWeaponSlotsHUD();
+              if (!document.getElementById("upgrade-modal").classList.contains("hidden")) renderUpgradeModal();
             }
           }
+        });
+
+        // 모든 살아있는 플레이어가 아이템을 수거했으면 메모리/씬에서 완전 삭제
+        const allLivingPicked = game.players.filter(pl => !pl.downed).every(pl => pk.collectedBy[pl.id]);
+        if (allLivingPicked) {
           pk.done = true;
           if (pk.sym) {
             if (pk.sym.el) pk.sym.el.remove();
             const sIdx = game.worldSymbols.indexOf(pk.sym);
             if (sIdx !== -1) game.worldSymbols.splice(sIdx, 1);
           }
-          entitiesGroup.remove(pk.mesh);
+          try { entitiesGroup.remove(pk.mesh); } catch (e) {}
           game.pickups.splice(i, 1);
-          if (tp.id === mySlotIndex) {
-            updateWeaponSlotsHUD();
-            if (!document.getElementById("upgrade-modal").classList.contains("hidden")) renderUpgradeModal();
-          }
         }
       }
     }

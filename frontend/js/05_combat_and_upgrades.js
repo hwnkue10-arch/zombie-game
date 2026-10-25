@@ -2165,12 +2165,20 @@
 
         if (curR) {
           curR.sectorKills = (curR.sectorKills || 0) + 1;
-          const secScale = 1 + curR.index * 0.45;
+          // 후방 격벽이 닫히기 전까지는 이전 섹터의 BP 획득 배율 유지 (격벽 미폐쇄 파밍 어뷰징 방지)
+          // 후방 격벽을 완전히 폐쇄(curR.lockedBehind)해야만 신규 섹터의 온전한 BP 배율 적용
+          const effectiveBpSecIdx = (curR.index > 0 && !curR.lockedBehind) ? (curR.index - 1) : curR.index;
+          const secScale = 1 + effectiveBpSecIdx * 0.45;
+          const prevRoom = (curR.index > 0 && !curR.lockedBehind) ? game.rooms[curR.index - 1] : null;
+          const isBerserkNow = curR.berserkActive || (prevRoom && prevRoom.berserkActive);
+          const berserkPenalty = isBerserkNow ? 0.20 : 1.0;
+
           if (isMB) {
-            game.bioPoints += Math.round(zmb.spec.bp * secScale);
+            const grantBp = Math.max(1, Math.round(zmb.spec.bp * secScale * berserkPenalty));
+            curR.bpEarned += grantBp;
+            game.bioPoints += grantBp;
           } else {
-            // 제한시간 초과 광폭화(berserkActive) 상태에서만 0.20배 BP 페널티 적용
-            const berserkPenalty = curR.berserkActive ? 0.20 : 1.0;
+            // 제한시간 초과 광폭화(berserkActive) 상태에서 0.20배 BP 페널티 적용
             const grantBp = Math.max(1, Math.round(zmb.spec.bp * secScale * envMult * berserkPenalty));
             curR.bpEarned += grantBp;
             game.bioPoints += grantBp;

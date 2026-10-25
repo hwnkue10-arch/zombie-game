@@ -609,9 +609,14 @@
       const armRotY = armSide.dir === "N" ? 0 : (armSide.dir === "S" ? Math.PI : (armSide.dir === "W" ? Math.PI / 2 : -Math.PI / 2));
       room.armoryFixedPos = { x: armX, z: armZ, rotY: armRotY, inNormX: armSide.inNormX, inNormZ: armSide.inNormZ };
 
-      // [기본 안전지대] 독안개/냉각 가스 섹터: 무기고 주변에 상시 대기 정화 돔(반경 9.5m) 기본 생성
+      // [기본 안전지대] 독안개/냉각 가스 섹터: 방 내부 랜덤 위치에 첫 안전구역(반경 10m) 생성!
       if (room.envType === "TOXIC_FOG" || room.envType === "CRYO_LEAK") {
-        addRoomSafeZone(room, armX + armSide.inNormX * 3.5, armZ + armSide.inNormZ * 3.5, 9.5, "무기고 정화구역");
+        const spanW = Math.max(16, ((room.hw || room.half) - 14) * 1.5);
+        const spanD = Math.max(16, ((room.hd || room.half) - 14) * 1.5);
+        const randSafeX = room.wx + (Math.random() - 0.5) * spanW;
+        const randSafeZ = room.wz + (Math.random() - 0.5) * spanD;
+        const safeTitle = room.envType === "CRYO_LEAK" ? "온열 안전구역" : "정화 안전구역";
+        addRoomSafeZone(room, Math.round(randSafeX * 10) / 10, Math.round(randSafeZ * 10) / 10, 10.0, safeTitle);
       }
 
       // [수동 격벽 폐쇄 시스템] 2섹터 이상: 새로 도착한 방 입구 안쪽에 [F] 수동 후방 격벽 폐쇄 콘솔 배치
