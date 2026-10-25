@@ -608,11 +608,10 @@
                   );
                 } else if (msg.action === "IGNITE_GENERATOR") {
                   const node = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "GENERATOR" && n.stepOrder === msg.stepOrder && !n.done);
-                  if (node) {
-                    node.done = true;
-                    if (node.coreMat) node.coreMat.color.setHex(0x38bdf8);
-                    spawnMissionStageVFX(node.x, node.z, 0x38bdf8, 6.8, 20, false);
-                  }
+                  if (!node) return;
+                  node.done = true;
+                  if (node.coreMat) node.coreMat.color.setHex(0x38bdf8);
+                  spawnMissionStageVFX(node.x, node.z, 0x38bdf8, 6.8, 20, false);
                   r.progress++;
                   SoundFX.play("upgrade");
                   if (r.progress < r.targetVal) {
@@ -874,17 +873,6 @@
                 });
               }
 
-              // 후방 격벽이 봉쇄(lockedBehind)되었을 때 원격 플레이어가 아직 이전 방에 남아있다면 현재 섹터 안으로 자동 합류!
-              const meP = game.players[mySlotIndex];
-              if (cr && cr.lockedBehind && meP) {
-                const hw = cr.hw || cr.half;
-                const hd = cr.hd || cr.half;
-                if (Math.abs(meP.x - cr.wx) >= hw || Math.abs(meP.z - cr.wz) >= hd) {
-                  meP.x = cr.wx + (mySlotIndex - 1.5) * 1.5;
-                  meP.z = cr.wz + 1.2;
-                  if (meP.visual && meP.visual.group) meP.visual.group.position.set(meP.x, 0, meP.z);
-                }
-              }
 
               // [v3.5 멀티플레이 안전구역 완벽 동기화] 호스트에서 생성된 모든 안전지대를 클라이언트에서도 동일하게 시각화!
               if (Array.isArray(msg.safeZones) && cr) {
@@ -1028,11 +1016,15 @@
                     game.zombies.pop();
                     game.zombies[idx] = zObj;
                   }
-                  zObj.x += (zs[1] - zObj.x) * 0.45;
-                  zObj.z += (zs[2] - zObj.z) * 0.45;
+                  zObj.netTargetX = zs[1];
+                  zObj.netTargetZ = zs[2];
+                  if (Math.hypot(zObj.x - zs[1], zObj.z - zs[2]) > 6.0) {
+                    zObj.x = zs[1];
+                    zObj.z = zs[2];
+                    if (zObj.group) zObj.group.position.set(zObj.x, 0, zObj.z);
+                  }
                   zObj.hp = zs[3];
                   zObj.maxHp = zs[4];
-                  if (zObj.group) zObj.group.position.set(zObj.x, 0, zObj.z);
 
                   const enrageLvl = zs[5] || 0;
                   if (enrageLvl === 2 && !zObj.phase2Enraged && !zObj.spec.isNutrientHost) {
@@ -1071,8 +1063,8 @@
       }
     }
 
-    // [v3.1 멀티플레이 실시간 브로드캐스터]
-    // 1) 모든 클라이언트: 20Hz(50ms) 주기로 내 캐릭터 좌표·회전·체력·장착무기를 서버로 전송
+    // [v3.5 멀티플레이 고속 실시간 브로드캐스터]
+    // 1) 모든 클라이언트: 33Hz(30ms) 고속 주기로 내 캐릭터 좌표·회전·체력·장착무기를 서버로 실시간 전송
     setInterval(() => {
       if (!game.running || !wsClient || wsClient.readyState !== WebSocket.OPEN) return;
       const me = game.players[mySlotIndex];
@@ -1097,9 +1089,9 @@
           droneMediLv: (me.drone && me.drone.modules && me.drone.modules.medi) ? (me.drone.modules.medi.level || 0) : 0
         }));
       } catch (e) {}
-    }, 50);
+    }, 30);
 
-    // 2) 호스트(P1): 8Hz(125ms) 주기로 월드 상태 및 좀비 위치 스냅샷을 브로드캐스트하여 4인 화면의 좀비/웨이브/미션 완벽 동기화!
+    // 2) 호스트(P1): 28Hz(35ms) 고속 주기로 월드 상태 및 좀비 위치 스냅샷을 실시간 브로드캐스트하여 끊김 없는 화면 동기화!
     setInterval(() => {
       if (!game.running || isRemoteClient || !wsClient || wsClient.readyState !== WebSocket.OPEN) return;
       const cr = game.rooms[game.currentRoomIndex];
@@ -1199,7 +1191,7 @@
           zombies: zSnap
         }));
       } catch (e) {}
-    }, 125);
+    }, 35);
 
     // =========================================================================
     // 20. UI EVENT LISTENERS, SETTINGS SYNC & INITIALIZATION

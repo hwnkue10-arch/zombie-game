@@ -898,7 +898,10 @@
         if (room.unlockStage === 0 && !room.isBossRoom && !room.hasMidBoss && room.condType !== "THERMITE") {
           const hasNode = game.missionNodes.some(n => n.roomIndex === room.index && (n.stepOrder === 1 || n.genIndex === 1));
           if (!hasNode && typeof spawnRandomMissionStepForRoom === "function") {
-            try { spawnRandomMissionStepForRoom(room, 1); } catch (e) { console.error(e); }
+            try {
+              room.unlockStage = 1;
+              spawnRandomMissionStepForRoom(room, 1);
+            } catch (e) { console.error(e); }
           }
         }
 
@@ -1907,16 +1910,13 @@
       // [v3.5] 보스 격전지 진입 시 정비 단계(스쿼드 준비 및 무기고 쇼핑) 중에는 호드 스폰 일시 정지!
       const isBossPrepState = (curRoom && curRoom.hasMidBoss && !curRoom.midBossAwakened) ||
                               (curRoom && curRoom.isBossRoom && (curRoom.bossPhaseStage || 0) === 0);
-      if (isBossPrepState) {
-        return;
-      }
 
       // 후방 격벽 폐쇄 대기 중일 때는:
       // - 신규 방(curRoom)에서는 감염체가 전혀 스폰되지 않음!
       // - 이전 방(prevRoom)이 0초에 도달하여 광폭화(berserkActive)된 경우에만, 이전 방의 스폰 구멍에서 광폭화 감염체가 스폰되어 열린 문으로 난입!
-      const canSpawnHorde = curRoomWaitingBulkhead
+      const canSpawnHorde = isBossPrepState ? false : (curRoomWaitingBulkhead
         ? (prevRoom && prevRoom.berserkActive)
-        : (!isWaveHordeFinished && !isCalmSpawningRestricted);
+        : (!isWaveHordeFinished && !isCalmSpawningRestricted));
 
       if (!isRemoteClient && canSpawnHorde && game.spawnTimer <= 0 && game.zombies.length < maxSwarm) {
         game.spawnTimer = isSurge
@@ -2201,10 +2201,10 @@
             } else if (nearMissionNode.kind === "ENV_CONTROL") {
               const isFog = nearMissionNode.envType === "TOXIC_FOG";
               if (curRoom && (curRoom.blackoutRestoredTimer || 0) > 0) {
-                interactTitle.textContent = `💡 비상 발전기 가동 중 (${Math.ceil(curRoom.blackoutRestoredTimer)}초 후 과부하)`;
+                interactTitle.textContent = `💡 비상 조명 켜짐 (${Math.ceil(curRoom.blackoutRestoredTimer)}초 후 과부하)`;
                 interactBar.style.width = "100%";
               } else {
-                interactTitle.textContent = isFog ? "☣️ [F 홀드] 환기밸브 개방" : "💡 [F 홀드] 비상발전기 가동";
+                interactTitle.textContent = isFog ? "☣️ [F 홀드] 환기밸브 개방" : "💡 [F 홀드] 비상 조명 배전반 복구";
                 if (holdingF) {
                   nearMissionNode.holdTime += dt;
                   interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 1.5) * 100) + "%";
@@ -2214,14 +2214,14 @@
                       curRoom.envCleared = true;
                       entitiesGroup.remove(nearMissionNode.mesh);
                     } else {
-                      // [v3.2] 비상 발전기 가동: 60초간 전력 복구 후 자동 과부하 트립 발생!
+                      // [v3.2] 비상 조명 배전반 복구: 60초간 전력 복구 후 자동 과부하 트립 발생!
                       curRoom.envCleared = true;
                       curRoom.blackoutRestoredTimer = 60.0;
                       nearMissionNode.holdTime = 0;
                       const safeBanner = document.getElementById("hud-safe-banner");
                       if (safeBanner) {
                         document.getElementById("hud-safe-banner-text").textContent =
-                          "💡 비상 발전기 가동! 60초간 정상 조명 유지";
+                          "💡 비상 조명 배전반 복구! 60초간 정상 조명 유지";
                         safeBanner.classList.remove("hidden");
                         setTimeout(() => safeBanner.classList.add("hidden"), 4000);
                       }
@@ -2941,13 +2941,23 @@
             }
           }
         } else if (p.role === "REMOTE") {
-          // [v3.1 멀티플레이 위치 보간] 원격 팀원(REMOTE)의 좌표를 60FPS로 부드럽게 보간(Lerp)하여 끊김 없는 이동 보장!
+          // [v3.5 멀티플레이 실시간 보간] 원격 팀원의 위치와 회전각을 60FPS로 극도로 부드럽게 보간(Lerp)
           if (p.netTargetX !== undefined && p.netTargetZ !== undefined) {
-            p.x += (p.netTargetX - p.x) * Math.min(1.0, dt * 16);
-            p.z += (p.netTargetZ - p.z) * Math.min(1.0, dt * 16);
+            const dist = Math.hypot(p.netTargetX - p.x, p.netTargetZ - p.z);
+            if (dist > 8.0) {
+              p.x = p.netTargetX;
+              p.z = p.netTargetZ;
+            } else {
+              const lerpSpd = Math.min(1.0, dt * 24);
+              p.x += (p.netTargetX - p.x) * lerpSpd;
+              p.z += (p.netTargetZ - p.z) * lerpSpd;
+            }
           }
           if (p.netTargetRotY !== undefined) {
-            p.rotY = p.netTargetRotY;
+            let diffRot = p.netTargetRotY - p.rotY;
+            while (diffRot < -Math.PI) diffRot += Math.PI * 2;
+            while (diffRot > Math.PI) diffRot -= Math.PI * 2;
+            p.rotY += diffRot * Math.min(1.0, dt * 24);
           }
         }
 
@@ -3312,6 +3322,29 @@
           continue;
         }
         if (z.spec.isNutrientHost) {
+          z.group.position.set(z.x, 0, z.z);
+          continue;
+        }
+
+        // [v3.5 멀티플레이 클라이언트 실시간 60FPS 부드러운 위치 보간]
+        // 원격 클라이언트는 호스트와 충돌하는 로컬 AI 연산을 생략하고 호스트 권위 좌표로 매 프레임 매끄럽게 Lerp 이동!
+        if (isRemoteClient) {
+          if (z.netTargetX !== undefined && z.netTargetZ !== undefined) {
+            const zDist = Math.hypot(z.netTargetX - z.x, z.netTargetZ - z.z);
+            if (zDist > 8.0) {
+              z.x = z.netTargetX;
+              z.z = z.netTargetZ;
+            } else {
+              const zLerp = Math.min(1.0, dt * 22);
+              const mdx = z.netTargetX - z.x;
+              const mdz = z.netTargetZ - z.z;
+              z.x += mdx * zLerp;
+              z.z += mdz * zLerp;
+              if (Math.hypot(mdx, mdz) > 0.05) {
+                z.group.rotation.y = Math.atan2(mdx, mdz);
+              }
+            }
+          }
           z.group.position.set(z.x, 0, z.z);
           continue;
         }

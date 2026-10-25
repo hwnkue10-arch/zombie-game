@@ -771,7 +771,7 @@
           game.missionNodes.push(envNode);
           registerWorldSymbol(
             room.wx, 3.1, room.wz - 13,
-            isFog ? "☣️환기밸브[F]" : "💡비상전원[F]",
+            isFog ? "☣️환기밸브[F]" : "💡조명배전반[F]",
             "bg-lime-950/90 border-lime-400 text-lime-200",
             envNode, room.index
           );
@@ -1221,6 +1221,8 @@
     // 웨이브 방어 성공 시 해당 단계(stepOrder)의 미션 목표를 섹터 내 랜덤 위치에 출현시키는 함수!
     function spawnRandomMissionStepForRoom(room, stepOrder, forcePos) {
       if (!room || room.isBossRoom || room.hasMidBoss) return;
+      // [중복 스폰 원천 방지] 동일 섹터에 해당 단계(stepOrder)의 미션 노드가 이미 존재하면 중복 생성하지 않음!
+      if (game.missionNodes.some(n => n.roomIndex === room.index && n.stepOrder === stepOrder)) return;
       const pos = forcePos ? { x: forcePos.x, z: forcePos.z } : findRandomSafeMissionPos(room);
       room.activeMissionTargetPos = pos;
 
