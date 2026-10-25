@@ -2235,6 +2235,17 @@
                       false
                     );
                     SoundFX.play("upgrade");
+                    if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                      try {
+                        wsClient.send(JSON.stringify({
+                          type: "MISSION_ACTION",
+                          slotId: mySlotIndex,
+                          roomIdx: curRoom.index,
+                          action: "RESTORE_POWER",
+                          envType: nearMissionNode.envType
+                        }));
+                      } catch (e) {}
+                    }
                   }
                 } else {
                   interactBar.style.width = "0%";
@@ -2251,6 +2262,10 @@
                   curRoom.midBossAwakened = true;
                   curRoom.midBossSpawned = true;
                   entitiesGroup.remove(nearMissionNode.mesh);
+                  if (nearMissionNode.collider) {
+                    game.obstacles = game.obstacles.filter(ob => ob !== nearMissionNode.collider);
+                  }
+                  game.obstacles = game.obstacles.filter(ob => Math.hypot(ob.x - curRoom.wx, ob.z - curRoom.wz) > 5.5);
                   spawnIceShatterFX(curRoom.wx, curRoom.wz, 15);
                   spawnBloodParticles(curRoom.wx, 2.5, curRoom.wz, 0x06b6d4, 25);
                   SoundFX.play("alarm");
@@ -2306,6 +2321,16 @@
                     closeAndLockBulkheadDoor(targetRoom);
                     nearMissionNode.holdTime = 0;
                     interactBar.style.width = "0%";
+                    if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                      try {
+                        wsClient.send(JSON.stringify({
+                          type: "MISSION_ACTION",
+                          slotId: mySlotIndex,
+                          roomIdx: targetRoom.index,
+                          action: "LOCK_BULKHEAD"
+                        }));
+                      } catch (e) {}
+                    }
                   }
                 } else {
                   interactBar.style.width = "0%";
@@ -3326,8 +3351,8 @@
           continue;
         }
 
-        // [v3.5 멀티플레이 클라이언트 실시간 60FPS 부드러운 위치 보간]
-        // 원격 클라이언트는 호스트와 충돌하는 로컬 AI 연산을 생략하고 호스트 권위 좌표로 매 프레임 매끄럽게 Lerp 이동!
+        // [v3.5 멀티플레이 클라이언트 실시간 60FPS 부드러운 위치/회전각 보간]
+        // 호스트의 권위 목표 좌표 및 실제 회전 각도(netTargetRotY)를 향해 매끄럽게 Lerp 보간!
         if (isRemoteClient) {
           if (z.netTargetX !== undefined && z.netTargetZ !== undefined) {
             const zDist = Math.hypot(z.netTargetX - z.x, z.netTargetZ - z.z);
@@ -3335,15 +3360,16 @@
               z.x = z.netTargetX;
               z.z = z.netTargetZ;
             } else {
-              const zLerp = Math.min(1.0, dt * 22);
-              const mdx = z.netTargetX - z.x;
-              const mdz = z.netTargetZ - z.z;
-              z.x += mdx * zLerp;
-              z.z += mdz * zLerp;
-              if (Math.hypot(mdx, mdz) > 0.05) {
-                z.group.rotation.y = Math.atan2(mdx, mdz);
-              }
+              const zLerp = Math.min(1.0, dt * 18);
+              z.x += (z.netTargetX - z.x) * zLerp;
+              z.z += (z.netTargetZ - z.z) * zLerp;
             }
+          }
+          if (z.netTargetRotY !== undefined && z.group) {
+            let diffRot = z.netTargetRotY - z.group.rotation.y;
+            while (diffRot < -Math.PI) diffRot += Math.PI * 2;
+            while (diffRot > Math.PI) diffRot -= Math.PI * 2;
+            z.group.rotation.y += diffRot * Math.min(1.0, dt * 18);
           }
           z.group.position.set(z.x, 0, z.z);
           continue;

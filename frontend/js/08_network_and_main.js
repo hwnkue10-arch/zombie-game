@@ -554,6 +554,31 @@
                   if (game.wavePhase === "CALM" && game.waveTimer > 4.0) {
                     game.waveTimer = 4.0;
                   }
+                } else if (msg.action === "LOCK_BULKHEAD") {
+                  if (r && !r.lockedBehind) {
+                    closeAndLockBulkheadDoor(r);
+                  }
+                } else if (msg.action === "RESTORE_POWER") {
+                  if (r) {
+                    r.envCleared = true;
+                    if (msg.envType === "TOXIC_FOG") {
+                      const node = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "ENV_CONTROL");
+                      if (node) {
+                        node.done = true;
+                        if (node.mesh) entitiesGroup.remove(node.mesh);
+                      }
+                    } else {
+                      r.blackoutRestoredTimer = 60.0;
+                    }
+                    SoundFX.play("upgrade");
+                    const safeBanner = document.getElementById("hud-safe-banner");
+                    if (safeBanner) {
+                      document.getElementById("hud-safe-banner-text").textContent =
+                        msg.envType === "TOXIC_FOG" ? "☣️ 환기밸브 개방! 독안개 정화" : "💡 비상 조명 배전반 복구! 60초간 정상 조명 유지";
+                      safeBanner.classList.remove("hidden");
+                      setTimeout(() => safeBanner.classList.add("hidden"), 4000);
+                    }
+                  }
                 } else if (msg.action === "ATTACH_THERMITE") {
                   r.subStage = 2;
                   r.lastSubStageChangeTime = Date.now();
@@ -629,7 +654,9 @@
                   if (podNode) {
                     podNode.done = true;
                     if (podNode.mesh) entitiesGroup.remove(podNode.mesh);
+                    if (podNode.collider) game.obstacles = game.obstacles.filter(ob => ob !== podNode.collider);
                   }
+                  game.obstacles = game.obstacles.filter(ob => Math.hypot(ob.x - r.wx, ob.z - r.wz) > 5.5);
                   spawnIceShatterFX(r.wx, r.wz, 15);
                   spawnBloodParticles(r.wx, 2.5, r.wz, 0x06b6d4, 25);
                   SoundFX.play("alarm");
@@ -854,6 +881,8 @@
                 if (msg.roomState.midBossAwakened !== undefined) cr.midBossAwakened = msg.roomState.midBossAwakened;
                 if (msg.roomState.bossPhaseStage !== undefined) cr.bossPhaseStage = msg.roomState.bossPhaseStage;
                 if (msg.roomState.thermiteDetonated !== undefined) cr.thermiteDetonated = msg.roomState.thermiteDetonated;
+                if (msg.roomState.envCleared !== undefined) cr.envCleared = msg.roomState.envCleared;
+                if (msg.roomState.blackoutRestoredTimer !== undefined) cr.blackoutRestoredTimer = msg.roomState.blackoutRestoredTimer;
               }
 
               if (msg.thermiteParts !== undefined) {
@@ -1004,29 +1033,52 @@
 
               // [v3.5 감염체 360마리 전량 위치·체력·광폭화·동결/스턴 완벽 동기화]
               if (Array.isArray(msg.zombies)) {
-                while (game.zombies.length > msg.zombies.length) {
-                  const rem = game.zombies.pop();
-                  try { if (rem && rem.group) entitiesGroup.remove(rem.group); } catch (e) {}
-                }
-                msg.zombies.forEach((zs, idx) => {
-                  let zObj = game.zombies[idx];
-                  if (!zObj || zObj.typeKey !== zs[0]) {
-                    try { if (zObj && zObj.group) entitiesGroup.remove(zObj.group); } catch (e) {}
-                    zObj = spawnZombie(zs[0], zs[1], zs[2], game.currentRoomIndex);
-                    game.zombies.pop();
-                    game.zombies[idx] = zObj;
-                  }
-                  zObj.netTargetX = zs[1];
-                  zObj.netTargetZ = zs[2];
-                  if (Math.hypot(zObj.x - zs[1], zObj.z - zs[2]) > 6.0) {
-                    zObj.x = zs[1];
-                    zObj.z = zs[2];
-                    if (zObj.group) zObj.group.position.set(zObj.x, 0, zObj.z);
-                  }
-                  zObj.hp = zs[3];
-                  zObj.maxHp = zs[4];
+                const hostIds = new Set(msg.zombies.map(zs => zs[0]));
 
-                  const enrageLvl = zs[5] || 0;
+                for (let i = game.zombies.length - 1; i >= 0; i--) {
+                  const z = game.zombies[i];
+                  if (z && z.id !== undefined && !hostIds.has(z.id)) {
+                    try {
+                      if (z.iceBlock && z.group) z.group.remove(z.iceBlock);
+                      if (z.group) entitiesGroup.remove(z.group);
+                    } catch (e) {}
+                    game.zombies.splice(i, 1);
+                  }
+                }
+
+                const clientMap = new Map();
+                game.zombies.forEach(z => { if (z.id !== undefined) clientMap.set(z.id, z); });
+
+                msg.zombies.forEach(zs => {
+                  const [zId, typeKey, hx, hz, hrotY, hp, maxHp, enraged, fx] = zs;
+                  let zObj = clientMap.get(zId);
+                  if (!zObj) {
+                    zObj = spawnZombie(typeKey, hx, hz, game.currentRoomIndex);
+                    zObj.id = zId;
+                    zObj.x = hx;
+                    zObj.z = hz;
+                    zObj.netTargetX = hx;
+                    zObj.netTargetZ = hz;
+                    zObj.netTargetRotY = hrotY;
+                    if (zObj.group) {
+                      zObj.group.position.set(hx, 0, hz);
+                      zObj.group.rotation.y = hrotY;
+                    }
+                    clientMap.set(zId, zObj);
+                  } else {
+                    zObj.netTargetX = hx;
+                    zObj.netTargetZ = hz;
+                    zObj.netTargetRotY = hrotY;
+                    zObj.hp = hp;
+                    zObj.maxHp = maxHp;
+                    if (Math.hypot(zObj.x - hx, zObj.z - hz) > 8.0) {
+                      zObj.x = hx;
+                      zObj.z = hz;
+                      if (zObj.group) zObj.group.position.set(hx, 0, hz);
+                    }
+                  }
+
+                  const enrageLvl = enraged || 0;
                   if (enrageLvl === 2 && !zObj.phase2Enraged && !zObj.spec.isNutrientHost) {
                     zObj.phase2Enraged = true;
                     zObj.berserkEnraged = true;
@@ -1044,7 +1096,7 @@
                     if (zObj.group) zObj.group.scale.set(1.15, 1.15, 1.15);
                   }
 
-                  const fxState = zs[6] || 0;
+                  const fxState = fx || 0;
                   if (fxState === 1) {
                     if (zObj.iceBlock) zObj.iceBlock.visible = true;
                   } else if (zObj.iceBlock && zObj.iceBlock.visible) {
@@ -1091,15 +1143,17 @@
       } catch (e) {}
     }, 30);
 
-    // 2) 호스트(P1): 28Hz(35ms) 고속 주기로 월드 상태 및 좀비 위치 스냅샷을 실시간 브로드캐스트하여 끊김 없는 화면 동기화!
+    // 2) 호스트(P1): 20Hz(50ms) 주기로 월드 상태 및 좀비 ID·위치·각도 스냅샷을 실시간 브로드캐스트
     setInterval(() => {
       if (!game.running || isRemoteClient || !wsClient || wsClient.readyState !== WebSocket.OPEN) return;
       const cr = game.rooms[game.currentRoomIndex];
       try {
         const zSnap = game.zombies.slice(0, 360).map(z => [
+          z.id || 0,
           z.typeKey,
           Math.round(z.x * 10) / 10,
           Math.round(z.z * 10) / 10,
+          Math.round((z.group ? z.group.rotation.y : 0) * 100) / 100,
           Math.round(z.hp),
           Math.round(z.maxHp),
           z.phase2Enraged ? 2 : (z.berserkEnraged ? 1 : 0),
@@ -1186,12 +1240,14 @@
             gasWaveProgress: Math.round((cr.gasWaveProgress || 0) * 1000) / 1000,
             midBossAwakened: !!cr.midBossAwakened,
             bossPhaseStage: cr.bossPhaseStage || 0,
-            thermiteDetonated: !!cr.thermiteDetonated
+            thermiteDetonated: !!cr.thermiteDetonated,
+            envCleared: !!cr.envCleared,
+            blackoutRestoredTimer: Math.round(cr.blackoutRestoredTimer || 0)
           } : null,
           zombies: zSnap
         }));
       } catch (e) {}
-    }, 35);
+    }, 50);
 
     // =========================================================================
     // 20. UI EVENT LISTENERS, SETTINGS SYNC & INITIALIZATION

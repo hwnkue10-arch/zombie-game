@@ -830,7 +830,7 @@
 
           podGroup.position.set(room.wx, 0, room.wz);
           entitiesGroup.add(podGroup);
-          addWallCollider(room.wx, room.wz, 7.2, 7.2);
+          const podCollider = addWallCollider(room.wx, room.wz, 7.2, 7.2);
 
           const mbNode = {
             roomIndex: room.index,
@@ -841,7 +841,8 @@
             done: false,
             holdTime: 0,
             mesh: podGroup,
-            glassCyl
+            glassCyl,
+            collider: podCollider
           };
           game.missionNodes.push(mbNode);
           registerWorldSymbol(
@@ -1002,7 +1003,7 @@
         lTrim.position.set(bx, 3.85, bz);
         group.add(lTrim);
         addWallCollider(bx, bz, bw, bd);
-      } else if (room.shapeType === "OCTAGON_REACTOR") {
+      } else if (room.shapeType === "OCTAGON_REACTOR" && !room.hasMidBoss) {
         // 중앙에 대형 원자로 코어 기둥을 배치하여 빙빙 돌며 싸우는 원형 카이팅 구도 형성
         const reactorGroup = new THREE.Group();
         const coreCyl = new THREE.Mesh(
@@ -1863,6 +1864,8 @@
     }
 
     function addWallCollider(x, z, w, d) {
-      game.obstacles.push({ x, z, hw: w / 2, hd: d / 2 });
+      const ob = { x, z, hw: w / 2, hd: d / 2 };
+      game.obstacles.push(ob);
+      return ob;
     }
 

@@ -433,6 +433,8 @@
       MB_ACIDQUEEN:  { name: "중간보스 III: 애시드 퀸", hp: 17800, speed: 3.30, dmg: 36, scale: 2.45, skin: 0x84cc16, clothes: 0x14532d, bp: 380, isMidBoss: true, ranged: true }
     };
 
+    let nextZombieGlobalId = 1;
+
     function spawnZombie(typeKey, x, z, roomIndex) {
       const spec = ZOMBIE_TYPES[typeKey] || ZOMBIE_TYPES.WALKER;
       const group = new THREE.Group();
@@ -514,6 +516,7 @@
         : (spec.isNutrientHost ? Math.pow(1.27, roomIndex) * hostSquadScale : Math.pow(1.27, roomIndex));
       const dmgScale = 1 + roomIndex * 0.12;
       const zObj = {
+        id: nextZombieGlobalId++,
         typeKey,
         spec,
         x, z,
