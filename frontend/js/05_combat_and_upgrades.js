@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * BOXHEAD: THE CORE v3.5 — Frontend Module: 05_combat_and_upgrades.js
+ * BOXHEAD: THE CORE v3.6 — Frontend Module: 05_combat_and_upgrades.js
  * Zero-Loss Refactored Architecture (Shared Global Lexical Scope)
  * =========================================================================
  */

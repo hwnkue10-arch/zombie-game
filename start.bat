@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title BOXHEAD: THE CORE v3.5 - SERVER
+title BOXHEAD: THE CORE v3.6 - SERVER
 
 where node >nul 2>nul
 if %ERRORLEVEL% neq 0 (
