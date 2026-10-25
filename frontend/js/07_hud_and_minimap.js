@@ -287,14 +287,14 @@
           const tSecs = String(remSec % 60).padStart(2, "0");
           secTimerVal.textContent = `${tMins}:${tSecs}`;
 
-          if (remSec <= 0) {
+          if (remSec <= 0 || (prevR && prevR.berserkActive)) {
             secTimerVal.className = "font-mono-code font-black text-xl text-rose-500 tracking-wider animate-ping";
-            if (secTimerTitle) secTimerTitle.textContent = "🚨 이전 구역 침공! (후방 격벽 폐쇄 필수)";
+            if (secTimerTitle) secTimerTitle.textContent = "☣️ 이전 구역 광폭화! (후방 격벽 폐쇄 필수)";
             if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-red-600 animate-ping";
             secTimerCont.className = "hud-glass-red rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-red-500 shadow-2xl backdrop-blur-md pointer-events-auto";
           } else {
             secTimerVal.className = "font-mono-code font-black text-xl text-amber-400 tracking-wider animate-pulse";
-            if (secTimerTitle) secTimerTitle.textContent = "⚠️ 후방 격벽 폐쇄 제한시간";
+            if (secTimerTitle) secTimerTitle.textContent = "⏱️ 이전 구역 제한시간 (격벽 폐쇄 대기)";
             if (secTimerDot) secTimerDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
             secTimerCont.className = "hud-glass rounded-2xl px-5 py-1.5 flex items-center justify-center gap-3 border border-amber-500/80 shadow-2xl backdrop-blur-md pointer-events-auto";
           }
@@ -379,9 +379,9 @@
           const remSec = prevR ? Math.max(0, Math.ceil(prevR.sectorTimer || 0)) : 0;
           objText.textContent = "🔒 후방 격벽 폐쇄 [F] (입구 콘솔)";
           if (objSub) {
-            objSub.textContent = remSec <= 0
-              ? "🚨 이전 구역 침공 진행 중! 콘솔을 당겨 후방을 차단하세요!"
-              : `⚠️ 문을 닫지 않으면 이전 구역에서 강화 감염체 난입! (⏱️${remSec}s)`;
+            objSub.textContent = (remSec <= 0 || (prevR && prevR.berserkActive))
+              ? "🚨 이전 구역 광폭화 진행 중! 콘솔을 당겨 후방 격벽을 폐쇄하세요!"
+              : `⏱️ 이전 구역 제한시간: ${remSec}초 (만료 시 광폭화 호드 난입)`;
           }
           objBar.style.width = "0%";
         } else if (curRoom.waitingForWaveDefense) {

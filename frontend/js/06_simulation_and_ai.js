@@ -784,6 +784,8 @@
       }
 
       const curRoom = game.rooms[game.currentRoomIndex];
+      const isAwaitingBulkhead = curRoom && curRoom.index > 0 && !curRoom.lockedBehind;
+      const prevRoom = isAwaitingBulkhead ? game.rooms[curRoom.index - 1] : null;
 
       game.armoryVaults.forEach(v => {
         if (v.holoGun) v.holoGun.rotation.y += dt * 1.8;
@@ -1007,6 +1009,14 @@
           }
         }
 
+        // 이전 섹터 광폭화 및 독가스 확산 영구 정지 & 격리
+        if (prevIdx >= 0 && game.rooms[prevIdx]) {
+          const prevR = game.rooms[prevIdx];
+          prevR.berserkActive = false;
+          prevR.gasWaveActive = false;
+          if (prevR.gasMesh) prevR.gasMesh.visible = false;
+        }
+
         // 2. 콘솔 레버 내림 & 월드 심볼 소거
         if (room.bulkheadConsole) {
           room.bulkheadConsole.done = true;
@@ -1125,55 +1135,58 @@
         }
       }
 
-      // 1c. 섹터 제한시간 진행 및 후방 격벽 미폐쇄 시 이전 구역 강화 감염체 난입 로직:
+      // 1c. 섹터 제한시간 진행 및 후방 격벽 시스템:
       // A) 현재 방이 후방 격벽 폐쇄 대기 중(isAwaitingBulkhead)인 경우:
       //    -> 신규 방(curRoom)의 타이머는 아직 시작하지 않고 대기합니다.
-      //    -> 대신, 이전 방(prevRoom)의 제한시간이 계속해서 줄어듭니다!
-      //    -> 문을 닫지 않고 방치하면 이전 방의 스폰 구멍에서 붉은색 강화 감염체(Berserk Horde)가 지속 출현하여 열린 문으로 쏟아져 들어옵니다!
-      const isAwaitingBulkhead = curRoom && curRoom.index > 0 && !curRoom.lockedBehind;
-      const prevRoom = isAwaitingBulkhead ? game.rooms[curRoom.index - 1] : null;
-
+      //    -> 대신, 이전 방(prevRoom)의 제한시간(sectorTimer)이 0초를 향해 계속 감소합니다.
+      //    -> 이전 방의 제한시간이 0초에 도달하면 기존 게임의 표준 '광폭화(Berserk Enrage)'가 정상 발동하여 스폰 구멍이 열리고 독가스가 확산됩니다.
+      //    -> 플레이어가 신규 구역 입구 콘솔 [F]로 후방 격벽을 닫을 때까지 이전 구역의 광폭화 상태가 유지됩니다.
       if (prevRoom && !prevRoom.lockedBehind) {
         prevRoom.sectorTimer = Math.max(0, (prevRoom.sectorTimer || 260) - dt);
         if (prevRoom.sectorTimer <= 0) {
-          prevRoom.berserkActive = true;
-        }
+          if (!prevRoom.overtimeAlerted) {
+            prevRoom.overtimeAlerted = true;
+            prevRoom.berserkActive = true;
+            prevRoom.gasWaveActive = true;
+            prevRoom.gasWaveProgress = 0.05;
+            if (prevRoom.spawnHoles) {
+              prevRoom.spawnHoles.forEach(h => {
+                if (!h.active) {
+                  h.active = true;
+                  if (h.intactWallMesh) h.intactWallMesh.visible = false;
+                  if (h.breachDetailGroup) h.breachDetailGroup.visible = true;
+                }
+              });
+            }
 
-        // 이전 섹터가 문이 열린 채 방치되면, 이전 섹터에서 강화 좀비가 지속 스폰되어 신규 방으로 들이닥침!
-        prevRoom.unclosedPursuitTimer = (prevRoom.unclosedPursuitTimer || 2.5) - dt;
-        if (prevRoom.unclosedPursuitTimer <= 0) {
-          prevRoom.unclosedPursuitTimer = prevRoom.sectorTimer <= 0 ? 1.6 : 3.2;
-          if (!isRemoteClient && game.zombies.length < 35) {
-            const spawnCount = prevRoom.sectorTimer <= 0 ? 3 : 2;
-            const holes = (prevRoom.spawnHoles && prevRoom.spawnHoles.length > 0) ? prevRoom.spawnHoles : null;
-            for (let sc = 0; sc < spawnCount; sc++) {
-              let sx = prevRoom.wx + (Math.random() - 0.5) * (prevRoom.hw * 0.7);
-              let sz = prevRoom.wz + (Math.random() - 0.5) * (prevRoom.hd * 0.7);
-              if (holes) {
-                const h = holes[Math.floor(Math.random() * holes.length)];
-                sx = h.x; sz = h.z;
-              }
-              const pType = Math.random() < 0.5 ? "RUNNER" : (Math.random() < 0.8 ? "WALKER" : "BOOMER");
-              const zmb = spawnZombie(pType, sx, sz, prevRoom.index);
-              if (zmb) {
-                // 이전 섹터 추격 감염체는 강화/광폭화 상태 (공격력·이속·체력 증가, 핏빛 발광)
-                zmb.berserkEnraged = true;
-                zmb.maxHp = Math.round(zmb.maxHp * 1.5);
-                zmb.hp = zmb.maxHp;
-                zmb.speed *= 1.25;
-                if (zmb.group) zmb.group.scale.multiplyScalar(1.1);
-                if (zmb.skinMat) {
-                  zmb.skinMat.emissive.setHex(0xef4444);
-                  zmb.skinMat.emissiveIntensity = 0.85;
+            // 현재 이전 방에 살아있는 감염체도 즉시 광폭화(체력 +75%, 공격력 +35%, 이속 +35%, 핏빛 발광, 15% 벌크업) 적용!
+            game.zombies.forEach(z => {
+              if (z.roomIndex === prevRoom.index && !z.berserkEnraged && !z.spec.isNutrientHost) {
+                z.berserkEnraged = true;
+                const hpMult = 1.75;
+                z.maxHp = Math.round(z.maxHp * hpMult);
+                z.hp = Math.round(z.hp * hpMult);
+                z.speed *= 1.35;
+                if (z.group) z.group.scale.multiplyScalar(1.15);
+                if (z.skinMat) {
+                  z.skinMat.emissive.setHex(0xef4444);
+                  z.skinMat.emissiveIntensity = 0.85;
                 }
               }
+            });
+            SoundFX.play("alarm");
+            const collapseBanner = document.getElementById("hud-collapse-banner");
+            if (collapseBanner) {
+              document.getElementById("hud-collapse-msg").textContent =
+                "☣️ 이전 구역 제한시간 초과! 독가스 확산 & 호드 광폭화! 후방 격벽을 폐쇄하십시오!";
+              collapseBanner.classList.remove("hidden");
             }
           }
         }
       }
 
-      // B) 신규 방 타이머: 후방 격벽이 폐쇄(lockedBehind)된 후에만 비로소 정상 작동!
-      if (curRoom && !curRoom.cleared && !curRoom.isBossRoom && !isAwaitingBulkhead) {
+      // B) 현재 방 타이머: 후방 격벽 폐쇄 대기 중(isAwaitingBulkhead)이 아닐 때 정상적으로 0초를 향해 진행!
+      if (curRoom && !curRoom.isBossRoom && !isAwaitingBulkhead) {
         curRoom.sectorTimer = Math.max(0, (curRoom.sectorTimer || 260) - dt);
         if (curRoom.sectorTimer <= 0) {
           if (!curRoom.overtimeAlerted) {
@@ -1804,7 +1817,7 @@
       // 각 섹터 및 웨이브별 정해진 마리수(waveZombieQuota)만큼 확실하게 스폰되어 누적되며,
       // 정원이 모두 출현한 이후에는 스폰이 멈추고 5마리 이하 소탕 시 웨이브 방어 성공으로 판정됨!
       game.spawnTimer -= dt;
-      const isSurge = (game.wavePhase === "SURGE") || (curRoom && (curRoom.collapsing || curRoom.berserkActive));
+      const isSurge = (game.wavePhase === "SURGE") || (curRoom && (curRoom.collapsing || curRoom.berserkActive)) || (prevRoom && prevRoom.berserkActive);
       const rWave = curRoom ? (curRoom.roomWaveCount || 1) : 1;
       const secCapLv = getSectorMaxStatLv(); // 1 ~ 10
 
@@ -1828,42 +1841,54 @@
         return;
       }
 
-      if (game.spawnTimer <= 0 && game.zombies.length < maxSwarm && !isWaveHordeFinished && !isCalmSpawningRestricted) {
+      // 후방 격벽 폐쇄 대기 중일 때는:
+      // - 신규 방(curRoom)에서는 감염체가 전혀 스폰되지 않음!
+      // - 이전 방(prevRoom)이 0초에 도달하여 광폭화(berserkActive)된 경우에만, 이전 방의 스폰 구멍에서 광폭화 감염체가 스폰되어 열린 문으로 난입!
+      const canSpawnHorde = curRoomWaitingBulkhead
+        ? (prevRoom && prevRoom.berserkActive)
+        : (!isWaveHordeFinished && !isCalmSpawningRestricted);
+
+      if (canSpawnHorde && game.spawnTimer <= 0 && game.zombies.length < maxSwarm) {
         game.spawnTimer = isSurge
           ? Math.max(0.40, 0.95 - game.currentRoomIndex * 0.04 - rWave * 0.02)
           : Math.max(1.8, 2.8 - game.currentRoomIndex * 0.06);
 
-        if (curRoom) {
-          const activeHoles = (curRoom.spawnHoles || []).filter(h => h.active);
+        const targetRoom = curRoomWaitingBulkhead ? prevRoom : curRoom;
+        if (targetRoom) {
+          const activeHoles = (targetRoom.spawnHoles || []).filter(h => h.active);
           if (activeHoles.length > 0) {
             let packSize = isSurge
               ? Math.min(10, 3 + Math.floor(secCapLv * 0.6) + Math.floor(rWave * 0.4))
               : 1;
 
-            if (curRoom.waitingForWaveDefense) {
+            if (curRoomWaitingBulkhead) {
+              packSize = Math.min(3, packSize);
+            } else if (targetRoom.waitingForWaveDefense) {
               packSize = Math.min(packSize, remainingQuota);
             }
 
             if (packSize > 0) {
-              curRoom.waveZombiesSpawned = (curRoom.waveZombiesSpawned || 0) + packSize;
+              if (!curRoomWaitingBulkhead) {
+                targetRoom.waveZombiesSpawned = (targetRoom.waveZombiesSpawned || 0) + packSize;
+              }
               const hole = activeHoles[Math.floor(Math.random() * activeHoles.length)];
 
-              const hw = curRoom.hw || curRoom.half;
-              const hd = curRoom.hd || curRoom.half;
-              const inX = hole.x < curRoom.wx - (hw - 12) ? hole.x + 2.4 : (hole.x > curRoom.wx + (hw - 12) ? hole.x - 2.4 : hole.x);
-              const inZ = hole.z < curRoom.wz - (hd - 12) ? hole.z + 2.4 : (hole.z > curRoom.wz + (hd - 12) ? hole.z - 2.4 : hole.z);
+              const hw = targetRoom.hw || targetRoom.half;
+              const hd = targetRoom.hd || targetRoom.half;
+              const inX = hole.x < targetRoom.wx - (hw - 12) ? hole.x + 2.4 : (hole.x > targetRoom.wx + (hw - 12) ? hole.x - 2.4 : hole.x);
+              const inZ = hole.z < targetRoom.wz - (hd - 12) ? hole.z + 2.4 : (hole.z > targetRoom.wz + (hd - 12) ? hole.z - 2.4 : hole.z);
 
               for (let k = 0; k < packSize; k++) {
                 if (game.zombies.length >= maxSwarm) break;
                 const jitterA = (k / packSize) * Math.PI * 2 + Math.random() * 0.5;
-                const zx = Math.max(curRoom.wx - hw + 2.6, Math.min(curRoom.wx + hw - 2.6, inX + Math.cos(jitterA) * 1.6));
-                const zz = Math.max(curRoom.wz - hd + 2.6, Math.min(curRoom.wz + hd - 2.6, inZ + Math.sin(jitterA) * 1.6));
+                const zx = Math.max(targetRoom.wx - hw + 2.6, Math.min(targetRoom.wx + hw - 2.6, inX + Math.cos(jitterA) * 1.6));
+                const zz = Math.max(targetRoom.wz - hd + 2.6, Math.min(targetRoom.wz + hd - 2.6, inZ + Math.sin(jitterA) * 1.6));
 
                 // [v3.1] 섹터별 특수 좀비 계단식 순차 해금!
                 // 1섹터(index 0): 무조건 100% 기본 감염체(WALKER)만 출현!
                 // 2섹터(index 1): 러너 합류 | 3섹터(index 2): 스핏터·부머 합류 | 4~5섹터: 골리앗 합류 | 6섹터+: 블러드 데빌 합류
                 const roll = Math.random();
-                const sIdx = game.currentRoomIndex;
+                const sIdx = targetRoom.index;
                 let zType = "WALKER";
                 if (sIdx === 0) {
                   zType = "WALKER";
@@ -1886,8 +1911,8 @@
                   else if (roll < 0.82) zType = "DEVIL";
                 }
 
-                const zSpawned = spawnZombie(zType, zx, zz, curRoom.index);
-                if (curRoom.berserkActive && zSpawned) {
+                const zSpawned = spawnZombie(zType, zx, zz, targetRoom.index);
+                if (targetRoom.berserkActive && zSpawned) {
                   zSpawned.berserkEnraged = true;
                   const hpMult = 1.75;
                   zSpawned.maxHp = Math.round(zSpawned.maxHp * hpMult);
