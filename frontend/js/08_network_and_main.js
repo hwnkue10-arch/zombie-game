@@ -485,6 +485,7 @@
                   p.specialization = msg.specialization;
                 }
                 if (msg.tempShield !== undefined) p.tempShield = msg.tempShield;
+                if (msg.carryingPayload !== undefined) p.carryingPayload = !!msg.carryingPayload;
                 if (p.drone) {
                   if (msg.droneUnlocked !== undefined) {
                     p.drone.unlocked = !!msg.droneUnlocked;
@@ -633,10 +634,11 @@
                   );
                 } else if (msg.action === "IGNITE_GENERATOR") {
                   const node = game.missionNodes.find(n => n.roomIndex === msg.roomIdx && n.kind === "GENERATOR" && n.stepOrder === msg.stepOrder && !n.done);
-                  if (!node) return;
-                  node.done = true;
-                  if (node.coreMat) node.coreMat.color.setHex(0x38bdf8);
-                  spawnMissionStageVFX(node.x, node.z, 0x38bdf8, 6.8, 20, false);
+                  if (node) {
+                    node.done = true;
+                    if (node.coreMat) node.coreMat.color.setHex(0x38bdf8);
+                    spawnMissionStageVFX(node.x, node.z, 0x38bdf8, 6.8, 20, false);
+                  }
                   r.progress++;
                   SoundFX.play("upgrade");
                   if (r.progress < r.targetVal) {
@@ -773,7 +775,7 @@
                     advanceRoomMissionStage(
                       r,
                       msg.stepOrder,
-                      `✅ 오염 밸브 #${msg.stepOrder} 차단 완료 (+500 BP)! 다음 웨이브를 방어하면 밸브 #${reqStep + 1}이 개방됩니다!`
+                      `✅ 오염 밸브 #${msg.stepOrder} 차단 완료 (+500 BP)! 다음 웨이브를 방어하면 밸브 #${(msg.stepOrder || 1) + 1}이 개방됩니다!`
                     );
                   }
                   checkRoomClear(r);
@@ -1031,6 +1033,72 @@
                 });
               }
 
+              // [v3.5 멀티플레이 군락 증폭기 및 생체 신경절(HIVE_NODES / EXTERMINATE) 미션 오브젝트 완벽 동기화]
+              if (Array.isArray(msg.hiveNodes)) {
+                for (let pi = game.cystPods.length - 1; pi >= 0; pi--) {
+                  const pod = game.cystPods[pi];
+                  if (pod && pod.isMissionHive && pod.roomIndex === game.currentRoomIndex) {
+                    const stillExists = msg.hiveNodes.some(hn => Math.hypot(pod.x - hn[0], pod.z - hn[1]) < 1.0);
+                    if (!stillExists) {
+                      try { if (pod.mesh) entitiesGroup.remove(pod.mesh); } catch (e) {}
+                      if (pod.sym && pod.sym.el) pod.sym.el.remove();
+                      game.cystPods.splice(pi, 1);
+                    }
+                  }
+                }
+
+                msg.hiveNodes.forEach(hn => {
+                  let existing = game.cystPods.find(p => p.isMissionHive && Math.hypot(p.x - hn[0], p.z - hn[1]) < 1.0);
+                  if (!existing) {
+                    const r = game.rooms[hn[5] !== undefined ? hn[5] : game.currentRoomIndex];
+                    const isExterm = r && r.condType === "EXTERMINATE";
+                    const hGroup = new THREE.Group();
+                    const core = new THREE.Mesh(
+                      new THREE.DodecahedronGeometry(1.55, 1),
+                      new THREE.MeshStandardMaterial({
+                        color: isExterm ? 0xf97316 : 0xe11d48,
+                        emissive: isExterm ? 0xc2410c : 0x9f1239,
+                        emissiveIntensity: 0.8
+                      })
+                    );
+                    core.position.y = 1.6;
+                    hGroup.add(core);
+                    const bioRing = new THREE.Mesh(
+                      new THREE.TorusGeometry(1.8, 0.2, 8, 18),
+                      new THREE.MeshBasicMaterial({ color: isExterm ? 0xfacc15 : 0xf43f5e })
+                    );
+                    bioRing.rotation.x = Math.PI / 2;
+                    bioRing.position.y = 0.35;
+                    hGroup.add(bioRing);
+
+                    hGroup.position.set(hn[0], 0, hn[1]);
+                    entitiesGroup.add(hGroup);
+                    const podObj = {
+                      x: hn[0], z: hn[1],
+                      hp: hn[2],
+                      maxHp: hn[3],
+                      stepOrder: hn[4],
+                      isMissionHive: true,
+                      roomIndex: r ? r.index : game.currentRoomIndex,
+                      timer: 9999,
+                      mesh: hGroup,
+                      coreMesh: core,
+                      bioRing
+                    };
+                    game.cystPods.push(podObj);
+                    podObj.sym = registerWorldSymbol(
+                      hn[0], 3.3, hn[1],
+                      isExterm ? `☣️군락증폭기#${hn[4]}(사격파괴)` : `🧬생체신경절#${hn[4]}(사격파괴)`,
+                      "bg-rose-950/90 border-rose-400 text-rose-200",
+                      podObj, podObj.roomIndex
+                    );
+                  } else {
+                    existing.hp = hn[2];
+                    existing.maxHp = hn[3];
+                  }
+                });
+              }
+
               // [v3.5 감염체 360마리 전량 위치·체력·광폭화·동결/스턴 완벽 동기화]
               if (Array.isArray(msg.zombies)) {
                 const hostIds = new Set(msg.zombies.map(zs => zs[0]));
@@ -1042,6 +1110,7 @@
                       if (z.iceBlock && z.group) z.group.remove(z.iceBlock);
                       if (z.group) entitiesGroup.remove(z.group);
                     } catch (e) {}
+                    if (game.midBoss === z) game.midBoss = null;
                     game.zombies.splice(i, 1);
                   }
                 }
@@ -1133,6 +1202,7 @@
           tempShield: Math.round(me.tempShield || 0),
           downed: !!me.downed,
           currentWeapon: me.currentWeapon,
+          carryingPayload: !!me.carryingPayload,
           walkCycle: Math.round(me.walkCycle * 10) / 10,
           specialization: me.specialization || null,
           droneUnlocked: !!(me.drone && me.drone.unlocked),
@@ -1201,6 +1271,17 @@
           Math.round(p.maxHp)
         ]);
 
+        const hiveSnap = game.cystPods
+          .filter(p => p.isMissionHive && p.roomIndex === game.currentRoomIndex)
+          .map(p => [
+            Math.round(p.x * 10) / 10,
+            Math.round(p.z * 10) / 10,
+            Math.round(p.hp),
+            Math.round(p.maxHp),
+            p.stepOrder || 1,
+            p.roomIndex
+          ]);
+
         wsClient.send(JSON.stringify({
           type: "WORLD_SNAPSHOT",
           roomIdx: game.currentRoomIndex,
@@ -1214,6 +1295,7 @@
           midBossState: mbSnap,
           bossState: bossSnap,
           bloodPylons: pylonSnap,
+          hiveNodes: hiveSnap,
           missionNodes: (game.missionNodes || [])
             .filter(n => n.roomIndex === game.currentRoomIndex)
             .map(n => ({

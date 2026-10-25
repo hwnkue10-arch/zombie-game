@@ -2853,15 +2853,21 @@
             interactTitle.textContent = `🏥 [F] 치료소(${nearDecon.charges})`;
             interactBar.style.width = "100%";
             if (holdingF) {
-              nearDecon.charges--;
-              p.hp = Math.min(p.maxHp, p.hp + 55);
-              p.bleedingTimer = 0;
-              p.acidTimer = 0;
-              p.medkits = Math.min(getPlayerMaxMedkits(p), p.medkits + 1);
-              if (nearDecon.charges <= 0) entitiesGroup.remove(nearDecon.mesh);
-              SoundFX.play("revive");
+              if (!p.fDeconHeld) {
+                p.fDeconHeld = true;
+                nearDecon.charges--;
+                p.hp = Math.min(p.maxHp, p.hp + 55);
+                p.bleedingTimer = 0;
+                p.acidTimer = 0;
+                p.medkits = Math.min(getPlayerMaxMedkits(p), p.medkits + 1);
+                if (nearDecon.charges <= 0) entitiesGroup.remove(nearDecon.mesh);
+                SoundFX.play("revive");
+              }
+            } else {
+              p.fDeconHeld = false;
             }
           } else {
+            p.fDeconHeld = false;
             p.revivingTargetId = null;
           }
 
@@ -3058,6 +3064,10 @@
       targetPlayer.downed = false;
       targetPlayer.hp = 60;
       targetPlayer.reviveProgress = 0;
+      if (targetPlayer.wasCarryingPayload) {
+        targetPlayer.carryingPayload = true;
+        targetPlayer.wasCarryingPayload = false;
+      }
       targetPlayer.visual.body.rotation.x = 0;
       targetPlayer.visual.body.position.y = 1.1;
       targetPlayer.visual.head.position.set(0, 2.02, 0);

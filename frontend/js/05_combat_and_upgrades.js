@@ -2394,7 +2394,10 @@
         player.downed = true;
         console.warn(`[DOWNED] Player #${player.id} has been downed!`);
         player.bandagingTimer = 0;
-        player.carryingPayload = false;
+        if (player.carryingPayload) {
+          player.wasCarryingPayload = true;
+          player.carryingPayload = false;
+        }
         player.reviveProgress = 0;
         player.revivingTargetId = null;
         player.currentWeapon = 0;
