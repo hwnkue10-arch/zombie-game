@@ -177,12 +177,12 @@ http://localhost:3000
 
 플레이어의 어깨 위를 호버링하며 전술을 보조하는 인공지능 지원 드론 시스템입니다. 무기고(`U`)의 드론 모듈 베이에서 단계별로 업그레이드할 수 있습니다.
 
-1. **🧲 자력 수거 모듈 (Magnetic Collector Module)**:
-   * 주변에 드랍된 탄약팩, 생체 BP 박스, 구급키트, 🧬변이 코어를 **최대 10m 반경에서 자력으로 플레이어에게 자동 견인 흡수**.
-2. **🛡️ 탄약 요격 방어 모듈 (Point Defense Interceptor Module)**:
-   * 플레이어를 향해 날아오는 스핏터의 산성 침, 네크로 서모너의 암흑 구체 등 적 원거리 투사체를 감지하여 레이저로 요격 격추 (재사용 쿨타임 최저 0.6초).
-3. **💉 의무 나노 원격 소생 모듈 (Medical Nanite Reviver Module)**:
-   * 플레이어가 빈사 상태에 빠졌을 때 원격으로 나노 주사기를 투여하여 자가 소생 및 긴급 체력 회복 지원.
+1. **🧲 자력 수거 모듈 (Magnetic Collector Module, Lv.1~3)**:
+   * 주변에 드랍된 탄약팩, 생체 BP 박스, 구급키트, 무기 부품, 🧬변이 코어를 **최대 10m 반경에서 자력으로 플레이어에게 자동 견인 흡수** (Lv.1 5m / Lv.2 7.5m / Lv.3 10m).
+2. **🛡️ 탄약 요격 방어 모듈 (Point Defense Interceptor Module, Lv.1~3)**:
+   * 플레이어를 향해 날아오는 스핏터의 산성 침, 네크로 서모너의 암흑 구체 등 적 원거리 투사체를 감지하여 레이저로 요격 격추 (재사용 쿨타임 Lv.1 2.0초 → Lv.2 1.2초 → Lv.3 **최저 0.6초**).
+3. **💉 의무 나노 원격 소생 모듈 (Medical Nanite Reviver Module, Lv.1 특수)**:
+   * **반경 18m 이내에 기절(Downed)한 아군**이 있고 본인이 구급키트(`medkits >= 1`)를 보유 중일 때, 드론이 구급키트 1개를 소모하여 **원격 나노 빔으로 아군을 즉시 자동 소생** (쿨타임 90초, 섹터당 최대 2회 발동).
 
 ---
 
@@ -234,7 +234,7 @@ http://localhost:3000
 
 ### ① ⚙️ 무기 부품 (Weapon Parts) 수급처 및 상시 판매
 무기는 **요구 섹터 도달 + `⚙️ 부품` + `BP`**를 소비하여 해금합니다.
-* **⚙️ 무기 부품 상시 판매 (`btn-scrap-part`)**: 전 무기 해금 여부와 상관없이 무기고에서 **언제든지 보유 부품 1개당 4,500 BP에 즉시 판매**할 수 있습니다.
+* **⚙️ 무기 부품 상시 판매 (`btn-scrap-part` / `getPartScrapRefundBp`)**: 전 무기 해금 여부와 상관없이 무기고에서 **언제든지 보유 부품 1개를 현재 섹터 부품 합성 시세(`getPartCraftCost`)의 75% BP로 즉시 환전 판매**할 수 있습니다.
 * **5대 부품 수급처**:
   1. **개인 보급상자 (`📦보급상자`)**: 1번 상자 100% 확정 지급 / 2번 상자 50% 확률 지급
   2. **섹터 클리어 보상**: 매 섹터 미션 완수 및 탈출 시 전원 `⚙️ 부품 +1개` 확정
@@ -320,15 +320,25 @@ Boxhead_The_Core_v3.6/
 │   ├── index.html                # 메인 게임 엔트리, 글래스모피즘 HUD 및 특성화/드론/무기고 모달
 │   ├── css/
 │   │   └── style.css             # 반응형 제로 시프트 사이버펑크 스타일시트
-│   └── js/                       # 8대 도메인 모듈화 게임 엔진 스크립트
-│       ├── 01_audio_and_weapons.js     # Web Audio 사운드 합성, 무기 정의 및 9종 슈트 강화 데이터
-│       ├── 02_lobby_and_scene.js       # 대기실 로비, Three.js 씬/카메라/지오메트리 풀 초기화
-│       ├── 03_dungeon_and_world.js     # 절차적 맵 생성, 전장의 안개, 미션 노드 동기화, 방어 파일런
-│       ├── 04_entities_and_boss.js     # 플레이어, 감염체 풀, 보스/코어 안전 좌표(getSafeBossCoreCoord)
-│       ├── 05_combat_and_upgrades.js   # 키보드/마우스 입력, 특성화 스킬, 무기 강화/부품 판매, 탄도 연산
-│       ├── 06_simulation_and_ai.js     # 60FPS 메인 루프, 호드 AI, 보스 패턴, 탄환 히트박스 판정
-│       ├── 07_hud_and_minimap.js       # 실시간 전술 HUD, 팀원 생체 신호, 미션 가이드, 레이더 미니맵
-│       └── 08_network_and_main.js      # WebSocket 클라이언트, 20Hz 위치 보간 및 월드 스냅샷 동기화
+│   └── js/                       # 18개 세부 도메인 모듈화 게임 엔진 스크립트 (Phase 1-2 리팩토링 완료)
+│       ├── 01_audio_and_weapons.js         # Web Audio 사운드 합성, 무기 정의 및 9종 슈트 강화 데이터
+│       ├── 02_lobby_and_scene.js           # 대기실 로비, Three.js 씬/카메라/지오메트리 풀 초기화
+│       ├── 03_dungeon_and_world.js         # 절차적 맵 생성, 전장의 안개, 미션 노드 동기화, 방어 파일런
+│       ├── 04_entities_and_boss.js         # 플레이어, 감염체 풀, 보스/코어 안전 좌표(getSafeBossCoreCoord)
+│       ├── 05a_input_and_tactics.js        # 키보드/마우스 레이캐스팅 입력, 무기 전환, 대시/배시/치료 기동
+│       ├── 05b_armory_and_upgrades.js      # 무기고 모달 UI, 무기 랜덤 강화, 슈트 개조, 부품/코어 거래 경제
+│       ├── 05c_combat_and_damage.js        # 3D 무기별 탄도 발사, 레일건/극저온/폭발, 엔티티 데미지 판정
+│       ├── 05d_specializations_and_drone.js# 전술 드론 모듈 업그레이드 및 4대 특성화 클래스 액티브/패시브
+│       ├── 06a_missions_and_rooms.js       # 섹터 클리어 검증, 테르밋/미션 단계 진행 및 후방 격벽 폐쇄
+│       ├── 06b_sim_core_loop.js            # 60FPS 메인 시뮬레이션 오케스트레이터, 웨이브 스포너, 환경 기믹, 카메라
+│       ├── 06c_player_interactions.js      # 플레이어 미션/구출/무기고 상호작용, 질주/조준 물리 및 월드 배지
+│       ├── 06d_boss_ai.js                  # 10섹터 최종보스 '더 코어' AI, 3대 무적 기믹 및 패턴/해저드
+│       ├── 06e_zombie_ai_and_turrets.js    # 감염체 벽면 슬라이딩 AI, 중간보스 패턴, 바리케이드 포탑, 물리 분리
+│       ├── 06f_projectiles_and_pickups.js  # 탄환 비행/충돌 물리, 개인화 보급상자/드랍템 수거 및 벽면 충돌 판정
+│       ├── 07_hud_and_minimap.js           # 실시간 전술 HUD, 팀원 생체 신호, 미션 가이드, 레이더 미니맵
+│       ├── 08a_session_and_net_client.js   # 세션 저장/복구, 게임 시작/종료 및 WebSocket 패킷 핸들러
+│       ├── 08b_net_snapshot_sync.js        # 호스트 권위 월드 스냅샷 수신 동기화 및 33Hz/20Hz 고속 브로드캐스터
+│       └── 08c_main_bootstrap.js           # DOM UI 이벤트 바인딩, 환경설정 모달, 터치 컨트롤 및 메인 부트스트랩
 ```
 
 ---
@@ -337,7 +347,7 @@ Boxhead_The_Core_v3.6/
 
 * **Front-End**: HTML5, CSS3, TailwindCSS, Three.js (r128), Web Audio API (내장 합성 효과음)
 * **Back-End**: Node.js (v16+), HTTP Server, WebSocket (RFC-6455 내장 제로 디펜던시 엔진 + ws 라이브러리 하이브리드 지원)
-* **Zero-Loss Lexical Architecture**: 원본의 모든 전역 상태와 함수 렉시컬 스코프를 100% 무손실 유지한 상태로 기능별 8대 도메인 스크립트로 모듈화하여 버그 발생률을 최소화했습니다.
+* **Zero-Loss Lexical Architecture**: 원본의 모든 전역 상태와 함수 렉시컬 스코프를 100% 무손실 유지한 상태로 거대 함수를 단일 책임 단위로 분해(Phase 1)하고 18개 세부 도메인 스크립트로 모듈화(Phase 2)하여 AI/개발자 탐색 속도와 유지보수성을 극대화했습니다.
 
 ---
 
