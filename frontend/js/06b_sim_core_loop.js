@@ -133,6 +133,12 @@
             });
           }
         }
+        // [v3.1 Z-Fighting & 틈새 지글거림 방지] 문이 바닥 아래로 완전히 내려갔을 때 메시를 숨겨 바닥면과의 깊이 충돌 원천 차단
+        if (d.open && d.mesh.position.y <= -3.8) {
+          d.mesh.visible = false;
+        } else {
+          d.mesh.visible = true;
+        }
       });
 
       // 전 미션 노드(원료·합성대·발전기·블랙박스·중계기·송신기·환기밸브) 상시 3D 회전/부유 애니메이션
@@ -655,9 +661,10 @@
             if (p.drone.modules.medi) {
               p.drone.modules.medi.cooldown = Math.max(0, (p.drone.modules.medi.cooldown || 0) - dt);
 
-              // 의무 드론 원격 소생 (18m 반경, 레벨 1 이상 연구 시 가동, 구급키트 1개 소모, 90초 쿨타임, 섹터당 최대 2회)
+              // [v3.1 의무 드론 원격 소생 수동 전환] 자동 출격으로 구급키트가 낭비되는 문제 해결: [T]키로 수동 명령 시에만 출격!
               const mediLv = p.drone.modules.medi.level || 0;
               if (
+                p.id === mySlotIndex &&
                 !p.downed &&
                 mediLv >= 1 &&
                 p.drone.modules.medi.cooldown <= 0 &&
@@ -668,24 +675,9 @@
                 const downedMate = game.players.find(other =>
                   other.id !== p.id && other.downed && Math.hypot(other.x - p.x, other.z - p.z) <= 18.0
                 );
-                if (downedMate) {
-                  p.drone.modules.medi.cooldown = 90.0;
-                  p.drone.modules.medi.sectorRevivesUsed = (p.drone.modules.medi.sectorRevivesUsed || 0) + 1;
-                  p.medkits = Math.max(0, p.medkits - 1);
-                  p.drone.animState = "FLYING_OUT";
-                  p.drone.targetMateId = downedMate.id;
-                  p.drone.worldX = p.x + 0.92;
-                  p.drone.worldY = 2.15;
-                  p.drone.worldZ = p.z - 0.45;
-
-                  const safeBanner = document.getElementById("hud-safe-banner");
-                  if (safeBanner) {
-                    document.getElementById("hud-safe-banner-text").textContent =
-                      `🛸 [의무 드론] ${downedMate.name} 구출을 위해 비행 출격!`;
-                    safeBanner.classList.remove("hidden");
-                    setTimeout(() => safeBanner.classList.add("hidden"), 3000);
-                  }
-                }
+                p.canDroneReviveMate = downedMate ? downedMate.name : null;
+              } else {
+                p.canDroneReviveMate = null;
               }
             }
           }
@@ -815,6 +807,21 @@
           p.tempHp = Math.max(0, p.tempHp - 3.5 * dt);
         }
 
+        // [키네틱 에너지 쉴드 자동 재생] 비피격 4.5초 후 초당 12.0씩 최대치까지 자동 복구
+        const maxShield = (typeof getPlayerMaxShield === "function") ? getPlayerMaxShield(p) : 0;
+        p.timeSinceLastHit = (p.timeSinceLastHit || 0) + dt;
+        if (maxShield > 0 && !p.downed) {
+          if (p.timeSinceLastHit >= 4.5) {
+            const prevShield = p.shield || 0;
+            p.shield = Math.min(maxShield, prevShield + 12.0 * dt);
+            if (prevShield <= 0 && p.shield > 0 && p.id === mySlotIndex) {
+              SoundFX.play("reload");
+            }
+          }
+        } else {
+          p.shield = 0;
+        }
+
         if (p.downed) return;
 
         if (p.bleedingTimer > 0) {
@@ -832,24 +839,30 @@
         }
 
         if (p.bandagingTimer > 0) {
-          p.bandagingTimer -= dt;
-          if (p.bandagingTimer <= 0) {
-            const hasSyr = isPlayerSyringeUpgraded(p);
-            p.medkits = Math.max(0, p.medkits - 1);
-            const healVal = hasSyr ? 80 : 65;
-            p.hp = Math.min(p.maxHp, p.hp + healVal);
-            p.bleedingTimer = 0;
-            if (hasSyr) p.acidTimer = 0;
-            SoundFX.play("revive");
-            // [의무관 패시브] 치료 완료 시 4m 내 아군에게 회복량 25% 공유
-            if (p.specialization === "MEDIC") {
-              game.players.forEach(other => {
-                if (other.id !== p.id && !other.downed && Math.hypot(other.x - p.x, other.z - p.z) <= 4.0) {
-                  other.hp = Math.min(other.maxHp, other.hp + Math.round(healVal * 0.25));
-                  other.bleedingTimer = 0;
-                  spawnBloodParticles(other.x, 1.2, other.z, 0x10b981, 6);
-                }
-              });
+          // [v3.1 구급키트 Z키 홀드 방식 개편] Z키를 유지할 때만 작동! 손을 떼면 구급키트 소모 없이 즉시 취소하고 도주 가능
+          if (p.id === mySlotIndex && !keys["KeyZ"] && !window.touchHoldZ) {
+            p.bandagingTimer = 0;
+            p.bandagingMaxTimer = 0;
+          } else {
+            p.bandagingTimer -= dt;
+            if (p.bandagingTimer <= 0) {
+              const hasSyr = isPlayerSyringeUpgraded(p);
+              p.medkits = Math.max(0, p.medkits - 1);
+              const healVal = hasSyr ? 80 : 65;
+              p.hp = Math.min(p.maxHp, p.hp + healVal);
+              p.bleedingTimer = 0;
+              if (hasSyr) p.acidTimer = 0;
+              SoundFX.play("revive");
+              // [의무관 패시브] 치료 완료 시 4m 내 아군에게 회복량 25% 공유
+              if (p.specialization === "MEDIC") {
+                game.players.forEach(other => {
+                  if (other.id !== p.id && !other.downed && Math.hypot(other.x - p.x, other.z - p.z) <= 4.0) {
+                    other.hp = Math.min(other.maxHp, other.hp + Math.round(healVal * 0.25));
+                    other.bleedingTimer = 0;
+                    spawnBloodParticles(other.x, 1.2, other.z, 0x10b981, 6);
+                  }
+                });
+              }
             }
           }
         }
@@ -865,6 +878,174 @@
           }
         });
       });
+
+      // [v3.2 섹터 체류 시간 누적]
+      if (curRoom) {
+        curRoom.elapsedTime = (curRoom.elapsedTime || 0) + dt;
+      }
+
+      // [v3.2 동적 해저드 1: 바닥 주기적 분출구 (Geysers)]
+      (game.geysers || []).forEach(g => {
+        if (g.roomIndex !== (curRoom ? curRoom.index : -1)) return;
+        if (curRoom && (curRoom.cleared || curRoom.envCleared)) {
+          g.warnMesh.visible = false;
+          g.columnMesh.visible = false;
+          return;
+        }
+        g.cycleTimer = (g.cycleTimer || 0) + dt;
+        if (g.cycleTimer >= 10.0) g.cycleTimer = 0;
+
+        const isAcid = (g.type === "acid");
+        if (g.cycleTimer < 5.0) {
+          g.state = "idle";
+          g.warnMesh.visible = false;
+          g.columnMesh.visible = false;
+        } else if (g.cycleTimer < 6.5) {
+          g.state = "warning";
+          g.warnMesh.visible = true;
+          g.columnMesh.visible = false;
+          const warnProgress = (g.cycleTimer - 5.0) / 1.5;
+          g.warnMesh.material.opacity = 0.35 + 0.5 * Math.sin(warnProgress * Math.PI * 4);
+        } else {
+          g.state = "erupting";
+          g.warnMesh.visible = false;
+          g.columnMesh.visible = true;
+          const eruptScale = 0.85 + 0.25 * Math.sin(game.elapsedTime * 14.0);
+          g.columnMesh.scale.set(eruptScale, 1.0, eruptScale);
+          g.columnMesh.material.opacity = 0.75 + 0.2 * Math.sin(game.elapsedTime * 10.0);
+
+          game.players.forEach(p => {
+            if (!p.downed && Math.hypot(p.x - g.x, p.z - g.z) <= 1.9) {
+              if (isAcid) {
+                damagePlayer(p, 18 * dt, false, true, false, false);
+              } else {
+                damagePlayer(p, 14 * dt, false, false, false, true);
+              }
+            }
+          });
+        }
+      });
+
+      // [v3.2 동적 해저드 2: 중앙 거대 신경 촉수 (Apex Tentacles)]
+      (game.apexTentacles || []).forEach(tent => {
+        if (tent.roomIndex !== (curRoom ? curRoom.index : -1)) return;
+        if (tent.hp <= 0) return;
+
+        // 5분(300초) 이상 체류하거나 테르밋 기폭 시 키틴질 과열 탈진 파훼!
+        if ((curRoom && curRoom.elapsedTime >= 300.0) || (curRoom && curRoom.thermiteDetonated)) {
+          if (tent.invulnerable) {
+            tent.invulnerable = false;
+            tent.overheated = true;
+            if (tent.bodyMesh && tent.bodyMesh.material) {
+              tent.bodyMesh.material.color.setHex(0xeab308);
+              tent.bodyMesh.material.emissive.setHex(0xd97706);
+              tent.bodyMesh.material.emissiveIntensity = 0.9;
+            }
+            if (tent.sym && tent.sym.el) {
+              tent.sym.el.textContent = "💥생체신경촉수[키틴질과열·사격파괴가능]";
+              tent.sym.el.className = tent.sym.el.className.replace("bg-purple-950/90", "bg-amber-950/90").replace("border-purple-500/60", "border-amber-400");
+            }
+            showToastNotification("⚠️ 신경 촉수 키틴질 장갑 과열 탈진! 약점 완전 노출 - 총기 사격으로 파괴 가능!");
+            SoundFX.play("alarm");
+          }
+        }
+
+        tent.attackTimer = (tent.attackTimer || 0) + dt;
+        const cycle = tent.attackTimer % 14.6;
+        const liveTarget = game.players.find(p => !p.downed && Math.hypot(p.x - tent.x, p.z - tent.z) <= 32.0);
+
+        if (cycle < 12.5) {
+          tent.state = "idle";
+          tent.warnPlane.visible = false;
+          tent.breathMesh.visible = false;
+          if (liveTarget) {
+            tent.targetAngle = Math.atan2(liveTarget.x - tent.x, liveTarget.z - tent.z);
+          }
+        } else if (cycle < 14.0) {
+          tent.state = "aiming";
+          tent.warnPlane.visible = true;
+          tent.breathMesh.visible = false;
+          tent.warnPlane.rotation.z = -tent.targetAngle;
+          const midDist = 14.0;
+          tent.warnPlane.position.set(
+            tent.x + Math.sin(tent.targetAngle) * midDist,
+            0.06,
+            tent.z + Math.cos(tent.targetAngle) * midDist
+          );
+          tent.warnPlane.material.opacity = 0.45 + 0.4 * Math.sin((cycle - 12.5) * 8.0);
+        } else {
+          tent.state = "firing";
+          tent.warnPlane.visible = false;
+          tent.breathMesh.visible = true;
+          tent.breathMesh.rotation.y = tent.targetAngle;
+          const midDist = 14.0;
+          tent.breathMesh.position.set(
+            tent.x + Math.sin(tent.targetAngle) * midDist,
+            1.1,
+            tent.z + Math.cos(tent.targetAngle) * midDist
+          );
+          tent.breathMesh.material.opacity = 0.85;
+
+          const sinA = Math.sin(tent.targetAngle);
+          const cosA = Math.cos(tent.targetAngle);
+          game.players.forEach(p => {
+            if (!p.downed) {
+              const relX = p.x - tent.x;
+              const relZ = p.z - tent.z;
+              const forwardDist = relX * sinA + relZ * cosA;
+              const lateralDist = Math.abs(-relX * cosA + relZ * sinA);
+              if (forwardDist >= 0 && forwardDist <= 28.0 && lateralDist <= 1.6) {
+                damagePlayer(p, 35 * dt * 2.5, false, true, false, true);
+              }
+            }
+          });
+        }
+      });
+
+      // [v3.2 신규 미션 1: SURVIVAL_HOLDOUT 180초 결사 생존전]
+      if (curRoom && curRoom.condType === "SURVIVAL_HOLDOUT" && curRoom.holdoutActive && !curRoom.cleared && !curRoom.bulkheadOverride) {
+        curRoom.progress = Math.min(curRoom.targetVal, curRoom.progress + dt);
+        if (curRoom.progress >= curRoom.targetVal) {
+          spawnMissionStageVFX(curRoom.wx, curRoom.wz, 0x10b981, 14.0, 50, true);
+          SoundFX.play("upgrade");
+          showToastNotification("✅ 방호 락다운 해제 성공! 격벽 비상 개방 시퀀스로 전환됩니다!");
+          checkRoomClear(curRoom);
+        }
+      }
+
+      // [v3.2 신규 미션 2: DEFENSE_OBJECTIVE 150초 코어 발전기 수호전]
+      if (curRoom && curRoom.condType === "DEFENSE_OBJECTIVE" && curRoom.defenseActive && curRoom.defenseCore && !curRoom.cleared && !curRoom.bulkheadOverride) {
+        const core = curRoom.defenseCore;
+        if (core.isRebooting) {
+          core.rebootTimer = Math.max(0, core.rebootTimer - dt);
+          if (core.rebootTimer <= 0) {
+            core.isRebooting = false;
+            core.hp = core.maxHp;
+            core.shield = core.maxShield;
+            curRoom.progress = 0;
+            showToastNotification("🔄 코어 반응로 재부팅 완료! 150초 수호 타이머가 리셋되었습니다!");
+            SoundFX.play("alarm");
+          }
+        } else {
+          curRoom.progress = Math.min(curRoom.targetVal, curRoom.progress + dt);
+          if (curRoom.progress >= curRoom.targetVal) {
+            spawnMissionStageVFX(core.x, core.z, 0x10b981, 14.0, 50, true);
+            SoundFX.play("upgrade");
+            showToastNotification("✅ 코어 반응로 100% 충전 완료! 격벽 비상 개방 시퀀스로 전환됩니다!");
+            checkRoomClear(curRoom);
+          }
+        }
+      }
+
+      // [v3.2 격벽 비상 개방 시퀀스: Bulkhead Override (65초 파밍 호드 보장)]
+      if (curRoom && curRoom.bulkheadOverride && !curRoom.bulkheadOverrideDone && !curRoom.cleared) {
+        curRoom.bulkheadOverrideTimer = Math.max(0, curRoom.bulkheadOverrideTimer - dt);
+        game.wavePhase = "HORDE";
+        if (curRoom.bulkheadOverrideTimer <= 0) {
+          curRoom.bulkheadOverrideDone = true;
+          checkRoomClear(curRoom);
+        }
+      }
     }
 
     function updateWavePhasesAndHordeSpawner(dt, curRoom, prevRoom) {
@@ -1058,20 +1239,28 @@
                 } else if (sIdx === 1) {
                   if (roll < 0.28) zType = "RUNNER";
                 } else if (sIdx === 2) {
-                  if (roll < 0.22) zType = "RUNNER";
-                  else if (roll < 0.38) zType = "SPITTER";
-                  else if (roll < 0.50) zType = "BOOMER";
+                  if (roll < 0.20) zType = "RUNNER";
+                  else if (roll < 0.32) zType = "SPITTER";
+                  else if (roll < 0.44) zType = "BOOMER";
+                  else if (roll < 0.54) zType = "CRYO_WALKER"; // 3섹터 동결 감염체 합류
                 } else if (sIdx <= 4) {
-                  if (roll < 0.22) zType = "RUNNER";
-                  else if (roll < 0.38) zType = "SPITTER";
-                  else if (roll < 0.52) zType = "BOOMER";
-                  else if (roll < 0.66) zType = "GOLIATH";
+                  if (roll < 0.16) zType = "RUNNER";
+                  else if (roll < 0.26) zType = "ACID_RUNNER"; // 4섹터 산성 러너 합류
+                  else if (roll < 0.36) zType = "SPITTER";
+                  else if (roll < 0.46) zType = "BOOMER";
+                  else if (roll < 0.56) zType = "ACID_BOOMER"; // 4섹터 산성 봄버 합류
+                  else if (roll < 0.66) zType = "CRYO_WALKER";
+                  else if (roll < 0.76) zType = "SHOCK_RUNNER"; // 4섹터 전격 러너 합류
+                  else if (roll < 0.88) zType = "GOLIATH";
                 } else {
-                  if (roll < 0.22) zType = "RUNNER";
-                  else if (roll < 0.38) zType = "SPITTER";
-                  else if (roll < 0.52) zType = "BOOMER";
-                  else if (roll < 0.68) zType = "GOLIATH";
-                  else if (roll < 0.82) zType = "DEVIL";
+                  if (roll < 0.12) zType = "RUNNER";
+                  else if (roll < 0.22) zType = "ACID_RUNNER";
+                  else if (roll < 0.30) zType = "SPITTER";
+                  else if (roll < 0.38) zType = "ACID_BOOMER";
+                  else if (roll < 0.48) zType = "CRYO_WALKER";
+                  else if (roll < 0.58) zType = "SHOCK_RUNNER";
+                  else if (roll < 0.72) zType = "GOLIATH";
+                  else if (roll < 0.86) zType = "DEVIL";
                 }
 
                 const zSpawned = spawnZombie(zType, zx, zz, targetRoom.index);

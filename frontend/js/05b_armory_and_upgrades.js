@@ -10,11 +10,26 @@
     // =========================================================================
     // 11. WEAPON UPGRADE (PURE RANDOM ROLL), SUIT UPGRADES & PER-WEAPON AMMO
     // =========================================================================
+    let isQuickSupplyMode = false;
+
+    function openRemoteQuickSupplyModal() {
+      const modal = document.getElementById("upgrade-modal");
+      if (!modal) return;
+      isQuickSupplyMode = true;
+      modal.classList.remove("hidden");
+      try {
+        renderUpgradeModal();
+      } catch (e) {
+        console.error("renderUpgradeModal error:", e);
+      }
+    }
+
     function toggleUpgradeModal() {
       const modal = document.getElementById("upgrade-modal");
       if (!modal) return;
       const isHidden = modal.classList.contains("hidden");
       if (isHidden) {
+        isQuickSupplyMode = false;
         modal.classList.remove("hidden");
         try {
           renderUpgradeModal();
@@ -22,6 +37,7 @@
           console.error("renderUpgradeModal error:", e);
         }
       } else {
+        isQuickSupplyMode = false;
         modal.classList.add("hidden");
       }
     }
@@ -235,29 +251,9 @@
 
     function sellCoreSampleForBp(player) {
       const toastEl = document.getElementById("upg-roll-toast");
-      if (!isPlayerNearArmory(player)) {
-        if (toastEl) toastEl.textContent = "⛔ [🔧무기고] 반경 안에서만 변이 코어 추출 판매(환급)가 가능합니다!";
-        return;
-      }
-      if ((game.coreSamples || 0) < 1) {
-        if (toastEl) toastEl.textContent = "⚠️ 판매할 [🧬변이 코어]가 없습니다! (중간보스 처치로 획득 가능)";
-        return;
-      }
-      if ((game.shopCoresBought || 0) > 0) {
-        if (toastEl) toastEl.textContent = "⛔ 상점에서 코어를 구매한 이후에는 코어 차익 되팔기(추출 판매)가 제한됩니다!";
-        return;
-      }
-      const refund = getCoreSellRefundBp();
-      game.coreSamples--;
-      game.coresSoldCount = (game.coresSoldCount || 0) + 1;
-      game.bioPoints += refund;
-      triggerUpgradeHighlight("supply", { supplyKey: "btn-sell-core" });
-      SoundFX.play("upgrade");
       if (toastEl) {
-        toastEl.textContent = `🧬 변이 코어 분해 판매 완료! 즉시 +${refund} BP 환급! (비코어 순수 스탯 강화 자금 확보)`;
+        toastEl.textContent = `🧬 [변이 코어] 보유: ${game.coreSamples || 0}개 · 무기 1차특수/2차각성/3차초월 전용 핵심 자원이며 실수 매각 방지를 위해 영구 보존됩니다.`;
       }
-      renderUpgradeModal();
-      updateWeaponSlotsHUD();
     }
 
     function unlockSpecialWeaponPerk(player, wIdx, tier) {
@@ -409,11 +405,13 @@
       if (key === "maxHp") {
         player.maxHp = getPlayerMaxHp(player);
         player.hp = Math.min(player.maxHp, player.hp + 25);
+      } else if (key === "energyShield") {
+        player.shield = getPlayerMaxShield(player);
       } else if (key === "medkitCap") {
         player.medkits = Math.min(getPlayerMaxMedkits(player), player.medkits + 1);
       } else if (key === "stimCap") {
         player.stims = Math.min(getPlayerMaxStims(player), player.stims + 1);
-      } else if (key === "maxStamina") {
+      } else if (key === "staminaCore" || key === "maxStamina") {
         player.maxStamina = getPlayerMaxStamina(player);
         player.stamina = player.maxStamina;
       } else if (key === "syringe") {
@@ -495,9 +493,17 @@
       const secCap = getSectorMaxStatLv();
       const maxTotalHere = Math.min(50, secCap * 8 + 2);
 
+      const scrollContainer = document.getElementById("upg-scroll-container");
+      if (scrollContainer) {
+        scrollContainer.classList.toggle("hidden", !!isQuickSupplyMode);
+      }
+
       const armoryBanner = document.getElementById("upg-armory-status");
       if (armoryBanner) {
-        if (nearArmory) {
+        if (isQuickSupplyMode) {
+          armoryBanner.className = "h-9 px-3 rounded-xl bg-cyan-950/90 border border-cyan-400/50 text-xs font-bold text-cyan-200 flex items-center whitespace-normal break-keep";
+          armoryBanner.textContent = "🛸 [전술 드론 원격 보급] 공중 지원 가동 중 — 소모품(전 탄약 일괄 보급 / 구급키트 / 스팀팩) 즉시 공중 투하 가능";
+        } else if (nearArmory) {
           armoryBanner.className = "h-9 px-3 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-xs font-bold text-emerald-200 flex items-center whitespace-normal break-keep";
           armoryBanner.textContent = `🟢 무기고 단말기 연결됨 [F] — S${game.currentRoomIndex + 1} 총 상한: Lv.${maxTotalHere}/50 (스탯당 최대 Lv.10 자유 강화)`;
         } else {
@@ -516,7 +522,7 @@
       if (buyCoreLbl) buyCoreLbl.textContent = shopInfo.label;
 
       const sellCoreLbl = document.getElementById("upg-sell-core-label");
-      if (sellCoreLbl) sellCoreLbl.textContent = `+${getCoreSellRefundBp().toLocaleString()} BP 환급 (보유:${game.coreSamples || 0})`;
+      if (sellCoreLbl) sellCoreLbl.textContent = `보유: ${game.coreSamples || 0}개 (개조전용)`;
 
       const partCost = getPartCraftCost();
       const craftPartLbl = document.getElementById("upg-craft-part-label");
@@ -568,25 +574,25 @@
       const canBuyCore = nearArmory && (game.shopCoresBought || 0) < 3 && game.currentRoomIndex >= shopInfo.reqRoom && game.bioPoints >= shopInfo.cost;
       setSupplyBtnVisualState("btn-buy-core", canBuyCore, "bg-fuchsia-950/85 hover:bg-fuchsia-900 border border-fuchsia-400/70");
 
-      const canSellCore = nearArmory && (game.coreSamples || 0) >= 1 && (game.shopCoresBought || 0) === 0;
-      setSupplyBtnVisualState("btn-sell-core", canSellCore, "bg-cyan-950/85 hover:bg-cyan-900 border border-cyan-400/70");
+      // [v3.4 코어 판매 완전 제거] 변이 코어는 실수 매각 방지를 위해 판매 불가, 상태 표시 전용
+      setSupplyBtnVisualState("btn-sell-core", false, "bg-slate-900/80 border border-cyan-500/40 text-cyan-200 cursor-default");
 
-      // ==================== 1) 9종 전술 신체 · 외골격 · 의료 · 기동 강화 (3대 전술 카테고리별 그룹화 렌더링) ====================
+      // ==================== 1) 11종 전술 신체 · 외골격 · 의료 · 기동·CQC 강화 (3대 전술 카테고리 4/3/4 균형 렌더링) ====================
       const suitGrid = document.getElementById("upgrade-suit-grid");
       if (suitGrid) {
         suitGrid.innerHTML = "";
         if (!me.suitUpgrades) {
-          me.suitUpgrades = { maxHp: 0, armorPlating: 0, medkitCap: 0, stimCap: 0, maxStamina: 0, staminaRegen: 0, dashCd: 0, bashCd: 0, sprintSpeed: 0, syringe: 0 };
+          me.suitUpgrades = { maxHp: 0, armorPlating: 0, energyShield: 0, bioRecycler: 0, medkitCap: 0, stimCap: 0, syringe: 0, staminaCore: 0, sprintSpeed: 0, bashCd: 0, cqcMastery: 0 };
         }
 
         const catSurvival = (typeof SUIT_CATEGORIES === "object" && SUIT_CATEGORIES.SURVIVAL) || { name: "💖 생존 & 방호 외골격", icon: "💖", desc: "체력 증강 및 피격 피해 감쇄", border: "border-rose-500/50", badge: "bg-rose-950/80 text-rose-300 border-rose-400/50" };
         const catMedical  = (typeof SUIT_CATEGORIES === "object" && SUIT_CATEGORIES.MEDICAL)  || { name: "🩹 의무 & 응급 보급",   icon: "🩹", desc: "구급키트/스팀팩 및 나노 주사기", border: "border-emerald-500/50", badge: "bg-emerald-950/80 text-emerald-300 border-emerald-400/50" };
-        const catMobility = (typeof SUIT_CATEGORIES === "object" && SUIT_CATEGORIES.MOBILITY) || { name: "🏃 기동성 & 전술 기구", icon: "🏃", desc: "스태미너 및 점프/패링 특화", border: "border-cyan-500/50", badge: "bg-cyan-950/80 text-cyan-300 border-cyan-400/50" };
+        const catMobility = (typeof SUIT_CATEGORIES === "object" && SUIT_CATEGORIES.MOBILITY) || { name: "🏃 기동성 & CQC 전술", icon: "🏃", desc: "스태미너 및 CQC/기동 특화", border: "border-cyan-500/50", badge: "bg-cyan-950/80 text-cyan-300 border-cyan-400/50" };
 
         const categoryGroups = [
-          { groupDef: catSurvival, keys: ["maxHp", "armorPlating"] },
+          { groupDef: catSurvival, keys: ["maxHp", "armorPlating", "energyShield", "bioRecycler"] },
           { groupDef: catMedical,  keys: ["medkitCap", "stimCap", "syringe"] },
-          { groupDef: catMobility, keys: ["maxStamina", "staminaRegen", "dashCd", "bashCd", "sprintSpeed"] }
+          { groupDef: catMobility, keys: ["staminaCore", "sprintSpeed", "bashCd", "cqcMastery"] }
         ];
 
         categoryGroups.forEach(cg => {
@@ -610,6 +616,7 @@
 
           cg.keys.forEach(sKey => {
             const def = SUIT_UPGRADE_DEFS[sKey];
+            if (!def) return;
             const curLv = me.suitUpgrades[sKey] || 0;
             const isMax = curLv >= def.maxLv;
             const reqRoom = isMax ? 0 : (def.reqRooms[curLv] || 0);
@@ -621,13 +628,14 @@
             let statNowText = "";
             if (sKey === "maxHp") statNowText = `최대 ${getPlayerMaxHp(me)} HP`;
             else if (sKey === "armorPlating") statNowText = `피해 ${Math.round(getPlayerDmgReduction(me) * 100)}% 경감`;
+            else if (sKey === "energyShield") statNowText = `임시 쉴드 +${typeof getPlayerMaxShield === "function" ? getPlayerMaxShield(me) : 0} SH`;
+            else if (sKey === "bioRecycler") statNowText = `탄약팩 드랍률 +${Math.round((typeof getPlayerAmmoDropBonus === "function" ? getPlayerAmmoDropBonus(me) : 0) * 100)}%`;
             else if (sKey === "medkitCap") statNowText = `최대 ${getPlayerMaxMedkits(me)}개 소지`;
             else if (sKey === "stimCap") statNowText = `최대 ${getPlayerMaxStims(me)}개 소지`;
-            else if (sKey === "maxStamina") statNowText = `최대 ${getPlayerMaxStamina(me)} ST`;
-            else if (sKey === "staminaRegen") statNowText = `초당 +${getPlayerStaminaRegen(me)}/s`;
-            else if (sKey === "dashCd") statNowText = `점프 소모 ${getPlayerJumpStaminaCost(me)} ST`;
-            else if (sKey === "bashCd") statNowText = `쿨 ${getPlayerBashCooldownMax(me).toFixed(2)}s · 반경 ${getPlayerBashRadius(me).toFixed(1)}m`;
+            else if (sKey === "staminaCore" || sKey === "maxStamina") statNowText = `최대 ${getPlayerMaxStamina(me)} ST · 초당 +${getPlayerStaminaRegen(me)}/s`;
             else if (sKey === "sprintSpeed") statNowText = `이동/질주 +${Math.round(getPlayerMoveSpeedBonus(me) * 100)}%`;
+            else if (sKey === "bashCd") statNowText = `쿨 ${getPlayerBashCooldownMax(me).toFixed(2)}s · 반경 ${getPlayerBashRadius(me).toFixed(1)}m`;
+            else if (sKey === "cqcMastery") statNowText = curLv === 0 ? "기본 밀치기" : (curLv === 1 ? "1Lv: 데미지+150%·아머파쇄" : (curLv === 2 ? "2Lv: 스태미너+30·35%탄약" : "3Lv: 체력25%즉사처형·폭주"));
             else if (sKey === "syringe") statNowText = curLv > 0 ? "자가0.6s(무감속)·아군0.4s" : "기본: 자가2.8s·아군1.8s";
 
             const costText = `${cost.toLocaleString()}BP${partCost > 0 ? ` + ⚙️${partCost}개` : ""}`;
@@ -947,14 +955,18 @@
             ? `<div class="text-emerald-300 font-extrabold leading-snug break-keep">✔ ${pureBonus.label}</div>`
             : `<div class="text-slate-400 leading-snug break-keep">• 비코어 순수스탯: 15Lv(+30%) · 30Lv(+65%&관통+1) · 45Lv(+115%&관통+2&장갑무시)</div>`;
 
+          // [v3.1 코어 3단계(15Lv 1차개조 / 30Lv 2차각성 / 45Lv 3차초월) 완벽 3행 표시]
           specialRowHtml = `
             <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-800 text-[11px]">
               <div class="space-y-0.5 min-w-0 flex-1">
                 <div class="${inv.tier1Special ? 'text-fuchsia-300 font-bold' : 'text-slate-300'} leading-snug break-keep">
-                  ${inv.tier1Special ? '✔' : '•'} <b>15Lv(코어)</b>: ${w.tier1Name}
+                  ${inv.tier1Special ? '✔' : '•'} <b>+15 (1차개조)</b>: ${w.tier1Name}
                 </div>
                 <div class="${inv.awakened ? 'text-cyan-300 font-bold' : 'text-slate-300'} leading-snug break-keep">
-                  ${inv.awakened ? '✔' : '•'} <b>30Lv(코어)</b>: ${w.awakenName} ${inv.transcended ? '(⚡45Lv 초월x1.55)' : ''}
+                  ${inv.awakened ? '✔' : '•'} <b>+30 (2차각성)</b>: ${w.awakenName}
+                </div>
+                <div class="${inv.transcended ? 'text-amber-300 font-bold' : 'text-slate-400'} leading-snug break-keep">
+                  ${inv.transcended ? '✔' : '•'} <b>+45 (3차초월)</b>: 초월 오버클럭 (최종 화력 x1.55 · 공속+25%)
                 </div>
                 ${pureBanner}
               </div>
@@ -977,7 +989,7 @@
             const statBoxClass = canClickStat
               ? "border-amber-400/70 bg-slate-900 hover:bg-amber-950/40 text-slate-100 cursor-pointer"
               : "border-slate-700 bg-slate-800/80 text-slate-500 cursor-not-allowed opacity-65";
-            const lvText = isSecLocked ? `🔒${st.reqSector + 1}섹터` : `Lv.${curLv}/10`;
+            const lvText = isSecLocked ? `🔒${st.reqSector + 1}섹터` : `+${curLv}/10`;
             return `
               <button type="button" data-upg-w="${wIdx}" title="${st.desc}" ${!canClickStat ? "disabled" : ""}
                       class="p-1.5 rounded-xl border text-center transition ${statBoxClass} ${statHighlightClass}">
@@ -1000,7 +1012,7 @@
                 <span class="px-2 py-0.5 rounded-md text-xs font-mono-code font-bold ${
                   inv.awakened ? "bg-cyan-500 text-slate-950" :
                   inv.tier1Special ? "bg-fuchsia-500 text-slate-950" : "bg-amber-500/20 text-amber-300"
-                }">총 Lv.${inv.totalLv}/${maxTotalHere}</span>
+                }">+${inv.totalLv} (+${inv.totalLv}/+${maxTotalHere})</span>
               </div>
               ${headerRight}
             </div>

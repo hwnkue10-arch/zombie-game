@@ -202,6 +202,8 @@
       game.shockTrails = [];
       game.cystPods = [];
       game.tentacles = [];
+      game.geysers = [];
+      game.apexTentacles = [];
       game.bloodPylons = [];
       game.spawnHoles = [];
       game.worldSymbols = [];
@@ -217,7 +219,7 @@
       let gx = 0, gz = 0;
       const GRID_STEP = 124;
 
-      const missionPool = ["THERMITE", "GENERATORS", "PAYLOAD", "RADAR_UPLINK", "HIVE_NODES", "DECON_PURGE", "EXTERMINATE"];
+      const missionPool = ["THERMITE", "GENERATORS", "PAYLOAD", "RADAR_UPLINK", "HIVE_NODES", "DECON_PURGE", "EXTERMINATE", "SURVIVAL_HOLDOUT", "DEFENSE_OBJECTIVE"];
       const shapePool = ["RECT_BUNKER", "TUNNEL_LONG", "L_FACILITY", "OCTAGON_REACTOR", "CROSS_WAREHOUSE"];
 
       // [v3.5] 단일 10섹터 풀 레이드 캠페인으로 단일화 (Sector 3, 6, 9는 중간보스 특화 섹터, Sector 10은 최종보스)
@@ -250,7 +252,7 @@
         const wx = gx * GRID_STEP;
         const wz = gz * GRID_STEP;
 
-        // 중간보스 섹터는 "MID_BOSS", 최종보스는 "BOSS", 일반 섹터는 7대 순환 미션
+        // 중간보스 섹터는 "MID_BOSS", 최종보스는 "BOSS", 일반 섹터는 9대 순환 미션
         const condType = isBossRoom ? "BOSS" : (hasMidBoss ? "MID_BOSS" : missionPool[i % missionPool.length]);
         // 중반(4~6섹터) 및 후반(7~9섹터) 미션 목표 개수 확장 (3 -> 4 -> 5개)
         const stageTier = i >= 6 ? 5 : (i >= 3 ? 4 : 3);
@@ -262,6 +264,8 @@
         else if (condType === "DECON_PURGE") targetVal = Math.min(4, stageTier);
         else if (condType === "HIVE_NODES") targetVal = stageTier;
         else if (condType === "EXTERMINATE") targetVal = Math.max(2, stageTier - 1);
+        else if (condType === "SURVIVAL_HOLDOUT") targetVal = 180;
+        else if (condType === "DEFENSE_OBJECTIVE") targetVal = 150;
         else if (condType === "MID_BOSS") targetVal = 1;
 
         const envPool = ["NORMAL", "BLACKOUT", "TOXIC_FOG", "BLOOD_RAIN", "CRYO_LEAK"];
@@ -272,9 +276,11 @@
         const totalSteps = condType === "THERMITE" ? 3
           : (condType === "PAYLOAD" ? payloadSteps
           : (condType === "RADAR_UPLINK" ? 3
-          : targetVal));
+          : (condType === "SURVIVAL_HOLDOUT" || condType === "DEFENSE_OBJECTIVE" ? 1
+          : targetVal)));
 
-        const secTimer = (isBossRoom || hasMidBoss) ? 999 : Math.round(260 + i * 20);
+        // [v3.2 섹터 체류 시간 현실화] 섹터당 3.5~5분 완벽 체류 및 충분한 BP 파밍 보장 (6~9분 광폭화 타이머)
+        const secTimer = (isBossRoom || hasMidBoss) ? 999 : Math.round(360 + i * 25);
         // 외벽 스폰 구멍 추가 파공 이벤트: 섹터당 약 42% 확률로만 발생(안 터지는 섹터 존재), 타이머 50% 이하 중반부터만 발동!
         const willHaveExtraBreach = (i > 0 && !isBossRoom && !hasMidBoss && rng() < 0.42);
         const maxExtraHoles = willHaveExtraBreach ? (rng() < 0.55 ? 1 : 2) : 0;
@@ -329,6 +335,14 @@
           safeZones: [],
           bulkheadConsole: null,
           bulkheadLocked: false,
+          bulkheadOverride: false,
+          bulkheadOverrideTimer: 0,
+          bulkheadOverrideMax: 0,
+          bulkheadOverrideDone: false,
+          holdoutActive: false,
+          defenseActive: false,
+          defenseCore: null,
+          elapsedTime: 0,
           gasWaveActive: false,
           gasWaveProgress: 0,
           gasMesh: null,
@@ -492,6 +506,7 @@
       const gridHelper = new THREE.GridHelper(Math.max(rw, rd), Math.floor(Math.max(rw, rd) / 4), 0x2e3b4e, 0x192130);
       gridHelper.scale.set(rw / Math.max(rw, rd), 1, rd / Math.max(rw, rd));
       gridHelper.position.set(room.wx, 0.02, room.wz);
+      if (gridHelper.material) gridHelper.material.depthWrite = false;
       group.add(gridHelper);
 
       const wallHeight = 4.0;
@@ -549,12 +564,13 @@
           const midZ = isNS ? (startEdge + endEdge) / 2 : room.wz;
           const bridgeLen = Math.abs(endEdge - startEdge) + 1.6;
 
+          // [v3.1 바닥 Z-Fighting 제거] 방 바닥(y=-0.3)과 동일 높이 중복을 피하기 위해 미세 오프셋(-0.304) 적용
           const bridgeGroup = new THREE.Group();
           const bridgeMesh = new THREE.Mesh(
             new THREE.BoxGeometry(side.rotY === 0 ? doorWidth + 2 : bridgeLen, 0.6, side.rotY === 0 ? bridgeLen : doorWidth + 2),
             new THREE.MeshStandardMaterial({ color: 0x1e293b })
           );
-          bridgeMesh.position.set(midX, -0.3, midZ);
+          bridgeMesh.position.set(midX, -0.304, midZ);
           bridgeGroup.add(bridgeMesh);
 
           [-doorWidth / 2 - 0.8, doorWidth / 2 + 0.8].forEach(railOff => {
@@ -571,11 +587,11 @@
           bridgeGroup.visible = false;
           worldGroup.add(bridgeGroup);
 
-          // 격벽 게이트(doorMesh)는 현재 방의 외벽 개구부(wx, wz)에 정확히 밀착 배치하여 열리기 전까지 외부를 완전 차단!
+          // [v3.1 격벽 Z-Fighting 제거] 문 폭을 벽 개구부 대비 0.12m 여유를 두어 하강 시 벽면과의 지글거림 방지
           const doorX = wx;
           const doorZ = wz;
           const doorMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(side.rotY === 0 ? doorWidth : 1.8, wallHeight + 0.3, side.rotY === 0 ? 1.8 : doorWidth),
+            new THREE.BoxGeometry(side.rotY === 0 ? doorWidth - 0.12 : 1.68, wallHeight + 0.3, side.rotY === 0 ? 1.68 : doorWidth - 0.12),
             new THREE.MeshStandardMaterial({
               color: 0xd97706,
               emissive: 0x78350f,
@@ -598,7 +614,11 @@
             open: false,
             lockedPermanently: false,
             mesh: doorMesh,
-            bridgeGroup
+            bridgeGroup,
+            bridgeMidX: midX,
+            bridgeMidZ: midZ,
+            bridgeLen: bridgeLen,
+            isNS: isNS
           });
         }
       });
@@ -992,26 +1012,28 @@
       const trimMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x0369a1, emissiveIntensity: 0.5 });
 
       // 1. 비정형 방 구조물 조각 (외벽 스폰 구멍과 보급상자 동선을 전혀 막지 않도록 내측 14m 이상 이격 배치!)
+      // [v3.6 구조물 지글거림/Z-Fighting 완벽 박멸] 바닥 접촉면을 -0.1m 파묻고, 천장 상단 트림과 명확한 오프셋 적용
       if (room.shapeType === "L_FACILITY") {
         const bw = 18, bd = 18;
         const bx = room.wx + 14;
         const bz = room.wz - 14;
-        const lBlock = new THREE.Mesh(new THREE.BoxGeometry(bw, 4.0, bd), blockMat);
+        const lBlock = new THREE.Mesh(new THREE.BoxGeometry(bw, 4.2, bd), blockMat);
         lBlock.position.set(bx, 2.0, bz);
         lBlock.castShadow = true;
         group.add(lBlock);
-        const lTrim = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.3, 0.3, bd + 0.3), trimMat);
-        lTrim.position.set(bx, 3.85, bz);
+        // 천장 상단면(y=4.1)과 겹치지 않도록 테두리 프레임을 상단 0.12m 위에 띄워 지글거림 원천 제거!
+        const lTrim = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.35, 0.25, bd + 0.35), trimMat);
+        lTrim.position.set(bx, 4.22, bz);
         group.add(lTrim);
         addWallCollider(bx, bz, bw, bd);
       } else if (room.shapeType === "OCTAGON_REACTOR" && !room.hasMidBoss) {
         // 중앙에 대형 원자로 코어 기둥을 배치하여 빙빙 돌며 싸우는 원형 카이팅 구도 형성
         const reactorGroup = new THREE.Group();
         const coreCyl = new THREE.Mesh(
-          new THREE.CylinderGeometry(5.2, 5.8, 4.2, 12),
+          new THREE.CylinderGeometry(5.2, 5.8, 4.4, 12),
           new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.7, roughness: 0.3 })
         );
-        coreCyl.position.y = 2.1;
+        coreCyl.position.y = 2.1; // 밑면 y = -0.1로 바닥 속에 파묻힘
         reactorGroup.add(coreCyl);
         const glowRing = new THREE.Mesh(
           new THREE.TorusGeometry(5.6, 0.28, 8, 24),
@@ -1029,8 +1051,8 @@
           const cw = 11, cd = 11;
           const cx = room.wx + c[0] * 18;
           const cz = room.wz + c[1] * 18;
-          const cMesh = new THREE.Mesh(new THREE.BoxGeometry(cw, 3.8, cd), blockMat);
-          cMesh.position.set(cx, 1.9, cz);
+          const cMesh = new THREE.Mesh(new THREE.BoxGeometry(cw, 4.0, cd), blockMat);
+          cMesh.position.set(cx, 1.9, cz); // 밑면 y = -0.1로 바닥 속에 파묻힘
           group.add(cMesh);
           addWallCollider(cx, cz, cw, cd);
         });
@@ -1057,10 +1079,10 @@
           const cColors = [0x991b1b, 0x1e3a8a, 0x065f46, 0xb45309];
           const contGroup = new THREE.Group();
           const box = new THREE.Mesh(
-            new THREE.BoxGeometry(7.2, 2.8, 3.2),
+            new THREE.BoxGeometry(7.2, 3.0, 3.2),
             new THREE.MeshStandardMaterial({ color: cColors[(room.index + idx) % cColors.length], roughness: 0.6, metalness: 0.35 })
           );
-          box.position.y = 1.4;
+          box.position.y = 1.4; // 밑면 y = -0.1로 파묻힘
           box.castShadow = true;
           contGroup.add(box);
           const stripe = new THREE.Mesh(
@@ -1075,10 +1097,10 @@
         } else if (sp.kind === "SERVER_RACK") {
           const rackGroup = new THREE.Group();
           const cab = new THREE.Mesh(
-            new THREE.BoxGeometry(4.2, 3.1, 1.8),
+            new THREE.BoxGeometry(4.2, 3.3, 1.8),
             new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.75, roughness: 0.3 })
           );
-          cab.position.y = 1.55;
+          cab.position.y = 1.55; // 밑면 y = -0.1로 파묻힘
           rackGroup.add(cab);
           [-1.2, 0, 1.2].forEach(lx => {
             const led = new THREE.Mesh(
@@ -1094,10 +1116,10 @@
         } else if (sp.kind === "FORKLIFT") {
           const fkGroup = new THREE.Group();
           const body = new THREE.Mesh(
-            new THREE.BoxGeometry(2.8, 1.6, 2.0),
+            new THREE.BoxGeometry(2.8, 1.8, 2.0),
             new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.5 })
           );
-          body.position.y = 0.8;
+          body.position.y = 0.8; // 밑면 y = -0.1로 파묻힘
           fkGroup.add(body);
           const cage = new THREE.Mesh(
             new THREE.BoxGeometry(2.0, 1.2, 1.8),
@@ -1110,6 +1132,159 @@
           addWallCollider(px, pz, 2.8, 2.0);
         }
       });
+
+      // [v3.2 동적 해저드 1] 바닥 주기적 분출구 (Geysers: 산성/동결 기둥 분출)
+      // 3섹터 이후 일반 섹터에 2~3개 배치 (경고 링 예고 후 솟구치는 유독 가스)
+      if (room.index >= 2 && !room.isBossRoom) {
+        const geyserCount = room.index >= 5 ? 3 : 2;
+        const gType = (room.index % 2 === 0) ? "acid" : "cryo";
+        const isAcid = (gType === "acid");
+        for (let gi = 0; gi < geyserCount; gi++) {
+          const ang = (gi / geyserCount) * Math.PI * 2 + (rng() * 0.5);
+          const dist = 14.0 + rng() * 12.0;
+          const gx = room.wx + Math.cos(ang) * dist;
+          const gz = room.wz + Math.sin(ang) * dist;
+
+          // 철제 배수 그릴 메쉬
+          const grillMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(1.8, 0.06, 1.8),
+            new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 })
+          );
+          grillMesh.position.set(gx, 0.03, gz);
+          entitiesGroup.add(grillMesh);
+
+          // 바닥 원형 경고 링
+          const warnMesh = new THREE.Mesh(
+            new THREE.RingGeometry(0.3, 1.8, 24),
+            new THREE.MeshBasicMaterial({
+              color: isAcid ? 0x84cc16 : 0x38bdf8,
+              side: THREE.DoubleSide,
+              transparent: true,
+              opacity: 0.0
+            })
+          );
+          warnMesh.rotation.x = -Math.PI / 2;
+          warnMesh.position.set(gx, 0.05, gz);
+          effectsGroup.add(warnMesh);
+
+          // 솟구치는 가스/냉기 기둥
+          const columnMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.2, 1.6, 4.2, 14),
+            new THREE.MeshStandardMaterial({
+              color: isAcid ? 0xa3e635 : 0x7dd3fc,
+              emissive: isAcid ? 0x65a30d : 0x0284c7,
+              emissiveIntensity: 0.7,
+              transparent: true,
+              opacity: 0.0
+            })
+          );
+          columnMesh.position.set(gx, 2.1, gz);
+          effectsGroup.add(columnMesh);
+
+          const geyserObj = {
+            roomIndex: room.index,
+            x: gx, z: gz,
+            type: gType,
+            cycleTimer: rng() * 8.0,
+            state: "idle",
+            grillMesh,
+            warnMesh,
+            columnMesh
+          };
+          if (!game.geysers) game.geysers = [];
+          game.geysers.push(geyserObj);
+        }
+      }
+
+      // [v3.2 동적 해저드 2] 중앙 거대 신경 촉수 (Apex Tentacle: 관통 브레스 방사 & 키틴질 장갑 파훼)
+      // 4섹터 이상 또는 군락 미션 방에서 방 중앙 부근에 출현 (테르밋 폭발 또는 5분 체류 시 과열 파훼)
+      if (room.index >= 3 && !room.isBossRoom && (room.index % 2 === 1 || room.condType === "HIVE_NODES")) {
+        const tentacleGroup = new THREE.Group();
+        const tx = room.wx + (rng() - 0.5) * 8.0;
+        const tz = room.wz + (rng() - 0.5) * 8.0;
+
+        // 거대 신경 촉수 기둥 메쉬
+        const bodyMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.7, 1.4, 4.6, 12),
+          new THREE.MeshStandardMaterial({ color: 0x2e1065, emissive: 0x3b0764, emissiveIntensity: 0.5, roughness: 0.6 })
+        );
+        bodyMesh.position.y = 2.3;
+        tentacleGroup.add(bodyMesh);
+
+        // 팁 바이오 코어
+        const coreMesh = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.95, 0),
+          new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xdc2626, emissiveIntensity: 0.9 })
+        );
+        coreMesh.position.y = 4.8;
+        tentacleGroup.add(coreMesh);
+
+        // 바닥 키틴질 방어 링
+        const baseRing = new THREE.Mesh(
+          new THREE.TorusGeometry(1.8, 0.25, 8, 20),
+          new THREE.MeshBasicMaterial({ color: 0x4c1d95 })
+        );
+        baseRing.rotation.x = Math.PI / 2;
+        baseRing.position.y = 0.2;
+        tentacleGroup.add(baseRing);
+
+        tentacleGroup.position.set(tx, 0, tz);
+        entitiesGroup.add(tentacleGroup);
+        addWallCollider(tx, tz, 2.8, 2.8);
+
+        // 일직선 붉은 레이저 경고선 (폭 2.4m, 길이 28m)
+        const warnPlane = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.4, 28),
+          new THREE.MeshBasicMaterial({
+            color: 0xef4444,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.0
+          })
+        );
+        warnPlane.rotation.x = -Math.PI / 2;
+        warnPlane.position.set(tx, 0.06, tz);
+        effectsGroup.add(warnPlane);
+
+        // 관통 브레스 방사 빔 메쉬
+        const breathMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(2.6, 2.2, 28),
+          new THREE.MeshStandardMaterial({
+            color: 0xf43f5e,
+            emissive: 0xe11d48,
+            emissiveIntensity: 0.85,
+            transparent: true,
+            opacity: 0.0
+          })
+        );
+        breathMesh.position.set(tx, 1.1, tz);
+        effectsGroup.add(breathMesh);
+
+        const tentacleObj = {
+          roomIndex: room.index,
+          x: tx, z: tz,
+          hp: 3500 + room.index * 400,
+          maxHp: 3500 + room.index * 400,
+          invulnerable: true, // 기본 키틴질 장갑 100% 면역!
+          overheated: false,
+          attackTimer: 4.0 + rng() * 4.0,
+          state: "idle", // "idle" (14s) -> "warning" (1.5s) -> "firing" (0.6s)
+          targetAngle: 0,
+          group: tentacleGroup,
+          coreMesh,
+          bodyMesh,
+          warnPlane,
+          breathMesh
+        };
+        tentacleObj.sym = registerWorldSymbol(
+          tx, 5.2, tz,
+          "🦑생체신경촉수[키틴질면역]",
+          "bg-purple-950/90 border-purple-500/60 text-purple-200",
+          tentacleObj, room.index
+        );
+        if (!game.apexTentacles) game.apexTentacles = [];
+        game.apexTentacles.push(tentacleObj);
+      }
     }
 
     // [v3.5] 10섹터 2단계: 중앙 보스 코어를 감싸는 생체 방어 파일런 3기 기립 (스쿼드 인원수 연동)
@@ -1193,7 +1368,11 @@
         color: isFog ? 0x84cc16 : 0x38bdf8,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.85
+        opacity: 0.85,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1
       });
       const ring = new THREE.Mesh(ringGeo, ringMat);
       ring.rotation.x = -Math.PI / 2;
@@ -1205,7 +1384,11 @@
         color: isFog ? 0x65a30d : 0x0284c7,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.14
+        opacity: 0.14,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1
       });
       const fill = new THREE.Mesh(fillGeo, fillMat);
       fill.rotation.x = -Math.PI / 2;
@@ -1254,10 +1437,10 @@
         let holo = null, coreCone = null, tank = null, cap = null;
         if (isTable) {
           const desk = new THREE.Mesh(
-            new THREE.BoxGeometry(3.2, 1.2, 2.2),
+            new THREE.BoxGeometry(3.2, 1.4, 2.2),
             new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4 })
           );
-          desk.position.y = 0.6;
+          desk.position.y = 0.6; // 밑면 y = -0.1로 바닥 속에 파묻혀 지글거림 방지
           mGroup.add(desk);
           holo = new THREE.Mesh(
             new THREE.TorusGeometry(1.1, 0.14, 8, 24),
@@ -1274,10 +1457,10 @@
           mGroup.add(coreCone);
         } else {
           tank = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.8, 0.8, 2.1, 14),
+            new THREE.CylinderGeometry(0.8, 0.8, 2.3, 14),
             new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xb45309, emissiveIntensity: 0.7 })
           );
-          tank.position.y = 1.05;
+          tank.position.y = 1.05; // 밑면 y = -0.1로 파묻힘
           mGroup.add(tank);
           cap = new THREE.Mesh(
             new THREE.TorusGeometry(0.95, 0.14, 8, 18),
@@ -1313,10 +1496,10 @@
       } else if (room.condType === "GENERATORS") {
         const gGroup = new THREE.Group();
         const base = new THREE.Mesh(
-          new THREE.BoxGeometry(2.4, 1.4, 2.4),
+          new THREE.BoxGeometry(2.4, 1.6, 2.4),
           new THREE.MeshStandardMaterial({ color: 0x1e293b })
         );
-        base.position.y = 0.7;
+        base.position.y = 0.7; // 밑면 y = -0.1로 파묻힘
         gGroup.add(base);
         const turbine = new THREE.Mesh(
           new THREE.CylinderGeometry(0.95, 1.1, 2.5, 12),
@@ -1359,10 +1542,10 @@
         const bGroup = new THREE.Group();
         if (stepOrder === 1) {
           const ped = new THREE.Mesh(
-            new THREE.CylinderGeometry(1.1, 1.3, 0.6, 8),
+            new THREE.CylinderGeometry(1.1, 1.3, 0.8, 8),
             new THREE.MeshStandardMaterial({ color: 0x1e293b })
           );
-          ped.position.y = 0.3;
+          ped.position.y = 0.3; // 밑면 y = -0.1로 바닥 속에 파묻힘
           bGroup.add(ped);
           const crystal = new THREE.Mesh(
             new THREE.OctahedronGeometry(1.05, 0),
@@ -1392,10 +1575,10 @@
         } else if (stepOrder === 2 && room.reqWaves >= 3) {
           // 중후반(4섹터+) 2단계: 🔐보안중계기 암호 해독
           const relay = new THREE.Mesh(
-            new THREE.BoxGeometry(1.8, 2.4, 1.8),
+            new THREE.BoxGeometry(1.8, 2.6, 1.8),
             new THREE.MeshStandardMaterial({ color: 0x4f46e5, emissive: 0x312e81, emissiveIntensity: 0.85 })
           );
-          relay.position.y = 1.2;
+          relay.position.y = 1.2; // 밑면 y = -0.1로 파묻힘
           bGroup.add(relay);
           bGroup.position.set(pos.x, 0, pos.z);
           entitiesGroup.add(bGroup);
@@ -1419,10 +1602,10 @@
         } else {
           // 최종 단계: 섹터 내 무작위 위치에 업로드 송신 단말기가 활성화되어 그곳까지 운반!
           const tower = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.7, 1.2, 2.8, 10),
+            new THREE.CylinderGeometry(0.7, 1.2, 3.0, 10),
             new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x0369a1, emissiveIntensity: 0.8 })
           );
-          tower.position.y = 1.4;
+          tower.position.y = 1.4; // 밑면 y = -0.1로 파묻힘
           bGroup.add(tower);
           const dish = new THREE.Mesh(
             new THREE.TorusGeometry(1.3, 0.16, 8, 24),
@@ -1457,16 +1640,16 @@
         if (stepOrder === 1) {
           // 1단계: 📡 통신 배전반 (Main Breaker Console)
           const base = new THREE.Mesh(
-            new THREE.BoxGeometry(2.6, 2.2, 1.4),
+            new THREE.BoxGeometry(2.6, 2.4, 1.4),
             new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.65, roughness: 0.35 })
           );
-          base.position.y = 1.1;
+          base.position.y = 1.1; // 밑면 y = -0.1로 파묻힘
           rGroup.add(base);
           const screen = new THREE.Mesh(
             new THREE.PlaneGeometry(1.6, 0.9),
             new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
           );
-          screen.position.set(0, 1.45, 0.71);
+          screen.position.set(0, 1.45, 0.72);
           rGroup.add(screen);
           const coilRing = new THREE.Mesh(
             new THREE.TorusGeometry(0.7, 0.08, 8, 20),
@@ -1498,10 +1681,10 @@
         } else if (stepOrder === 2) {
           // 2단계: 🛰️ 대형 파라볼라 안테나 (Parabolic Radar Dish)
           const mount = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.5, 1.4, 1.6, 8),
+            new THREE.CylinderGeometry(0.5, 1.4, 1.8, 8),
             new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 })
           );
-          mount.position.y = 0.8;
+          mount.position.y = 0.8; // 밑면 y = -0.1로 파묻힘
           rGroup.add(mount);
           const dish = new THREE.Mesh(
             new THREE.CylinderGeometry(2.2, 0.4, 0.6, 18),
@@ -1658,6 +1841,98 @@
           "bg-rose-950/90 border-rose-400 text-rose-200",
           podObj, room.index
         );
+      } else if (room.condType === "SURVIVAL_HOLDOUT") {
+        // [신규 미션 1] SURVIVAL_HOLDOUT: 방호 보안 콘솔 단말기 (180초 결사 생존)
+        const sGroup = new THREE.Group();
+        const consoleBase = new THREE.Mesh(
+          new THREE.BoxGeometry(2.8, 1.8, 1.8),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.7, roughness: 0.3 })
+        );
+        consoleBase.position.y = 0.9;
+        sGroup.add(consoleBase);
+        const screen = new THREE.Mesh(
+          new THREE.PlaneGeometry(1.8, 1.0),
+          new THREE.MeshBasicMaterial({ color: 0xef4444 })
+        );
+        screen.position.set(0, 1.35, 0.92);
+        sGroup.add(screen);
+        const alarmLight = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.2, 0.25, 0.45, 12),
+          new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xb91c1c, emissiveIntensity: 1.0 })
+        );
+        alarmLight.position.set(0, 1.95, 0);
+        sGroup.add(alarmLight);
+        sGroup.position.set(pos.x, 0, pos.z);
+        entitiesGroup.add(sGroup);
+        const nodeObj = {
+          roomIndex: room.index,
+          kind: "SURVIVAL_CONSOLE",
+          stepOrder: 1,
+          x: pos.x, z: pos.z,
+          done: false,
+          holdTime: 0,
+          mesh: sGroup,
+          screen,
+          alarmLight,
+          beaconMesh
+        };
+        game.missionNodes.push(nodeObj);
+        nodeObj.sym = registerWorldSymbol(
+          pos.x, 3.2, pos.z,
+          "⏱️방호보안콘솔[F가동]",
+          "bg-rose-950/90 border-rose-400 text-rose-200",
+          nodeObj, room.index
+        );
+      } else if (room.condType === "DEFENSE_OBJECTIVE") {
+        // [신규 미션 2] DEFENSE_OBJECTIVE: 메인 코어 반응로 (150초 수호, 4,500 HP)
+        const dGroup = new THREE.Group();
+        const coreCyl = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.6, 2.0, 3.6, 16),
+          new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.2 })
+        );
+        coreCyl.position.y = 1.8;
+        dGroup.add(coreCyl);
+        const plasmaCore = new THREE.Mesh(
+          new THREE.SphereGeometry(1.2, 16, 16),
+          new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.9 })
+        );
+        plasmaCore.position.y = 2.0;
+        dGroup.add(plasmaCore);
+        const shieldDome = new THREE.Mesh(
+          new THREE.SphereGeometry(3.2, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+          new THREE.MeshBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+        );
+        shieldDome.position.y = 0.05;
+        dGroup.add(shieldDome);
+        dGroup.position.set(pos.x, 0, pos.z);
+        entitiesGroup.add(dGroup);
+        const coreHp = 4500 + room.index * 500;
+        const defCoreObj = {
+          roomIndex: room.index,
+          kind: "DEFENSE_GENERATOR",
+          stepOrder: 1,
+          x: pos.x, z: pos.z,
+          hp: coreHp,
+          maxHp: coreHp,
+          shield: 500,
+          maxShield: 500,
+          isRebooting: false,
+          rebootTimer: 0,
+          done: false,
+          holdTime: 0,
+          mesh: dGroup,
+          shieldDome,
+          plasmaCore,
+          beaconMesh
+        };
+        room.defenseCore = defCoreObj;
+        game.missionNodes.push(defCoreObj);
+        defCoreObj.sym = registerWorldSymbol(
+          pos.x, 3.8, pos.z,
+          "⚡코어반응로[F가동]",
+          "bg-cyan-950/90 border-cyan-400 text-cyan-200",
+          defCoreObj, room.index
+        );
       }
     }
 
@@ -1715,18 +1990,18 @@
       });
 
       const backWall = new THREE.Mesh(
-        new THREE.BoxGeometry(6.6, 4.0, 0.55),
+        new THREE.BoxGeometry(6.6, 4.2, 0.55),
         new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.6, roughness: 0.4 })
       );
-      backWall.position.set(0, 2.0, -0.55);
+      backWall.position.set(0, 2.0, -0.55); // 밑면 y = -0.1로 파묻힘
       vGroup.add(backWall);
 
-      const leftPillar = new THREE.Mesh(new THREE.BoxGeometry(0.75, 4.0, 1.85), frameMat);
-      leftPillar.position.set(-3.0, 2.0, 0);
-      const rightPillar = new THREE.Mesh(new THREE.BoxGeometry(0.75, 4.0, 1.85), frameMat);
-      rightPillar.position.set(3.0, 2.0, 0);
+      const leftPillar = new THREE.Mesh(new THREE.BoxGeometry(0.75, 4.2, 1.85), frameMat);
+      leftPillar.position.set(-3.0, 2.0, 0); // 밑면 y = -0.1로 파묻힘
+      const rightPillar = new THREE.Mesh(new THREE.BoxGeometry(0.75, 4.2, 1.85), frameMat);
+      rightPillar.position.set(3.0, 2.0, 0); // 밑면 y = -0.1로 파묻힘
       const topHeader = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.75, 2.0), frameMat);
-      topHeader.position.set(0, 3.65, 0.05);
+      topHeader.position.set(0, 3.75, 0.05);
       vGroup.add(leftPillar, rightPillar, topHeader);
 
       const neonSign = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.28, 2.08), goldTrimMat);
@@ -1735,10 +2010,10 @@
 
       // 2. 벽면 내부에 매립된 무기 거치대 & 전술 정비 콘솔
       const bench = new THREE.Mesh(
-        new THREE.BoxGeometry(5.0, 1.05, 1.35),
+        new THREE.BoxGeometry(5.0, 1.25, 1.35),
         new THREE.MeshStandardMaterial({ color: 0x312e81, emissive: 0x1e1b4b, emissiveIntensity: 0.65, metalness: 0.5 })
       );
-      bench.position.set(0, 0.55, 0.2);
+      bench.position.set(0, 0.55, 0.2); // 밑면 y = -0.075로 파묻힘
       vGroup.add(bench);
 
       [-1.7, 0, 1.7].forEach(rx => {
@@ -1846,16 +2121,16 @@
     function spawnDeconStation(x, z, roomIndex) {
       const dGroup = new THREE.Group();
       const pillar = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.4, 1.5, 2.2, 16),
+        new THREE.CylinderGeometry(1.4, 1.5, 2.4, 16),
         new THREE.MeshStandardMaterial({ color: 0x0f766e, emissive: 0x115e59, emissiveIntensity: 0.5 })
       );
-      pillar.position.y = 1.1;
+      pillar.position.y = 1.1; // 밑면 y = -0.1로 바닥 속에 파묻힘
       dGroup.add(pillar);
 
       const crossMat = new THREE.MeshBasicMaterial({ color: 0x4ade80 });
       const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.4, 0.42), crossMat);
       crossV.position.y = 2.95;
-      const crossH = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.42, 0.42), crossMat);
+      const crossH = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.42, 0.46), crossMat);
       crossH.position.y = 2.95;
       dGroup.add(crossV, crossH);
 

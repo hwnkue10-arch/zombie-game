@@ -20,6 +20,21 @@
       const shotSeed = (netShotSeed !== undefined) ? netShotSeed : Math.floor(Math.random() * 2147483600);
       const shotRng = createRNG(shotSeed);
 
+      // [v3.1 버그 해결] 탄약 검사를 REMOTE_FIRE 패킷 송신 전으로 최우선 배치하여, 0발 상태에서 패킷이 난사되는 화염방사 버그 원천 차단!
+      if (!wDef.infinite && !netShotSeed) {
+        if ((inv.ammo || 0) <= 0) {
+          if (player.id === mySlotIndex) {
+            player.fireCooldown = Math.max(player.fireCooldown || 0, 0.28);
+            SoundFX.play("deny");
+          }
+          return;
+        }
+        const freeShotChance = Math.min(0.65, inv.stats.knock * 0.065);
+        if (shotRng() >= freeShotChance) {
+          inv.ammo = Math.max(0, inv.ammo - 1);
+        }
+      }
+
       if (!netShotSeed && player.id === mySlotIndex && wsClient && wsClient.readyState === WebSocket.OPEN) {
         try {
           wsClient.send(JSON.stringify({
@@ -38,17 +53,6 @@
             transcended: inv.transcended
           }));
         } catch (e) {}
-      }
-
-      // 모든 총기·바리케이드·드럼통은 각자의 개별 탄약(inv.ammo)을 소모! (탄약효율 스탯당 6.5%, 최대 65% 무소모)
-      if (!wDef.infinite && !netShotSeed) {
-        if ((inv.ammo || 0) <= 0) {
-          return;
-        }
-        const freeShotChance = Math.min(0.65, inv.stats.knock * 0.065);
-        if (shotRng() >= freeShotChance) {
-          inv.ammo = Math.max(0, inv.ammo - 1);
-        }
       }
 
       const isDownedPistol = !!player.downed;
@@ -120,11 +124,10 @@
       let calculatedDmg = Math.round(wDef.damage * atkMult);
       let effectivePierce = pierceCount + (player.specialization === "STRIKER" ? 1 : 0);
 
-      // [척후병 암살 관통샷] 은신 중 첫 발사: 2배 피해(보스 제외) 및 무한 관통 탄환 판정!
+      // [척후병 암살 관통샷] 은신 중 첫 발사: 100% 확정 치명타(보스 포함 2.5배) & 방어구 무시 무한 관통!
       let isScoutAssassination = false;
       if (player.cloakActive) {
         isScoutAssassination = true;
-        calculatedDmg = Math.round(calculatedDmg * 2.0);
         effectivePierce = 999;
         player.cloakActive = false;
         player.specActiveTimer = 0;
@@ -136,7 +139,7 @@
       }
 
       if (wIdx === 5) {
-        fireRailgunBeam(player, nx, nz, calculatedDmg, stunDur, knockVal, areaMult, effAwakened, effTier1);
+        fireRailgunBeam(player, nx, nz, calculatedDmg, stunDur, knockVal, areaMult, effAwakened, effTier1, isScoutAssassination);
         return;
       }
 
@@ -194,7 +197,16 @@
           vx, vz,
           damage: calculatedDmg,
           isScoutAssassination,
-          weakMult: isDownedPistol ? 1.0 : ((wDef.weakMult || 1.2) + (pureBonus.weakBonus || 0) + (wIdx === 0 && effTier1 ? 0.6 : 0)),
+          weakMult: isDownedPistol ? 1.0 : (
+            isScoutAssassination ? 2.5 : ((wDef.weakMult || 1.2) + (pureBonus.weakBonus || 0) + (wIdx === 0 && effTier1 ? 0.6 : 0))
+          ),
+          weakCritChance: isDownedPistol ? 0.05 : (
+            isScoutAssassination ? 1.0 : (
+              (wDef.weakCritChance || 0) +
+              (wIdx === 0 && effTier1 ? 0.15 : 0) +
+              (player.specialization === "STRIKER" ? (0.10 + (player.overclockActive ? 0.15 : 0)) : 0)
+            )
+          ),
           stun: stunDur,
           knockback: knockVal,
           explosiveRadius: (wDef.explosiveRadius || 0) * areaMult * (wIdx === 4 && effTier1 ? 1.25 : 1.0),
@@ -207,7 +219,7 @@
       }
     }
 
-    function fireRailgunBeam(player, nx, nz, damage, stunDur, knockVal, areaMult, awakened, tier1Special) {
+    function fireRailgunBeam(player, nx, nz, damage, stunDur, knockVal, areaMult, awakened, tier1Special, isScoutAssassination) {
       const maxBeamLen = 46;
       let beamLen = maxBeamLen;
       // [v3.2 버그 수정] 레일건 빔이 콘크리트 벽과 닫힌 격벽은 통과하지 않고 벽까지만 뻗도록 레이캐스트 거리 제한!
@@ -232,32 +244,8 @@
       effectsGroup.add(beamMesh);
       game.particles.push({ mesh: beamMesh, life: 0.28, maxLife: 0.28 });
 
-      // 15Lv 1차 특수(1.5초 단기 전류장) / 30Lv 최종각성(3.5초 고출력 전류장 + 3D 시각 이펙트)
-      if (awakened || tier1Special) {
-        const trailLife = awakened ? 3.5 : 1.5;
-        const trailDmgRatio = awakened ? 0.32 : 0.16;
-        const tRadius = 2.2 * areaMult * widthBoost;
-        for (let s = 4; s <= beamLen; s += 6) {
-          const tx = player.x + nx * s;
-          const tz = player.z + nz * s;
-          const ringM = new THREE.Mesh(
-            new THREE.RingGeometry(tRadius * 0.35, tRadius, 16),
-            new THREE.MeshBasicMaterial({ color: awakened ? 0x22d3ee : 0xe879f9, side: THREE.DoubleSide, transparent: true, opacity: 0.55 })
-          );
-          ringM.rotation.x = -Math.PI / 2;
-          ringM.position.set(tx, 0.08, tz);
-          effectsGroup.add(ringM);
-          game.shockTrails.push({
-            x: tx,
-            z: tz,
-            radius: tRadius,
-            dmg: Math.round(damage * trailDmgRatio),
-            life: trailLife,
-            mesh: ringM
-          });
-        }
-      }
-
+      // [v3.1 레일건 리빌드] 샷건 드래곤브레스와 겹치던 바닥 잔류 장판 제거!
+      // 대신 순간 충격파 횡방향 넉백 압축파(15Lv) & 관통 적 전원 6초 장갑 파쇄(+35% 피해 증폭)(30Lv)로 차별화
       const beamRadius = 1.35 * areaMult * widthBoost;
       for (let i = game.zombies.length - 1; i >= 0; i--) {
         const zmb = game.zombies[i];
@@ -266,8 +254,36 @@
         const proj = px * nx + pz * nz;
         if (proj > 0 && proj < beamLen) {
           const perpDist = Math.hypot(px - proj * nx, pz - proj * nz);
-          if (perpDist <= zmb.radius + beamRadius) {
-            damageZombie(i, Math.round(damage * (zmb.spec.isMidBoss ? (awakened ? 2.2 : 1.8) : 1.0)), nx * knockVal, nz * knockVal, stunDur, 5);
+          const hitThresh = zmb.radius + beamRadius + (tier1Special ? 1.6 : 0);
+          if (perpDist <= hitThresh) {
+            // 15Lv 1차 특수: 궤적 좌우로 강하게 날려버리는 횡방향 공탄성 충격파 넉백
+            let sideKnockX = nx * knockVal;
+            let sideKnockZ = nz * knockVal;
+            if (tier1Special) {
+              const cross = px * nz - pz * nx;
+              const sign = cross >= 0 ? 1 : -1;
+              sideKnockX += -nz * sign * (knockVal * 1.8);
+              sideKnockZ += nx * sign * (knockVal * 1.8);
+            }
+
+            // 30Lv 2차 각성: 피격된 모든 적에게 6초간 장갑 파쇄(+35% 모든 무기 피해 증폭) 부여
+            if (awakened) {
+              zmb.armorShredTimer = 6.0;
+              zmb.armorShredMult = 1.35;
+              spawnBloodParticles(zmb.x, 1.8, zmb.z, 0x22d3ee, 5);
+            }
+
+            // [v3.4 레일건 치명타 판정] 기본 0 + 돌격수(0.10/0.25) + 척후병 은신 첫발(1.0 확정)
+            const railCritChance = isScoutAssassination ? 1.0 : (
+              (player.specialization === "STRIKER" ? (0.10 + (player.overclockActive ? 0.15 : 0)) : 0)
+            );
+            const isCrit = Math.random() < railCritChance;
+            const critMult = isCrit ? (isScoutAssassination ? 2.5 : 1.6) : 1.0;
+            if (isCrit) {
+              spawnBloodParticles(zmb.x, 1.4, zmb.z, 0xfacc15, 6);
+            }
+
+            damageZombie(i, Math.round(damage * (zmb.spec.isMidBoss ? 1.4 : 1.0) * critMult), sideKnockX, sideKnockZ, stunDur + (tier1Special ? 0.6 : 0), 5);
           }
         }
       }
@@ -282,7 +298,7 @@
         const proj = px * nx + pz * nz;
         if (proj > 0 && proj < beamLen) {
           const perpDist = Math.hypot(px - proj * nx, pz - proj * nz);
-          if (perpDist <= 2.4) pod.hp -= damage * 1.4;
+          if (perpDist <= 2.4) pod.hp -= Math.min(damage * 1.4, Math.round(pod.maxHp * 0.15));
         }
       }
 
@@ -293,7 +309,7 @@
         const proj = px * nx + pz * nz;
         if (proj > 0 && proj < beamLen) {
           const perpDist = Math.hypot(px - proj * nx, pz - proj * nz);
-          if (perpDist <= 2.4) pyl.hp -= damage * 1.5;
+          if (perpDist <= 2.4) pyl.hp -= Math.min(damage * 1.5, Math.round(pyl.maxHp * 0.15));
         }
       }
 
@@ -304,7 +320,17 @@
         if (proj > 0 && proj < beamLen) {
           const perpDist = Math.hypot(px - proj * nx, pz - proj * nz);
           if (perpDist <= game.boss.radius + beamRadius) {
-            damageBoss(Math.round(damage * (awakened ? 2.2 : 1.8)));
+            if (awakened) {
+              game.boss.armorShredTimer = 6.0;
+              game.boss.armorShredMult = 1.35;
+              spawnBloodParticles(game.boss.x, 2.8, game.boss.z, 0x22d3ee, 8);
+            }
+            const isBossCrit = Math.random() < railCritChance;
+            const critMult = isBossCrit ? (isScoutAssassination ? 2.5 : 1.6) : 1.0;
+            if (isBossCrit) {
+              spawnBloodParticles(game.boss.x, 2.8, game.boss.z, 0xfacc15, 8);
+            }
+            damageBoss(Math.round(damage * 1.5 * critMult));
           }
         }
       }
@@ -640,9 +666,9 @@
           const groggyCapRatio = activeSquadCount >= 4 ? 0.026 : (activeSquadCount >= 2 ? 0.038 : 0.055);
           finalDmg = Math.min(Math.round(finalDmg * 1.75), Math.round(zmb.maxHp * groggyCapRatio));
         } else {
-          // [v3.5] 평시 중장갑 감쇄(48% 차감) + 4인 기준 타격당 1.2% (1인 2.6%) 동적 캡 적용으로 순삭 방지
-          const hitCapRatio = activeSquadCount >= 4 ? 0.012 : (activeSquadCount >= 2 ? 0.018 : 0.026);
-          finalDmg = Math.min(Math.round(finalDmg * 0.52), Math.round(zmb.maxHp * hitCapRatio));
+          // [v3.1 중간보스 중장갑 밸런싱] 샷건 다단히트 등에 의한 5초컷 방지: 기본 52% 피해 감쇄 + 타격당 동적 캡 강화
+          const hitCapRatio = activeSquadCount >= 4 ? 0.008 : (activeSquadCount >= 2 ? 0.012 : 0.018);
+          finalDmg = Math.min(Math.round(finalDmg * 0.48), Math.round(zmb.maxHp * hitCapRatio));
         }
       }
 
@@ -696,7 +722,8 @@
 
           const activeSquadCount = (game.players || []).filter(p => p.role !== "EMPTY").length || 1;
           const squadNodeScale = 1.0 + Math.max(0, activeSquadCount - 1) * 0.70;
-          const nodeHp = Math.round((1800 + (zmb.roomIndex || game.currentRoomIndex || 0) * 850) * squadNodeScale);
+          // [v3.1 중간보스 증폭핵 밸런스 개선] 0.5초 순삭 방지를 위해 기본 체력 상향 (5500 + 2600*섹터)
+          const nodeHp = Math.round((5500 + (zmb.roomIndex || game.currentRoomIndex || 0) * 2600) * squadNodeScale);
           const nodePod = {
             x: nx, z: nz,
             hp: nodeHp,
@@ -718,13 +745,16 @@
         });
       }
 
-      if (stunDur && stunDur > 0 && !zmb.mbShieldActive) {
+      // [v3.1 중간보스 위엄 확립] 중간보스는 일반 사격에 의한 기절과 넉백에 완전 면역! (오직 [V] 패링 성공 시에만 4.2초 대그로기 허용)
+      if (stunDur && stunDur > 0 && !zmb.mbShieldActive && !zmb.spec.isMidBoss) {
         const effStun = stunDur * Math.max(0.25, 1 - resist);
-        zmb.stunTimer = Math.max(zmb.stunTimer, zmb.spec.isMidBoss ? effStun * 0.35 : effStun);
+        zmb.stunTimer = Math.max(zmb.stunTimer, effStun);
       }
 
-      const kScale = (zmb.spec.isMidBoss ? 0.03 : 0.16) * Math.max(0.3, 1 - resist);
-      moveEntityWithCollision(zmb, (knockX || 0) * kScale, (knockZ || 0) * kScale, zmb.radius);
+      if (!zmb.spec.isMidBoss) {
+        const kScale = 0.16 * Math.max(0.3, 1 - resist);
+        moveEntityWithCollision(zmb, (knockX || 0) * kScale, (knockZ || 0) * kScale, zmb.radius);
+      }
       spawnBloodParticles(zmb.x, 1.1, zmb.z, 0xdc2626, 2);
 
       if (zmb.hp <= 0) {
@@ -808,13 +838,25 @@
 
         if (isExp) {
           triggerExplosion(zx, zz, 4.0, 58, -1, false);
+          if (zmb.spec.leavesAcidPool) {
+            // [v3.4 산성 봄버] 폭발 지점에 5.5초간 부식 산성 웅덩이 잔류
+            const aMesh = new THREE.Mesh(
+              new THREE.CircleGeometry(3.2, 24),
+              new THREE.MeshBasicMaterial({ color: 0x84cc16, side: THREE.DoubleSide, transparent: true, opacity: 0.65, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1.0 })
+            );
+            aMesh.rotation.x = -Math.PI / 2;
+            aMesh.position.set(zx, 0.07, zz);
+            effectsGroup.add(aMesh);
+            game.acidPools.push({ x: zx, z: zz, radius: 3.2, life: 5.5, roomIndex: zmb.roomIndex, mesh: aMesh });
+          }
         }
 
-        // [v3.2 탄약 드랍 개편] 보유(해금) 무기 전용 탄약팩 드랍 (전체 1.0% 드랍 확립) + [v3.5] 생체 BP 박스 (0.8% 드랍)
+        // [v3.2 탄약 드랍 개편] 보유(해금) 무기 전용 탄약팩 드랍 + [바이오 탄약 재활용기 보너스 반영]
+        const recyclerBonus = (typeof getPlayerAmmoDropBonus === "function" && mePlayer) ? getPlayerAmmoDropBonus(mePlayer) : 0;
         const isElite = (zmb.typeKey === "GOLIATH" || zmb.typeKey === "DEVIL");
         const partChance = isElite ? 0.001 : 0.0;
         const bpBoxChance = 0.008; // 0.8% 드랍율 (0.5% ~ 1.0% 지정 범위)
-        const ammoDropChance = 0.010; // 1.0%
+        const ammoDropChance = 0.010 * (1 + recyclerBonus * 2.0) + (recyclerBonus > 0 ? 0.015 : 0); // 기본 1.0% ➔ 바이오 재활용기 시 대폭 증강
         const r = Math.random();
         if (r < ammoDropChance) {
           spawnPickup(zx, zz, "AMMO_PACK", getDropWeapon());
@@ -945,20 +987,62 @@
         player.bandagingTimer = 0;
       }
 
-      // [선봉장 특성화] 기본 받는 피해 -10% 경감 및 [C] 결사 요새 발동 중 추가 -40% 피해 경감 (총 -50%)
+      // [선봉장 특성화] 상시 피해 -20% 경감 및 [C] 결사 요새 발동 중 추가 -50% 피해 경감
       let inDmg = dmg;
       if (player.specialization === "JUGGERNAUT") {
-        inDmg *= 0.90;
+        inDmg *= 0.80;
         if (player.specActiveTimer > 0) {
-          inDmg *= 0.60;
+          inDmg *= 0.50;
         }
       }
 
       // [v3.2 케블라 방탄 외골격] 받는 모든 피해 영구 경감 (-6%/Lv, 최대 -30%)
       const red = getPlayerDmgReduction(player);
       const isDoT = (dmg < 3.5);
-      // [급사 버그 완벽 수정] 독가스/동상/출혈 등 dt 단위 지속 피해는 실수치 그대로 차감 (Math.max(1)로 1프레임당 1HP씩 60~144 DPS 초고속 급사하던 버그 원천 박멸!)
+      // [급사 버그 완벽 수정] 독가스/동상/출혈 등 dt 단위 지속 피해는 실수치 그대로 차감
       let rem = isDoT ? (inDmg * (1 - red)) : Math.max(1, Math.round(inDmg * (1 - red)));
+
+      // [선봉장 고유 방어 1] 잡좀비 다구리 방어용 고정 피해 감쇄 (-4 고정 차감, 최소 1)
+      if (player.specialization === "JUGGERNAUT" && !isDoT) {
+        rem = Math.max(1, rem - 4);
+      }
+
+      // [선봉장 고유 방어 2] 치명적인 강타 피해 상한 캡 (최대 HP의 25% 초과 불가, 원콤 급사 방지!)
+      if (player.specialization === "JUGGERNAUT" && !isDoT) {
+        const maxSingleHit = Math.max(30, Math.round(player.maxHp * 0.25));
+        if (rem > maxSingleHit) rem = maxSingleHit;
+      }
+
+      // [선봉장 고유 방어 3] 근접 피격 가시 반사 충격파 (2초 쿨다운, 스태미너 15 소모, 주변 2.5m 35% 반사 & 1.5m 넉백)
+      if (player.specialization === "JUGGERNAUT" && !isDoT && (player.thornsCooldown || 0) <= 0 && (player.stamina || 0) >= 15) {
+        player.thornsCooldown = 2.0;
+        player.stamina = Math.max(0, player.stamina - 15);
+        const reflectDmg = Math.max(12, Math.round(dmg * 0.35));
+        spawnMissionStageVFX(player.x, player.z, 0xf59e0b, 2.5, 12, false);
+        SoundFX.play("explosion");
+        for (let zi = game.zombies.length - 1; zi >= 0; zi--) {
+          const z = game.zombies[zi];
+          const distZ = Math.hypot(z.x - player.x, z.z - player.z);
+          if (distZ <= 2.5) {
+            const kx = ((z.x - player.x) / (distZ || 1)) * 1.5;
+            const kz = ((z.z - player.z) / (distZ || 1)) * 1.5;
+            damageZombie(zi, reflectDmg, kx, kz, 0.45, -1);
+          }
+        }
+      }
+
+      // 피격 카운터 리셋 (키네틱 에너지 쉴드 4.5초 자동 재생 지연)
+      player.timeSinceLastHit = 0;
+
+      // [키네틱 에너지 쉴드 흡수] 외골격 자동 재생 임시 쉴드로 우선 차감!
+      if ((player.shield || 0) > 0) {
+        const absorbedEnergyShield = Math.min(player.shield, rem);
+        player.shield -= absorbedEnergyShield;
+        rem -= absorbedEnergyShield;
+        if (!isDoT && absorbedEnergyShield > 0) {
+          spawnBloodParticles(player.x, 1.2, player.z, 0x38bdf8, 3);
+        }
+      }
 
       // [선봉장 결사 요새 임시 쉴드] 쉴드로 먼저 흡수!
       if (player.tempShield > 0) {
@@ -975,12 +1059,13 @@
       }
       player.hp = Math.max(0, player.hp - rem);
 
-      // [v3.2] 스팀팩 폭주 중에는 모든 상태이상 및 군중제어 완전 면역!
+      // [v3.2] 스팀팩 폭주 중에는 모든 상태이상 및 군중제어 완전 면역! 선봉장은 상태이상 지속시간 50% 단축!
       if (player.stimBuffTimer <= 0) {
-        if (causesBleed && Math.random() < 0.35) player.bleedingTimer = 8.0;
-        if (causesAcid) player.acidTimer = 6.0;
-        if (causesShock) player.shockTimer = 4.5;
-        if (causesFrost) player.frostTimer = 4.0;
+        const durMult = player.specialization === "JUGGERNAUT" ? 0.50 : 1.0;
+        if (causesBleed && Math.random() < 0.35) player.bleedingTimer = 8.0 * durMult;
+        if (causesAcid) player.acidTimer = 6.0 * durMult;
+        if (causesShock) player.shockTimer = 4.5 * durMult;
+        if (causesFrost) player.frostTimer = 4.0 * durMult;
       }
 
       if (!isDoT) {

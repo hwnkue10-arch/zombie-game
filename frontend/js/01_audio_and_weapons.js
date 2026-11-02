@@ -127,18 +127,18 @@
         ammoType: "INF", infinite: true, startAmmo: 999, maxAmmo: 999, packAmmo: 0, packCost: 0, baseCost: 38,
         reqParts: 0, unlockBpCost: 0,
         fireRate: 0.18, damage: 44, speed: 44, spread: 0.02, pellets: 1,
-        stun: 0.35, knockback: 0.85, weakMult: 2.2,
+        stun: 0.35, knockback: 0.85, weakMult: 2.2, weakCritChance: 0.25,
         color: 0xfacc15, sound: "pistol", unlockedAtStart: true,
-        tier1Name: "할로우 포인트 (약점+0.6 · 관통+1 · 충격파)",
+        tier1Name: "할로우 포인트 (약점확률+15% · 관통+1 · 충격파)",
         awakenName: "아킴보 매그넘 (2연발 동시사격 + 관통 충격파)",
-        roleDesc: "무한탄약 · 보스 약점 2.2배 · 유효사거리 강화 가능"
+        roleDesc: "무한탄약 · 약점 치명타 2.2배(기본 25%) · 유효사거리 강화 가능"
       },
       {
         id: 1, key: "2", name: "컴뱃 산탄총", eng: "Combat Shotgun",
         ammoType: "SHELL", infinite: false, startAmmo: 36, maxAmmo: 96, packAmmo: 24, packCost: 110, baseCost: 75,
         reqParts: 2, unlockBpCost: 900,
         fireRate: 0.52, damage: 30, speed: 36, spread: 0.28, pellets: 8,
-        stun: 0.58, knockback: 2.7, weakMult: 1.15,
+        stun: 0.58, knockback: 2.7, weakMult: 1.25, weakCritChance: 0,
         color: 0xf97316, sound: "shotgun", unlockedAtStart: false,
         tier1Name: "소이 산탄 (산탄+2 · 3초 화상 지속피해)",
         awakenName: "드래곤 브레스 (피격 지점 3.5초 화염장판)",
@@ -149,7 +149,7 @@
         ammoType: "SMG", infinite: false, startAmmo: 220, maxAmmo: 560, packAmmo: 130, packCost: 110, baseCost: 75,
         reqParts: 2, unlockBpCost: 1000,
         fireRate: 0.066, damage: 38, speed: 44, spread: 0.08, pellets: 1,
-        stun: 0.20, knockback: 0.40, weakMult: 1.20,
+        stun: 0.20, knockback: 0.40, weakMult: 1.30, weakCritChance: 0,
         runAndGun: true, ammoRefillBonus: 1.5,
         color: 0x38bdf8, sound: "uzi", unlockedAtStart: false,
         tier1Name: "정전기 탄환 (인근 1마리 전이 스파크 +45%딜)",
@@ -161,7 +161,7 @@
         ammoType: "RIFLE", infinite: false, startAmmo: 120, maxAmmo: 320, packAmmo: 70, packCost: 130, baseCost: 85,
         reqParts: 3, unlockBpCost: 2400,
         fireRate: 0.105, damage: 55, speed: 50, spread: 0.025, pellets: 1,
-        stun: 0.38, knockback: 1.15, weakMult: 1.65,
+        stun: 0.38, knockback: 1.15, weakMult: 1.65, weakCritChance: 0.20,
         pierceBase: 1, heavyImpact: true,
         color: 0x4ade80, sound: "rifle", unlockedAtStart: false,
         tier1Name: "고폭 균열탄 (피격 시 반경 2m 파편 폭발)",
@@ -172,23 +172,23 @@
         id: 4, key: "5", name: "유탄발사기", eng: "Grenade Launcher",
         ammoType: "GRENADE", infinite: false, startAmmo: 14, maxAmmo: 40, packAmmo: 8, packCost: 150, baseCost: 95,
         reqParts: 3, unlockBpCost: 3200,
-        fireRate: 0.70, damage: 195, speed: 26, spread: 0.04, pellets: 1,
-        stun: 0.90, knockback: 3.5, explosiveRadius: 5.8, weakMult: 1.25,
+        fireRate: 0.58, damage: 285, speed: 28, spread: 0.035, pellets: 1,
+        stun: 0.95, knockback: 3.8, explosiveRadius: 6.4, weakMult: 1.35, weakCritChance: 0,
         color: 0xf43f5e, sound: "shotgun", unlockedAtStart: false,
         tier1Name: "집속 파편탄 (반경+25% · 자탄 2발 · 오사감소)",
         awakenName: "확산 클러스터 (자탄 4발 폭격 · 오사 70%감소)",
-        roleDesc: "광역 유탄 폭격 · 대규모 호드 및 기둥 철거"
+        roleDesc: "광역 유탄 폭격 (단발 285로 상향) · 대규모 호드 및 기둥 철거"
       },
       {
         id: 5, key: "6", name: "플라즈마 레일건", eng: "Plasma Railgun",
         ammoType: "CELL", infinite: false, startAmmo: 10, maxAmmo: 28, packAmmo: 6, packCost: 160, baseCost: 105,
         reqParts: 4, unlockBpCost: 5500,
         fireRate: 0.78, damage: 295, speed: 75, spread: 0.0, pellets: 1,
-        stun: 1.15, knockback: 2.3, piercing: true, weakMult: 1.85,
+        stun: 1.15, knockback: 2.3, piercing: true, weakMult: 1.85, weakCritChance: 0,
         color: 0x22d3ee, sound: "railgun", unlockedAtStart: false,
-        tier1Name: "과충전 이온빔 (두께+35% · 1.5초 전류장)",
-        awakenName: "초전도 플라즈마 (3.5초 전류장 · 보스 2.2배딜)",
-        roleDesc: "일직선 전 적 관통 · 보스 및 중장갑 극딜"
+        tier1Name: "충격 압축파 (두께+35% · 횡방향 공탄성 넉백 & 기절)",
+        awakenName: "초전도 장갑파쇄 (관통 적 전원 6초 아머파쇄 +35% 피해증폭)",
+        roleDesc: "초정밀 초고속 관통 저격포 · 횡방향 충격파 넉백 제압 · 보스 및 전 적 장갑파쇄 특화"
       },
       {
         id: 6, key: "7", name: "전술 바리케이드", eng: "Auto-Barricade",
@@ -335,6 +335,7 @@
     };
 
     const SUIT_UPGRADE_DEFS = {
+      // --- 생존 & 방호 외골격 (SURVIVAL - 4종) ---
       maxHp: {
         key: "maxHp",
         category: "SURVIVAL",
@@ -343,7 +344,7 @@
         desc: "최대 체력 +25 증가 (기본 100 ➔ 최대 225 HP)",
         maxLv: 5,
         reqRooms: [0, 1, 2, 4, 6],
-        costs: [1200, 3600, 11000, 32000, 85000],
+        costs: [1200, 3200, 7500, 16000, 28000],
         partsCosts: [0, 0, 1, 1, 2]
       },
       armorPlating: {
@@ -354,9 +355,33 @@
         desc: "받는 모든 피해 -6% 영구 경감 (최대 -30% 방어막)",
         maxLv: 5,
         reqRooms: [0, 1, 2, 4, 6],
-        costs: [1500, 4200, 14000, 38000, 95000],
+        costs: [1500, 3800, 8500, 18000, 32000],
         partsCosts: [0, 0, 1, 1, 2]
       },
+      energyShield: {
+        key: "energyShield",
+        category: "SURVIVAL",
+        icon: "🛡️⚡",
+        name: "키네틱 에너지 쉴드",
+        desc: "[7섹터+] 비피격 4.5초 후 자동 재생 임시 쉴드 (+20/+35/+50 SH)",
+        maxLv: 3,
+        reqRooms: [6, 7, 8],
+        costs: [8500, 16000, 28000],
+        partsCosts: [2, 2, 3]
+      },
+      bioRecycler: {
+        key: "bioRecycler",
+        category: "SURVIVAL",
+        icon: "♻️",
+        name: "바이오 탄약 재활용기",
+        desc: "[6섹터+] 적 처치 시 탄약 팩 드랍 확률 증강 (+15%/+30% 보급)",
+        maxLv: 2,
+        reqRooms: [5, 7],
+        costs: [6500, 14000],
+        partsCosts: [1, 2]
+      },
+
+      // --- 의무 & 응급 보급 (MEDICAL - 3종) ---
       medkitCap: {
         key: "medkitCap",
         category: "MEDICAL",
@@ -365,7 +390,7 @@
         desc: "구급키트[Z] 최대 소지 +1 (최대 4개 · 즉시 +1 보충)",
         maxLv: 3,
         reqRooms: [0, 2, 4],
-        costs: [1800, 7500, 28000],
+        costs: [1800, 5500, 14000],
         partsCosts: [0, 1, 1]
       },
       stimCap: {
@@ -376,7 +401,7 @@
         desc: "스팀팩[X] 최대 소지 +1 (최대 4개 · 즉시 +1 보충)",
         maxLv: 3,
         reqRooms: [0, 2, 4],
-        costs: [2000, 8500, 32000],
+        costs: [2000, 6000, 15000],
         partsCosts: [0, 1, 1]
       },
       syringe: {
@@ -387,52 +412,21 @@
         desc: "[5섹터+] 자가치료 0.6초(무감속)·아군치료 0.4초·+80HP",
         maxLv: 1,
         reqRooms: [4],
-        costs: [38000],
+        costs: [8500],
         partsCosts: [2],
         isSpecial: true
       },
-      maxStamina: {
-        key: "maxStamina",
+
+      // --- 기동성 & CQC 전술 (MOBILITY - 4종) ---
+      staminaCore: {
+        key: "staminaCore",
         category: "MOBILITY",
         icon: "🫁",
-        name: "최대 스태미너",
-        desc: "최대 스태미너 +25 증가 (기본 50 ➔ 최대 150 ST)",
+        name: "스태미너 통합 코어",
+        desc: "최대 스태미너 +20 및 초당 회복 +5.0/s 종합 증강 (최대 130 ST)",
         maxLv: 4,
         reqRooms: [0, 1, 3, 5],
-        costs: [1000, 3200, 11000, 32000],
-        partsCosts: [0, 0, 1, 1]
-      },
-      staminaRegen: {
-        key: "staminaRegen",
-        category: "MOBILITY",
-        icon: "🔋",
-        name: "스태미너 회복력",
-        desc: "초당 스태미너 회복 +6.5/s (기본 10/s ➔ 최대 36/s)",
-        maxLv: 4,
-        reqRooms: [0, 1, 3, 5],
-        costs: [1000, 3200, 11000, 32000],
-        partsCosts: [0, 0, 1, 1]
-      },
-      dashCd: {
-        key: "dashCd",
-        category: "MOBILITY",
-        icon: "🚀",
-        name: "점프 스태미너 절감",
-        desc: "[Space] 점프 소모량 -5 ST 감소 (35 ST ➔ 15 ST)",
-        maxLv: 4,
-        reqRooms: [0, 1, 3, 5],
-        costs: [1200, 3800, 14000, 42000],
-        partsCosts: [0, 0, 1, 1]
-      },
-      bashCd: {
-        key: "bashCd",
-        category: "MOBILITY",
-        icon: "👊",
-        name: "기절 밀치기 강화",
-        desc: "[V] 기절기 쿨타임 -0.4초 단축 & 충격 반경 증가",
-        maxLv: 4,
-        reqRooms: [0, 1, 3, 5],
-        costs: [1200, 3800, 14000, 42000],
+        costs: [1200, 3000, 6800, 14000],
         partsCosts: [0, 0, 1, 1]
       },
       sprintSpeed: {
@@ -443,10 +437,49 @@
         desc: "기본 이동속도 및 Shift 질주 속도 +5% 증가 (최대 +25% 기동력)",
         maxLv: 5,
         reqRooms: [0, 1, 2, 4, 6],
-        costs: [1200, 3500, 9500, 25000, 65000],
+        costs: [1200, 2800, 6500, 13000, 24000],
         partsCosts: [0, 0, 1, 1, 2]
+      },
+      bashCd: {
+        key: "bashCd",
+        category: "MOBILITY",
+        icon: "👊",
+        name: "기절 밀치기 강화",
+        desc: "[V] 기절기 쿨타임 -0.4초 단축 & 충격 반경 증가",
+        maxLv: 4,
+        reqRooms: [0, 1, 3, 5],
+        costs: [1200, 2800, 6500, 14000],
+        partsCosts: [0, 0, 1, 1]
+      },
+      cqcMastery: {
+        key: "cqcMastery",
+        category: "MOBILITY",
+        icon: "💥",
+        name: "CQC 파쇄 너클",
+        desc: "[5섹터+] [V] 근접 마스터리: 1Lv 피해+150%·아머파쇄 / 2Lv 스태미너+30·35%탄약팩 / 3Lv 체력25%이하 즉사처형·폭주",
+        maxLv: 3,
+        reqRooms: [4, 6, 8],
+        costs: [7500, 15000, 26000],
+        partsCosts: [1, 2, 2]
       }
     };
+
+    function getPlayerMaxShield(player) {
+      const lv = (player && player.suitUpgrades && player.suitUpgrades.energyShield) || 0;
+      if (lv <= 0) return 0;
+      if (lv === 1) return 20;
+      if (lv === 2) return 35;
+      return 50;
+    }
+
+    function getPlayerAmmoDropBonus(player) {
+      const lv = (player && player.suitUpgrades && player.suitUpgrades.bioRecycler) || 0;
+      return lv * 0.15;
+    }
+
+    function getPlayerCqcLevel(player) {
+      return (player && player.suitUpgrades && player.suitUpgrades.cqcMastery) || 0;
+    }
 
     function getPlayerMoveSpeedBonus(player) {
       const upg = (player && player.suitUpgrades && player.suitUpgrades.sprintSpeed) || 0;
@@ -474,17 +507,23 @@
     }
 
     function getPlayerMaxStamina(player) {
-      const lv = (player && player.suitUpgrades && player.suitUpgrades.maxStamina) || 0;
-      return 50 + lv * 25;
+      const coreLv = (player && player.suitUpgrades && player.suitUpgrades.staminaCore) || 0;
+      const legacyLv = (player && player.suitUpgrades && player.suitUpgrades.maxStamina) || 0;
+      const lv = Math.max(coreLv, legacyLv);
+      return 50 + lv * 20;
     }
 
     function getPlayerStaminaRegen(player) {
-      const lv = (player && player.suitUpgrades && player.suitUpgrades.staminaRegen) || 0;
-      return 10 + lv * 6.5;
+      const coreLv = (player && player.suitUpgrades && player.suitUpgrades.staminaCore) || 0;
+      const legacyLv = (player && player.suitUpgrades && player.suitUpgrades.staminaRegen) || 0;
+      const lv = Math.max(coreLv, legacyLv);
+      return 10 + lv * 5.0;
     }
 
     function getPlayerJumpStaminaCost(player) {
-      const lv = (player && player.suitUpgrades && player.suitUpgrades.dashCd) || 0;
+      const coreLv = (player && player.suitUpgrades && player.suitUpgrades.staminaCore) || 0;
+      const legacyLv = (player && player.suitUpgrades && player.suitUpgrades.dashCd) || 0;
+      const lv = Math.max(coreLv, legacyLv);
       let cost = Math.max(15, 35 - lv * 5);
       if (player && player.shockTimer > 0 && (player.stimBuffTimer || 0) <= 0) {
         cost *= 2.0;

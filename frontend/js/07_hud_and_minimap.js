@@ -25,8 +25,8 @@
       if (curAmmoLabel && curW && curInv) {
         const maxA = getWeaponMaxAmmo(me, activeIdx);
         curAmmoLabel.textContent = curW.infinite
-          ? `🔫 ${curW.name} (Lv.${curInv.totalLv}) : ∞ 무한탄`
-          : `🔫 ${curW.name} (Lv.${curInv.totalLv}) : ${curInv.ammo} / ${maxA}발`;
+          ? `🔫 ${curW.name} (+${curInv.totalLv}) : ∞ 무한탄`
+          : `🔫 ${curW.name} (+${curInv.totalLv}) : ${curInv.ammo} / ${maxA}발`;
       }
 
       WEAPONS.forEach((w, idx) => {
@@ -46,7 +46,7 @@
         div.innerHTML = `
           <div class="flex items-center justify-between w-full text-[10px] font-mono-code text-slate-400 px-0.5 leading-none">
             <span class="font-extrabold text-slate-300">${w.key}</span>
-            <span class="text-cyan-300 font-bold">${inv.totalLv > 0 ? "L" + inv.totalLv : ""}</span>
+            <span class="text-cyan-300 font-bold">${inv.totalLv > 0 ? "+" + inv.totalLv : ""}</span>
           </div>
           <div class="text-xs font-extrabold text-white leading-tight truncate w-full">${badgePrefix}${SHORT_W_NAMES[idx]}</div>
           <div class="text-xs font-mono-code font-extrabold leading-none ${emptyWarn}">${ammoStr}</div>
@@ -62,10 +62,11 @@
 
       const hpPct = Math.max(0, (me.hp / me.maxHp) * 100);
       const tempPct = Math.min(40, (me.tempHp / me.maxHp) * 100);
+      const totalShield = (me.tempShield || 0) + (me.shield || 0);
       document.getElementById("hud-my-hp-bar").style.width = hpPct + "%";
       document.getElementById("hud-my-temphp-bar").style.width = tempPct + "%";
       document.getElementById("hud-my-hp-text").textContent =
-        `${Math.ceil(me.hp)}${me.tempHp > 0 ? " + " + Math.ceil(me.tempHp) : ""}${me.tempShield > 0 ? " [🛡️" + Math.ceil(me.tempShield) + "]" : ""} / ${me.maxHp}`;
+        `${Math.ceil(me.hp)}${me.tempHp > 0 ? " + " + Math.ceil(me.tempHp) : ""}${totalShield > 0 ? " [🛡️" + Math.ceil(totalShield) + "]" : ""} / ${me.maxHp}`;
 
       const maxStam = getPlayerMaxStamina(me);
       const curStam = Math.max(0, Math.min(maxStam, me.stamina !== undefined ? me.stamina : maxStam));
@@ -401,6 +402,13 @@
             }
           }
           objBar.style.width = "0%";
+        } else if (curRoom.bulkheadOverride && !curRoom.bulkheadOverrideDone) {
+          const remOverride = Math.ceil(Math.max(0, curRoom.bulkheadOverrideTimer));
+          const maxOverride = curRoom.bulkheadOverrideMax || 65;
+          const pct = Math.min(100, Math.round(((maxOverride - remOverride) / maxOverride) * 100));
+          objText.textContent = `🚨 격벽 비상 충전 [${pct}%] (남은 시간: ${remOverride}s)`;
+          objBar.style.width = pct + "%";
+          if (objSub) objSub.textContent = "⚡ 호드 총공격 사냥! 몰려오는 감염체를 섬멸하며 대량 BP를 파밍하세요!";
         } else if (curRoom.waitingForWaveDefense) {
           const quota = curRoom.waveZombieQuota || 30;
           const spawned = curRoom.waveZombiesSpawned || 0;
@@ -502,6 +510,36 @@
           objText.textContent = `🧬 생체 신경절 파괴 (${curRoom.progress}/${curRoom.targetVal})`;
           objBar.style.width = ((curRoom.progress / curRoom.targetVal) * 100) + "%";
           if (objSub) objSub.textContent = getSequentialWaveSubText(curRoom.reqWaves || curRoom.targetVal);
+        } else if (curRoom.condType === "SURVIVAL_HOLDOUT") {
+          if (!curRoom.holdoutActive) {
+            objText.textContent = `⏱️ 방호 보안 콘솔 가동 [F]`;
+            objBar.style.width = "0%";
+            if (objSub) objSub.textContent = "중앙 단말기를 가동하여 3분(180초) 보안 락다운을 개시하세요";
+          } else {
+            const remS = Math.max(0, 180 - curRoom.progress);
+            const pct = Math.min(100, Math.round((curRoom.progress / 180) * 100));
+            objText.textContent = `⏱️ 결사 생존 유지 (${Math.ceil(remS)}s 남음)`;
+            objBar.style.width = pct + "%";
+            const phaseNum = remS > 120 ? 1 : (remS > 60 ? 2 : 3);
+            if (objSub) objSub.textContent = `[Phase ${phaseNum}/3] ${remS <= 60 ? "🚨 극대 호드 광란의 총공격 사냥!" : (remS <= 120 ? "⚠️ 원소 변종 감염체 유입!" : "일반 감염체 방어전")}`;
+          }
+        } else if (curRoom.condType === "DEFENSE_OBJECTIVE") {
+          const core = curRoom.defenseCore;
+          if (!curRoom.defenseActive) {
+            objText.textContent = `⚡ 코어 반응로 가동 [F]`;
+            objBar.style.width = "0%";
+            if (objSub) objSub.textContent = "반응로를 가동하여 150초간 파괴되지 않도록 수호하세요";
+          } else if (core && core.isRebooting) {
+            objText.textContent = `⚠️ 코어 파손 재부팅 중 (${Math.ceil(core.rebootTimer)}s)...`;
+            objBar.style.width = "0%";
+            if (objSub) objSub.textContent = "비상 재부팅 후 150초 타이머가 리셋됩니다!";
+          } else {
+            const remS = Math.max(0, 150 - curRoom.progress);
+            const hpPct = core ? Math.round((core.hp / core.maxHp) * 100) : 100;
+            objText.textContent = `⚡ 코어 수호: ${hpPct}% HP (충전 ${Math.ceil(curRoom.progress)}/150s)`;
+            objBar.style.width = ((curRoom.progress / 150) * 100) + "%";
+            if (objSub) objSub.textContent = `발전기 체력: ${core ? Math.round(core.hp) : 4500}/${core ? core.maxHp : 4500} HP (쉴드: ${core ? Math.round(core.shield) : 0})`;
+          }
         } else {
           objText.textContent = `💥 군락 증폭기 파괴 (${curRoom.progress}/${curRoom.targetVal})`;
           objBar.style.width = ((curRoom.progress / curRoom.targetVal) * 100) + "%";

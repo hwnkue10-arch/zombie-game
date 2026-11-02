@@ -126,10 +126,10 @@
                   break;
                 } else {
                   const armorMult = (zmb.spec.armored && !b.armorPen) ? 0.62 : 1.0;
-                  // [v3.2 특수개조 구현] 산탄총 15Lv 소이 산탄(3초 화상 지속피해) & 30Lv 드래곤 브레스(3.5초 고열 화염장판)
+                  // [v3.1 특수개조 개선] 산탄총 15Lv 소이 산탄(3초 화상 지속피해 대폭 상향) & 30Lv 드래곤 브레스(3.5초 고열 화염장판)
                   if (b.wIdx === 1 && (b.tier1Special || b.awakened)) {
                     zmb.burnTimer = 3.0;
-                    zmb.burnDps = Math.max(12, Math.round(b.damage * 0.45));
+                    zmb.burnDps = Math.max(38, Math.round(b.damage * 0.70));
                     if (b.awakened && game.flamePools.length < 18 && !game.flamePools.some(fp => Math.hypot(fp.x - b.x, fp.z - b.z) < 2.2)) {
                       const fMesh = new THREE.Mesh(
                         new THREE.CircleGeometry(2.6, 18),
@@ -161,7 +161,33 @@
                       hitStun = Math.max(hitStun, 0.45);
                     }
                   }
+
+                  // [v3.4 확률적 약점(치명타) 타격 시스템] 권총/돌소 고유치확 + 돌격수 패시브(+10%) + 척후병 배후기습(+25%) / 은신첫발(100% 확정)
+                  const owner = game.players[b.ownerId];
+                  let isBackstab = false;
+                  if (owner && owner.specialization === "SCOUT" && zmb.group) {
+                    const zAngle = zmb.group.rotation.y;
+                    const bAngle = Math.atan2(b.vx, b.vz);
+                    let diff = Math.abs(zAngle - bAngle);
+                    if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                    if (diff <= 1.15) { // 약 65도 이내 = 배후 기습!
+                      isBackstab = true;
+                    }
+                  }
+
+                  const effCritChance = (b.weakCritChance || 0) + (isBackstab ? 0.25 : 0);
+                  const isWeakCrit = Math.random() < effCritChance;
+                  if (isWeakCrit) {
+                    const critMult = (b.weakMult || 1.25) * (isBackstab ? 1.30 : 1.0);
+                    hitDmg = Math.round(hitDmg * critMult);
+                    spawnBloodParticles(zmb.x, 1.2, zmb.z, isBackstab ? 0x10b981 : 0xfacc15, 6); // 배후 암살 비취빛/치명타 황금빛 파티클
+                  }
+
+                  const prevHp = zmb.hp;
                   damageZombie(zIdx, hitDmg, b.vx * 0.04 * hitKnock, b.vz * 0.04 * hitKnock, hitStun, b.wIdx);
+                  if (b.isScoutAssassination && owner && prevHp > 0 && zmb.hp <= 0) {
+                    owner.specCooldown = Math.max(0, (owner.specCooldown || 0) - 5.0); // 은신 첫발 처치 시 쿨타임 5초 환급!
+                  }
 
                   if (b.wIdx === 2 && (b.tier1Special || b.awakened) && game.zombies.length > 1) {
                     let chains = 0;
@@ -210,7 +236,9 @@
                   removeBullet = true;
                   break;
                 }
-                pod.hp -= b.damage;
+                // [v3.1 샷건 일제사격 0.5초 순삭 방지] 타격당 최대 체력의 8% 피해 상한선 적용
+                const maxCap = Math.max(30, Math.round(pod.maxHp * 0.08));
+                pod.hp -= Math.min(b.damage, maxCap);
                 if (!b.piercing) removeBullet = true;
                 break;
               }
@@ -219,9 +247,45 @@
           if (!removeBullet) {
             for (const pyl of game.bloodPylons) {
               if (Math.hypot(pyl.x - b.x, pyl.z - b.z) < 2.2) {
-                pyl.hp -= b.damage;
+                // [v3.1 보스 파일런 순삭 방지] 타격당 최대 체력의 8% 피해 상한선 적용
+                const maxCap = Math.max(35, Math.round(pyl.maxHp * 0.08));
+                pyl.hp -= Math.min(b.damage, maxCap);
                 if (!b.piercing) removeBullet = true;
                 break;
+              }
+            }
+          }
+
+          if (!removeBullet && game.apexTentacles) {
+            for (const tent of game.apexTentacles) {
+              if (tent.hp > 0 && Math.hypot(tent.x - b.x, tent.z - b.z) < 2.2) {
+                if (tent.invulnerable) {
+                  // 키틴질 100% 면역: 보라색 스파크 튕김 & 총알 소멸
+                  spawnBloodParticles(b.x, 1.2, b.z, 0x9333ea, 4);
+                  SoundFX.play("hit");
+                  removeBullet = true;
+                  break;
+                } else {
+                  // 과열 탈진 상태: 총기 데미지 적용!
+                  const maxCap = Math.max(40, Math.round(tent.maxHp * 0.08));
+                  tent.hp -= Math.min(b.damage, maxCap);
+                  spawnBloodParticles(tent.x, 2.2, tent.z, 0xfacc15, 6);
+                  if (tent.hp <= 0) {
+                    spawnMissionStageVFX(tent.x, tent.z, 0xef4444, 8.5, 30, true);
+                    SoundFX.play("explosion");
+                    if (tent.group) entitiesGroup.remove(tent.group);
+                    if (tent.warnPlane) effectsGroup.remove(tent.warnPlane);
+                    if (tent.breathMesh) effectsGroup.remove(tent.breathMesh);
+                    if (tent.sym && tent.sym.el) tent.sym.el.style.display = "none";
+                    game.bioPoints += 8000;
+                    spawnPickupItem(tent.x, tent.z, "CORE");
+                    spawnPickupItem(tent.x + 1.2, tent.z, "AMMO_PACK");
+                    spawnPickupItem(tent.x - 1.2, tent.z, "MEDKIT");
+                    showToastNotification("💥 생체 신경 촉수 완전 파괴! (+8,000 BP & 전술 코어 획득)");
+                  }
+                  if (!b.piercing) removeBullet = true;
+                  break;
+                }
               }
             }
           }
@@ -231,7 +295,12 @@
               if (b.explosiveRadius > 0) {
                 triggerExplosion(b.x, b.z, b.explosiveRadius, b.damage, b.ownerId, b.awakened);
               } else {
-                let bossDmg = Math.round(b.damage * (b.weakMult || 1.2));
+                // [v3.4 보스 약점 타격 확률화] 권총/돌소 고유치확 + 돌격수 패시브 + 척후병 은신 첫발(100% 확정 크리티컬)
+                const isBossCrit = Math.random() < (b.weakCritChance || 0);
+                let bossDmg = isBossCrit ? Math.round(b.damage * (b.weakMult || 1.25)) : Math.round(b.damage);
+                if (isBossCrit) {
+                  spawnBloodParticles(game.boss.x, 2.8, game.boss.z, b.isScoutAssassination ? 0x10b981 : 0xfacc15, 8); // 보스 치명타 파티클
+                }
                 if (b.heavyImpact) {
                   const distFromOrigin = Math.hypot(b.x - (b.originX || b.x), b.z - (b.originZ || b.z));
                   if (distFromOrigin >= 9.0) bossDmg = Math.round(bossDmg * 1.35);
@@ -295,27 +364,29 @@
         }
       }
 
-      // [다목적 전술 드론: 자력 수거 모듈] 주변 아이템(탄약, 회복약, 스팀팩, 부품, 코어)을 플레이어에게 자동 견인!
-      game.players.forEach(p => {
-        if (p.downed || !p.drone || !p.drone.unlocked || !p.drone.modules || !p.drone.modules.magnet) return;
-        const magLv = p.drone.modules.magnet.level || 0;
-        if (magLv <= 0) return;
-        const magRadius = [0, 4.0, 6.0, 8.0, 10.0][magLv] || 4.0;
-        game.pickups.forEach(pk => {
-          if (pk.collectedBy && pk.collectedBy[p.id]) return;
-          const dist = Math.hypot(p.x - pk.x, p.z - pk.z);
-          if (dist <= magRadius && dist > 0.35) {
-            const pullSpd = 13.5;
-            pk.x += ((p.x - pk.x) / dist) * pullSpd * dt;
-            pk.z += ((p.z - pk.z) / dist) * pullSpd * dt;
-            if (pk.mesh) pk.mesh.position.set(pk.x, pk.mesh.position.y, pk.z);
-            if (pk.sym) {
-              pk.sym.x = pk.x;
-              pk.sym.z = pk.z;
+      // [다목적 전술 드론: 자력 수거 모듈 - v3.1 버그 수정]
+      // 개인 드랍 인스턴스 픽업이므로 내 화면에서는 오직 본인(mySlotIndex)의 자석 드론만 내 화면의 아이템을 견인해야 함! (친구한테 빨려들어가는 버그 원천 차단)
+      const myPlayer = game.players[mySlotIndex];
+      if (myPlayer && !myPlayer.downed && myPlayer.drone && myPlayer.drone.unlocked && myPlayer.drone.modules && myPlayer.drone.modules.magnet) {
+        const magLv = myPlayer.drone.modules.magnet.level || 0;
+        if (magLv > 0) {
+          const magRadius = [0, 4.0, 6.0, 8.0, 10.0][magLv] || 4.0;
+          game.pickups.forEach(pk => {
+            if (pk.collectedBy && pk.collectedBy[myPlayer.id]) return;
+            const dist = Math.hypot(myPlayer.x - pk.x, myPlayer.z - pk.z);
+            if (dist <= magRadius && dist > 0.35) {
+              const pullSpd = 13.5;
+              pk.x += ((myPlayer.x - pk.x) / dist) * pullSpd * dt;
+              pk.z += ((myPlayer.z - pk.z) / dist) * pullSpd * dt;
+              if (pk.mesh) pk.mesh.position.set(pk.x, pk.mesh.position.y, pk.z);
+              if (pk.sym) {
+                pk.sym.x = pk.x;
+                pk.sym.z = pk.z;
+              }
             }
-          }
-        });
-      });
+          });
+        }
+      }
 
       // 2. 개인 드랍 아이템(탄약팩, 구급키트, 스팀팩, 변이코어, BP박스): 모든 대원이 각자의 몫을 독립 수거!
       for (let i = game.pickups.length - 1; i >= 0; i--) {

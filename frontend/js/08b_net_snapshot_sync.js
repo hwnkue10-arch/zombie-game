@@ -320,6 +320,30 @@
                 });
               }
 
+              // [v3.1 멀티플레이 바리케이드 100% 동기화] 호스트의 바리케이드 목록 및 내구도/위치 일치 보장
+              if (Array.isArray(msg.barricades)) {
+                for (let i = game.barricades.length - 1; i >= 0; i--) {
+                  const b = game.barricades[i];
+                  const stillExists = msg.barricades.some(nb => Math.hypot(b.x - nb.x, b.z - nb.z) < 1.0);
+                  if (!stillExists) {
+                    if (b.mesh) entitiesGroup.remove(b.mesh);
+                    game.barricades.splice(i, 1);
+                  }
+                }
+                msg.barricades.forEach(nb => {
+                  const existing = game.barricades.find(b => Math.hypot(b.x - nb.x, b.z - nb.z) < 1.0);
+                  if (existing) {
+                    existing.hp = nb.hp;
+                    existing.maxHp = nb.maxHp;
+                    if (typeof updateBarricadeDamageVisual === "function") {
+                      updateBarricadeDamageVisual(existing);
+                    }
+                  } else {
+                    spawnBarricade(nb.x, nb.z, !!nb.hasTurret, null, nb.hw > nb.hd ? 0 : 1, nb.hw > nb.hd ? 1 : 0, false, nb.ownerId);
+                  }
+                });
+              }
+
               // [v3.5 감염체 360마리 전량 위치·체력·광폭화·동결/스턴 완벽 동기화]
               if (Array.isArray(msg.zombies)) {
                 const hostIds = new Set(msg.zombies.map(zs => zs[0]));
@@ -494,6 +518,17 @@
             p.roomIndex
           ]);
 
+        const barSnap = (game.barricades || []).map(b => ({
+          ownerId: b.ownerId,
+          x: Math.round(b.x * 10) / 10,
+          z: Math.round(b.z * 10) / 10,
+          hp: Math.round(b.hp),
+          maxHp: Math.round(b.maxHp),
+          hw: Math.round(b.hw * 10) / 10,
+          hd: Math.round(b.hd * 10) / 10,
+          hasTurret: !!b.hasTurret
+        }));
+
         wsClient.send(JSON.stringify({
           type: "WORLD_SNAPSHOT",
           roomIdx: game.currentRoomIndex,
@@ -508,6 +543,7 @@
           bossState: bossSnap,
           bloodPylons: pylonSnap,
           hiveNodes: hiveSnap,
+          barricades: barSnap,
           missionNodes: (game.missionNodes || [])
             .filter(n => n.roomIndex === game.currentRoomIndex)
             .map(n => ({

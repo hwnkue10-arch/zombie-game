@@ -363,6 +363,23 @@
       // 섬멸 미션도 최소 2웨이브 이상 방어해야 클리어 인정!
       if (room.condType === "EXTERMINATE" && (room.roomWaveCount || 1) < 2) return;
 
+      // [v3.2 신규 격벽 비상 개방 시퀀스: Bulkhead Override Sequence]
+      // 마지막 미션 목표 완료 시 문이 즉시 열리지 않고, 65초 동안 고밀도 호드 공세 유입으로 대량 BP 파밍 및 3.5~5분 체류 강제 보장!
+      if (!room.bulkheadOverride) {
+        room.bulkheadOverride = true;
+        room.bulkheadOverrideTimer = 65.0;
+        room.bulkheadOverrideMax = 65.0;
+        game.wavePhase = "HORDE";
+        game.waveTimer = 65.0;
+        SoundFX.play("alarm");
+        showToastNotification("🚨 격벽 전자 락다운 해제 시퀀스 가동: 콘덴서 충전(65초 소요)! 호드 웨이브 사냥 시작!");
+        return;
+      }
+
+      if (room.bulkheadOverride && !room.bulkheadOverrideDone) {
+        return;
+      }
+
       room.cleared = true;
 
       // 1. [안전 보장] 클리어 즉시 해당 방의 지향성 독가스 즉시 정지 및 비활성화, 전 구역 완전 정화 안전구역화
@@ -412,6 +429,29 @@
           spawnMissionStageVFX(door.x, door.z, 0x10b981, 6.0, 18, false);
         }
         door.open = true;
+
+        // [v3.1 복도 돌파 감염체 기믹 복원]
+        // 문이 개방되는 순간 다음 섹터로 이어지는 연결 통로에 밀집 매복한 감염체 무리가 쏟아져 나와 복도 돌파전 발발!
+        if (!isRemoteClient && game.rooms[nextIdx]) {
+          const spawnCount = Math.min(18, 10 + room.index * 2);
+          const bx = door.bridgeMidX || door.x;
+          const bz = door.bridgeMidZ || door.z;
+          const bLen = door.bridgeLen || 12.0;
+          const isNorthSouth = door.isNS !== undefined ? door.isNS : (door.w > door.d);
+
+          for (let s = 0; s < spawnCount; s++) {
+            const offset = (Math.random() - 0.5) * (bLen * 0.72);
+            const lateral = (Math.random() - 0.5) * 2.2;
+            const sx = isNorthSouth ? (bx + lateral) : (bx + offset);
+            const sz = isNorthSouth ? (bz + offset) : (bz + lateral);
+            const zType = (s % 4 === 0) ? "RUNNER" : (s % 6 === 0 ? "SPITTER" : "WALKER");
+            spawnZombie(zType, sx, sz, nextIdx);
+          }
+          if (typeof showCombatToast === "function") {
+            showCombatToast("🚨 복도 돌파 경보! 감염체 무리가 연결 통로를 봉쇄하고 있습니다!");
+          }
+          SoundFX.play("alarm");
+        }
       }
 
       // [2섹터 클리어 기념] 4대 작전 특성화 해금 알림 (게임 도중 강제 팝업 방지 -> [T]로 편할 때 선택)

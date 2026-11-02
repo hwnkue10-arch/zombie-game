@@ -10,63 +10,95 @@
     // =========================================================================
     // 17. SMART ZOMBIE WALL-SLIDING AI, AUTO-TURRET BARRICADES & BULLETS
     // =========================================================================
+    function hasLineOfSight(x1, z1, x2, z2, radius = 0.28) {
+      const dx = x2 - x1;
+      const dz = z2 - z1;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 1.0) return true;
+      const steps = Math.ceil(dist / 0.85);
+      const stepX = dx / steps;
+      const stepZ = dz / steps;
+      for (let s = 1; s < steps; s++) {
+        const sx = x1 + stepX * s;
+        const sz = z1 + stepZ * s;
+        if (typeof isPointBlockedByWall === "function" && isPointBlockedByWall(sx, sz, radius, false)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
     function moveZombieSmart(z, nx, nz, speed, dt, target) {
       const step = speed * dt;
       const prevX = z.x;
       const prevZ = z.z;
 
+      // 이미 벽 미끄러짐/우회 기동 중인 경우
       if ((z.slideTimer || 0) > 0 && z.slideDir !== 0) {
         z.slideTimer -= dt;
         const tx = -nz * z.slideDir;
         const tz = nx * z.slideDir;
-        moveEntityWithCollision(z, (nx * 0.35 + tx * 0.92) * step, (nz * 0.35 + tz * 0.92) * step, z.radius);
-        if (Math.hypot(z.x - prevX, z.z - prevZ) > step * 0.45) {
+        // 접선 방향 비중을 높이고 정면 방향 비중을 줄여 벽에 끼이지 않고 미끄러지듯 코너를 돌게 함
+        const moveDirX = nx * 0.20 + tx * 0.98;
+        const moveDirZ = nz * 0.20 + tz * 0.98;
+        const dirLen = Math.hypot(moveDirX, moveDirZ) || 1;
+        moveEntityWithCollision(z, (moveDirX / dirLen) * step * 1.05, (moveDirZ / dirLen) * step * 1.05, z.radius);
+        
+        const slideMoved = Math.hypot(z.x - prevX, z.z - prevZ);
+        if (slideMoved > step * 0.40) {
+          z.stuckCount = 0;
           z.group.rotation.y = Math.atan2(tx, tz);
           return;
         }
       }
 
+      // 기본 목표 방향 전진 시도
       moveEntityWithCollision(z, nx * step, nz * step, z.radius);
       const moved = Math.hypot(z.x - prevX, z.z - prevZ);
 
-      if (moved < step * 0.55) {
-        const probeX = z.x + nx * (z.radius + 0.65);
-        const probeZ = z.z + nz * (z.radius + 0.65);
-        let hitOb = null;
-        for (const ob of game.obstacles) {
-          if (Math.abs(probeX - ob.x) < ob.hw + z.radius && Math.abs(probeZ - ob.z) < ob.hd + z.radius) {
-            hitOb = ob;
-            break;
-          }
-        }
+      // 벽이나 모서리에 가로막힘 감지
+      if (moved < step * 0.50) {
+        z.stuckCount = (z.stuckCount || 0) + 1;
 
+        // 접선 벡터 (좌/우 90도 회피 방향)
         const t1x = -nz, t1z = nx;
         const t2x = nz, t2z = -nx;
-        let pickSign = z.slideDir || 1;
 
-        if (hitOb && target) {
-          const p1x = z.x + t1x * 1.5, p1z = z.z + t1z * 1.5;
-          const p2x = z.x + t2x * 1.5, p2z = z.z + t2z * 1.5;
-          const b1 = isPointBlockedByWall(p1x, p1z, z.radius, false);
-          const b2 = isPointBlockedByWall(p2x, p2z, z.radius, false);
-          if (!b1 && b2) pickSign = 1;
-          else if (b1 && !b2) pickSign = -1;
-          else {
-            const d1 = Math.hypot(target.x - p1x, target.z - p1z) + Math.hypot(p1x - hitOb.x, p1z - hitOb.z) * 0.25;
-            const d2 = Math.hypot(target.x - p2x, target.z - p2z) + Math.hypot(p2x - hitOb.x, p2z - hitOb.z) * 0.25;
-            pickSign = d1 <= d2 ? 1 : -1;
-          }
-        } else {
-          const p1x = z.x + t1x * 1.2, p1z = z.z + t1z * 1.2;
-          pickSign = !isPointBlockedByWall(p1x, p1z, z.radius, false) ? 1 : -1;
+        // 양방향 탐색 및 거리 평가
+        let pickSign = z.slideDir || (Math.random() < 0.5 ? 1 : -1);
+
+        // 정밀 탐색 반경 (스턱 횟수가 많아질수록 탐색 범위를 넓힘)
+        const probeDist = z.stuckCount > 2 ? 2.2 : 1.4;
+        const p1x = z.x + t1x * probeDist, p1z = z.z + t1z * probeDist;
+        const p2x = z.x + t2x * probeDist, p2z = z.z + t2z * probeDist;
+        const b1 = typeof isPointBlockedByWall === "function" ? isPointBlockedByWall(p1x, p1z, z.radius, false) : false;
+        const b2 = typeof isPointBlockedByWall === "function" ? isPointBlockedByWall(p2x, p2z, z.radius, false) : false;
+
+        if (!b1 && b2) {
+          pickSign = 1;
+        } else if (b1 && !b2) {
+          pickSign = -1;
+        } else if (!b1 && !b2 && target) {
+          // 둘 다 열려 있다면 목표 플레이어와의 유클리드 거리가 더 가까워지는 방향 선택
+          const d1 = Math.hypot(target.x - p1x, target.z - p1z);
+          const d2 = Math.hypot(target.x - p2x, target.z - p2z);
+          pickSign = d1 <= d2 ? 1 : -1;
+        } else if (b1 && b2) {
+          // 둘 다 막힌 'ㄱ'자 구석 모서리인 경우: 반대 방향으로 회전 시도
+          pickSign = (z.slideDir ? -z.slideDir : 1);
         }
 
         z.slideDir = pickSign;
-        z.slideTimer = 0.55;
+        // 심각한 스턱 상태면 슬라이드 유지 시간을 대폭 늘려 완전히 코너를 돌게 함
+        z.slideTimer = z.stuckCount > 3 ? 0.95 : 0.65;
+
         const sx = -nz * pickSign;
         const sz = nx * pickSign;
-        moveEntityWithCollision(z, sx * step * 1.05, sz * step * 1.05, z.radius);
+        // 탈출 방향으로 즉시 이동
+        moveEntityWithCollision(z, sx * step * 1.15, sz * step * 1.15, z.radius);
         z.group.rotation.y = Math.atan2(sx, sz);
+      } else {
+        z.stuckCount = Math.max(0, (z.stuckCount || 0) - 1);
       }
     }
 
@@ -250,13 +282,19 @@
         }
 
         // 쓰러진(빈사) 사람이나 은신(Phantom Scout Cloaked) 중인 대원에게는 좀비 어그로가 절대 끌리지 않음!
+        // [v3.2] 코어 발전기 수호전(DEFENSE_OBJECTIVE) 시 좀비 50%는 플레이어 대신 발전기를 최우선 목표로 공격!
+        const isDefenseMission = curRoom && curRoom.condType === "DEFENSE_OBJECTIVE" && curRoom.defenseActive && curRoom.defenseCore && !curRoom.defenseCore.isRebooting;
         let target = null, minDist = 9999;
-        game.players.forEach(p => {
-          if (p.downed) return;
-          if (p.cloakActive && p.specActiveTimer > 0) return;
-          const d = Math.hypot(p.x - z.x, p.z - z.z);
-          if (d < minDist) { minDist = d; target = p; }
-        });
+        if (isDefenseMission && (i % 2 === 0)) {
+          target = curRoom.defenseCore;
+        } else {
+          game.players.forEach(p => {
+            if (p.downed) return;
+            if (p.cloakActive && p.specActiveTimer > 0) return;
+            const d = Math.hypot(p.x - z.x, p.z - z.z);
+            if (d < minDist) { minDist = d; target = p; }
+          });
+        }
 
         if (!target) {
           // 어그로 대상이 없으면 천천히 배회(Wander)
@@ -302,22 +340,46 @@
 
         if (!blocked) {
           // 원거리 스핏터(SPITTER)는 플레이어와 11~19m 사거리를 유지하며 좌우로 선회(Kiting) 기동!
-          if (z.spec.isSpitter && dist > 8.5 && dist < 17.5) {
+          if (z.spec.isSpitter && dist > 8.5 && dist < 17.5 && target.kind !== "DEFENSE_GENERATOR") {
             const strafeSign = (i % 2 === 0) ? 1 : -1;
             moveZombieSmart(z, -nz * strafeSign * 0.75, nx * strafeSign * 0.75, z.speed * 0.72, dt, target);
-          } else if (dist > 1.35) {
+          } else if (dist > (target.kind === "DEFENSE_GENERATOR" ? 2.8 : 1.35)) {
             moveZombieSmart(z, nx, nz, z.speed, dt, target);
           } else if (z.attackCooldown <= 0) {
-            if (target.cloakActive && target.specActiveTimer > 0) {
-              continue;
-            }
-            z.attackCooldown = 0.95;
-            if (z.spec.explosive) {
-              damageZombie(i, 9999, 0, 0, 0, -1);
-              continue;
+            if (target.kind === "DEFENSE_GENERATOR") {
+              z.attackCooldown = 0.95;
+              const dmg = Math.round((z.scaledDmg || z.spec.dmg || 14));
+              if (target.shield > 0) {
+                target.shield = Math.max(0, target.shield - dmg);
+              } else {
+                target.hp = Math.max(0, target.hp - dmg);
+              }
+              spawnBloodParticles(target.x, 1.8, target.z, 0x38bdf8, 3);
+              if (target.hp <= 0 && !target.isRebooting) {
+                target.isRebooting = true;
+                target.rebootTimer = 5.0;
+                SoundFX.play("alarm");
+                showToastNotification("⚠️ 코어 발전기 파손! 비상 재부팅 후 150초 재수호 필요!");
+              }
             } else {
-              const berserkDmgMult = (curRoom && curRoom.berserkActive) ? 1.35 : 1.0;
-              damagePlayer(target, Math.round((z.scaledDmg || z.spec.dmg) * berserkDmgMult), !!z.spec.causesBleed, z.typeKey === "MB_ACIDQUEEN" || z.spec.isSpitter);
+              if (target.cloakActive && target.specActiveTimer > 0) {
+                continue;
+              }
+              z.attackCooldown = 0.95;
+              if (z.spec.explosive) {
+                damageZombie(i, 9999, 0, 0, 0, -1);
+                continue;
+              } else {
+                const berserkDmgMult = (curRoom && curRoom.berserkActive) ? 1.35 : 1.0;
+                damagePlayer(
+                  target,
+                  Math.round((z.scaledDmg || z.spec.dmg) * berserkDmgMult),
+                  !!z.spec.causesBleed,
+                  z.typeKey === "MB_ACIDQUEEN" || z.spec.isSpitter || !!z.spec.causesAcid,
+                  !!z.spec.causesShock,
+                  !!z.spec.causesFrost
+                );
+              }
             }
           }
         }
@@ -448,65 +510,73 @@
             }
           }
         } else if (z.spec.ranged && dist < 26.0) {
-          z.rangedCooldown -= dt;
-          if (z.rangedCooldown <= 0) {
-            z.rangedCooldown = z.spec.isMidBoss ? 3.6 : 3.1;
-            if (z.typeKey === "MB_SUMMONER" || z.typeKey === "MB_ACIDQUEEN") {
-              // 1.35초 영창 예고 링 생성 (이때 접근하여 [V] 기절기를 누르면 패턴 캔슬 + 4.2초 대그로기!)
-              z.channelingTimer = 1.35;
-              const warnC = z.typeKey === "MB_SUMMONER" ? 0xc084fc : 0xa3e635;
-              const warnRing = new THREE.Mesh(
-                new THREE.RingGeometry(1.5, 4.8, 24),
-                new THREE.MeshBasicMaterial({ color: warnC, side: THREE.DoubleSide, transparent: true, opacity: 0.75 })
-              );
-              warnRing.rotation.x = -Math.PI / 2;
-              warnRing.position.set(z.x, 0.15, z.z);
-              effectsGroup.add(warnRing);
-              game.particles.push({ mesh: warnRing, life: 1.35, maxLife: 1.35, expand: 0.35 });
-              SoundFX.play("alarm");
-            } else if (z.spec.isSpitter) {
-              // 맹독 스핏터(SPITTER): 청록색 맹독 산성 침 발사 (피격 시 산성 둔화 유발!)
-              const spitMesh = new THREE.Mesh(
-                new THREE.SphereGeometry(0.34, 8, 8),
-                new THREE.MeshBasicMaterial({ color: 0x06b6d4 })
-              );
-              spitMesh.position.set(z.x, 1.25, z.z);
-              effectsGroup.add(spitMesh);
-              game.bullets.push({
-                ownerId: -1,
-                isZombieProjectile: true,
-                causesAcid: true,
-                x: z.x, z: z.z,
-                vx: nx * 10.6, vz: nz * 10.6,
-                damage: 14,
-                explosiveRadius: 0,
-                piercing: false,
-                life: 2.3,
-                mesh: spitMesh
-              });
-            } else {
-              // 블러드 데빌(DEVIL): 3갈래 부채꼴 화염 혈탄 발사!
-              const baseA = Math.atan2(nx, nz);
-              for (let f = -1; f <= 1; f++) {
-                const a = baseA + f * 0.16;
-                const fbMesh = new THREE.Mesh(
-                  new THREE.SphereGeometry(0.32, 8, 8),
-                  new THREE.MeshBasicMaterial({ color: 0xf97316 })
+          // [스마트 원거리 AI] 사선(Line of Sight) 검사: 벽이나 문에 가로막혀 있으면 사격 보류 및 우회 기동
+          const hasLoS = hasLineOfSight(z.x, z.z, target.x, target.z, 0.28);
+          if (!hasLoS) {
+            // 사선이 확보되지 않았을 때는 침 낭비를 멈추고 사선이 열리는 위치로 적극 우회 기동!
+            z.rangedCooldown = Math.max(0.65, (z.rangedCooldown || 1.0) - dt * 0.2);
+            moveZombieSmart(z, nx, nz, z.speed * 0.92, dt, target);
+          } else {
+            z.rangedCooldown -= dt;
+            if (z.rangedCooldown <= 0) {
+              z.rangedCooldown = z.spec.isMidBoss ? 3.6 : 3.1;
+              if (z.typeKey === "MB_SUMMONER" || z.typeKey === "MB_ACIDQUEEN") {
+                // 1.35초 영창 예고 링 생성 (이때 접근하여 [V] 기절기를 누르면 패턴 캔슬 + 4.2초 대그로기!)
+                z.channelingTimer = 1.35;
+                const warnC = z.typeKey === "MB_SUMMONER" ? 0xc084fc : 0xa3e635;
+                const warnRing = new THREE.Mesh(
+                  new THREE.RingGeometry(1.5, 4.8, 24),
+                  new THREE.MeshBasicMaterial({ color: warnC, side: THREE.DoubleSide, transparent: true, opacity: 0.75 })
                 );
-                fbMesh.position.set(z.x, 1.25, z.z);
-                effectsGroup.add(fbMesh);
+                warnRing.rotation.x = -Math.PI / 2;
+                warnRing.position.set(z.x, 0.15, z.z);
+                effectsGroup.add(warnRing);
+                game.particles.push({ mesh: warnRing, life: 1.35, maxLife: 1.35, expand: 0.35 });
+                SoundFX.play("alarm");
+              } else if (z.spec.isSpitter) {
+                // 맹독 스핏터(SPITTER): 청록색 맹독 산성 침 발사 (피격 시 산성 둔화 유발!)
+                const spitMesh = new THREE.Mesh(
+                  new THREE.SphereGeometry(0.34, 8, 8),
+                  new THREE.MeshBasicMaterial({ color: 0x06b6d4 })
+                );
+                spitMesh.position.set(z.x, 1.25, z.z);
+                effectsGroup.add(spitMesh);
                 game.bullets.push({
                   ownerId: -1,
                   isZombieProjectile: true,
-                  causesAcid: false,
+                  causesAcid: true,
                   x: z.x, z: z.z,
-                  vx: Math.sin(a) * 11.2, vz: Math.cos(a) * 11.2,
-                  damage: 16,
+                  vx: nx * 10.6, vz: nz * 10.6,
+                  damage: 14,
                   explosiveRadius: 0,
                   piercing: false,
-                  life: 2.2,
-                  mesh: fbMesh
+                  life: 2.3,
+                  mesh: spitMesh
                 });
+              } else {
+                // 블러드 데빌(DEVIL): 3갈래 부채꼴 화염 혈탄 발사!
+                const baseA = Math.atan2(nx, nz);
+                for (let f = -1; f <= 1; f++) {
+                  const a = baseA + f * 0.16;
+                  const fbMesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.32, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: 0xf97316 })
+                  );
+                  fbMesh.position.set(z.x, 1.25, z.z);
+                  effectsGroup.add(fbMesh);
+                  game.bullets.push({
+                    ownerId: -1,
+                    isZombieProjectile: true,
+                    causesAcid: false,
+                    x: z.x, z: z.z,
+                    vx: Math.sin(a) * 11.2, vz: Math.cos(a) * 11.2,
+                    damage: 16,
+                    explosiveRadius: 0,
+                    piercing: false,
+                    life: 2.2,
+                    mesh: fbMesh
+                  });
+                }
               }
             }
           }

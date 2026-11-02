@@ -555,6 +555,50 @@
                 nearMissionNode.holdTime = 0;
                 interactBar.style.width = "0%";
               }
+            } else if (nearMissionNode.kind === "SURVIVAL_CONSOLE") {
+              if (curRoom.holdoutActive) {
+                interactTitle.textContent = `⏱️ 방호 보안 락다운 진행 중 (생존 유지!)`;
+              } else {
+                interactTitle.textContent = `⏱️ [F 홀드] 방호 보안 콘솔 가동 (180초 결사 생존)`;
+                if (holdingF) {
+                  nearMissionNode.holdTime = (nearMissionNode.holdTime || 0) + dt;
+                  interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 1.5) * 100) + "%";
+                  if (nearMissionNode.holdTime >= 1.5) {
+                    curRoom.holdoutActive = true;
+                    nearMissionNode.done = true;
+                    if (nearMissionNode.sym && nearMissionNode.sym.el) nearMissionNode.sym.el.style.display = "none";
+                    if (nearMissionNode.beaconMesh) nearMissionNode.beaconMesh.visible = false;
+                    SoundFX.play("alarm");
+                    spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0xef4444, 8.0, 24, true);
+                    showToastNotification("🚨 방호 보안 락다운 발동! 시스템 무력화까지 180초 결사 생존하라!");
+                  }
+                } else {
+                  nearMissionNode.holdTime = 0;
+                  interactBar.style.width = "0%";
+                }
+              }
+            } else if (nearMissionNode.kind === "DEFENSE_GENERATOR") {
+              if (curRoom.defenseActive) {
+                interactTitle.textContent = `⚡ 코어 반응로 가동 중 (체력 사수!)`;
+              } else {
+                interactTitle.textContent = `⚡ [F 홀드] 코어 반응로 가동 (150초 수호)`;
+                if (holdingF) {
+                  nearMissionNode.holdTime = (nearMissionNode.holdTime || 0) + dt;
+                  interactBar.style.width = Math.min(100, (nearMissionNode.holdTime / 1.5) * 100) + "%";
+                  if (nearMissionNode.holdTime >= 1.5) {
+                    curRoom.defenseActive = true;
+                    nearMissionNode.holdTime = 0;
+                    if (nearMissionNode.sym && nearMissionNode.sym.el) nearMissionNode.sym.el.style.display = "none";
+                    if (nearMissionNode.beaconMesh) nearMissionNode.beaconMesh.visible = false;
+                    SoundFX.play("upgrade");
+                    spawnMissionStageVFX(nearMissionNode.x, nearMissionNode.z, 0x38bdf8, 8.0, 24, true);
+                    showToastNotification("⚡ 코어 반응로 가동 시작! 150초 동안 파괴되지 않도록 사수하라!");
+                  }
+                } else {
+                  nearMissionNode.holdTime = 0;
+                  interactBar.style.width = "0%";
+                }
+              }
             }
     }
 
@@ -1000,7 +1044,7 @@
           }
           return;
         }
-        const isMissionObj = ref && (ref.stepOrder !== undefined || ref.kind === "GENERATOR" || ref.kind === "CHEM_PART" || ref.kind === "SYNTH_TABLE" || ref.kind === "DECON_VALVE" || ref.kind === "RADAR_CONSOLE" || ref.kind === "RADAR_DISH" || ref.kind === "RADAR_BEACON" || ref.kind === "BULKHEAD_CONSOLE" || ref.kind === "BOSS_MASTER_CONSOLE" || ref.kind === "BOSS_COOLANT" || ref.kind === "BLACKBOX" || ref.kind === "SECURITY_RELAY" || ref.kind === "UPLOAD_TERMINAL");
+        const isMissionObj = ref && (ref.stepOrder !== undefined || ref.kind === "GENERATOR" || ref.kind === "CHEM_PART" || ref.kind === "SYNTH_TABLE" || ref.kind === "DECON_VALVE" || ref.kind === "RADAR_CONSOLE" || ref.kind === "RADAR_DISH" || ref.kind === "RADAR_BEACON" || ref.kind === "BULKHEAD_CONSOLE" || ref.kind === "BOSS_MASTER_CONSOLE" || ref.kind === "BOSS_COOLANT" || ref.kind === "BLACKBOX" || ref.kind === "SECURITY_RELAY" || ref.kind === "UPLOAD_TERMINAL" || ref.kind === "SURVIVAL_CONSOLE" || ref.kind === "DEFENSE_GENERATOR");
         const maxDist = isMissionObj ? 180 : 44;
         if (me && Math.hypot(sym.x - me.x, sym.z - me.z) > maxDist) {
           sym.el.style.display = "none";

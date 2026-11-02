@@ -425,12 +425,17 @@
       SPITTER:  { name: "맹독 스핏터(원거리)", hp: 105, speed: 4.15, dmg: 15, scale: 1.08, skin: 0x06b6d4, clothes: 0x581c87, bp: 10, ranged: true, isSpitter: true },
       GOLIATH:  { name: "골리앗 중장갑체", hp: 360, speed: 3.10, dmg: 28, scale: 1.6, skin: 0x4d7c0f, clothes: 0x1e1b4b, bp: 16, armored: true },
       BOOMER:   { name: "맹독 자폭체", hp: 96, speed: 2.85, dmg: 42, scale: 1.22, skin: 0xa3e635, clothes: 0x365314, bp: 9, explosive: true },
+      // 4대 원소(산성·동결·전격·출혈) 변종 감염체
+      ACID_RUNNER:  { name: "산성 러너", hp: 65, speed: 7.15, dmg: 14, scale: 0.94, skin: 0x84cc16, clothes: 0x14532d, bp: 7, causesAcid: true },
+      ACID_BOOMER:  { name: "산성 봄버", hp: 110, speed: 2.85, dmg: 38, scale: 1.25, skin: 0xa3e635, clothes: 0x166534, bp: 11, explosive: true, leavesAcidPool: true },
+      CRYO_WALKER:  { name: "동결 감염체", hp: 88, speed: 3.25, dmg: 15, scale: 1.05, skin: 0x38bdf8, clothes: 0x0c4a6e, bp: 7, causesFrost: true },
+      SHOCK_RUNNER: { name: "전격 러너", hp: 70, speed: 7.35, dmg: 15, scale: 0.94, skin: 0xfacc15, clothes: 0x713f12, bp: 8, causesShock: true },
       DEVIL:    { name: "블러드 데빌(3연발원거리)", hp: 230, speed: 3.45, dmg: 22, scale: 1.3, skin: 0xef4444, clothes: 0x450a0a, bp: 18, ranged: true, armored: true },
       HOST:     { name: "황금 영양 숙주", hp: 480, speed: 2.15, dmg: 0, scale: 1.35, skin: 0xfacc15, clothes: 0x854d0e, bp: 25, isNutrientHost: true },
       // 3 Raid-Boss-Tier Mid-Bosses (4인 중화기 집중포화에도 버티는 레이드급 체력 + 50% 체력 무적 기믹 + 처치 시 바닥에 🧬변이 코어 드랍!)
-      MB_JUGGERNAUT: { name: "중간보스 I: 아머드 저거넛", hp: 18500, speed: 3.45, dmg: 44, scale: 2.55, skin: 0xf97316, clothes: 0x0f172a, bp: 320, isMidBoss: true, armored: true },
-      MB_SUMMONER:   { name: "중간보스 II: 네크로 서모너", hp: 16500, speed: 3.15, dmg: 32, scale: 2.35, skin: 0xa855f7, clothes: 0x3b0764, bp: 350, isMidBoss: true, ranged: true },
-      MB_ACIDQUEEN:  { name: "중간보스 III: 애시드 퀸", hp: 17800, speed: 3.30, dmg: 36, scale: 2.45, skin: 0x84cc16, clothes: 0x14532d, bp: 380, isMidBoss: true, ranged: true }
+      MB_JUGGERNAUT: { name: "중간보스 I: 아머드 저거넛", hp: 32000, speed: 3.55, dmg: 48, scale: 2.55, skin: 0xf97316, clothes: 0x0f172a, bp: 320, isMidBoss: true, armored: true },
+      MB_SUMMONER:   { name: "중간보스 II: 네크로 서모너", hp: 28000, speed: 3.25, dmg: 35, scale: 2.35, skin: 0xa855f7, clothes: 0x3b0764, bp: 350, isMidBoss: true, ranged: true },
+      MB_ACIDQUEEN:  { name: "중간보스 III: 애시드 퀸", hp: 30000, speed: 3.40, dmg: 38, scale: 2.45, skin: 0x84cc16, clothes: 0x14532d, bp: 380, isMidBoss: true, ranged: true }
     };
 
     let nextZombieGlobalId = 1;
@@ -457,9 +462,12 @@
       head.position.y = 1.78 * s;
       group.add(head);
 
-      // [v3.1 블랙아웃 호러 연출] 스핏터(청록 안광)·러너/데빌(핏빛 안광) 발광 눈빛 추가
-      if (spec.isSpitter || typeKey === "RUNNER" || typeKey === "DEVIL" || spec.isMidBoss) {
-        const eyeColor = spec.isSpitter ? 0x22d3ee : 0xef4444;
+      // [v3.1 블랙아웃 & 원소 변종] 스핏터/산성/동결/전격/러너 발광 눈빛 추가
+      if (spec.isSpitter || spec.causesAcid || spec.causesFrost || spec.causesShock || typeKey === "RUNNER" || typeKey === "DEVIL" || spec.isMidBoss) {
+        let eyeColor = 0xef4444;
+        if (spec.causesAcid || spec.isSpitter) eyeColor = 0x84cc16;
+        else if (spec.causesFrost) eyeColor = 0x38bdf8;
+        else if (spec.causesShock) eyeColor = 0xfacc15;
         const eyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
         const eyeGeo = new THREE.BoxGeometry(0.14 * s, 0.10 * s, 0.08 * s);
         const eyeL = new THREE.Mesh(eyeGeo, eyeMat);

@@ -379,14 +379,14 @@
           <div class="text-xs font-extrabold text-fuchsia-200 truncate">🛒 변이코어 구매</div>
           <div id="upg-buy-core-label" class="text-[11px] font-mono-code text-amber-300 font-bold truncate">3S 해금</div>
         </button>
-        <button id="btn-sell-core" type="button" aria-label="변이 코어 추출 판매 환급" class="p-2 rounded-xl bg-cyan-950/80 hover:bg-cyan-900/80 border border-cyan-400/50 text-left transition flex flex-col justify-between h-14">
-          <div class="text-xs font-extrabold text-cyan-200 truncate">🧬 코어 추출판매</div>
-          <div id="upg-sell-core-label" class="text-[11px] font-mono-code text-emerald-300 font-bold truncate">+6,000 BP</div>
+        <button id="btn-sell-core" type="button" aria-label="변이 코어 보유 현황 (무기 개조 전용)" class="p-2 rounded-xl bg-slate-900/80 border border-cyan-500/40 text-left transition flex flex-col justify-between h-14">
+          <div class="text-xs font-extrabold text-cyan-300 truncate">🧬 변이 코어</div>
+          <div id="upg-sell-core-label" class="text-[11px] font-mono-code text-cyan-200 font-bold truncate">보유: 0개 (개조전용)</div>
         </button>
       </div>
 
       <!-- Scrollable Container for Tactical Suit / Medical Upgrades AND Weapon Upgrades -->
-      <div class="overflow-y-auto pr-1 flex-1 flex flex-col gap-3">
+      <div id="upg-scroll-container" class="overflow-y-auto pr-1 flex-1 flex flex-col gap-3">
         <!-- Tactical Suit, Stamina, Cooldown & Nano-Syringe Upgrades -->
         <div class="bg-slate-950/85 rounded-2xl p-3 border border-cyan-500/35">
           <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -633,9 +633,9 @@
               <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-amber-950 border border-amber-500/40 text-amber-200">탱커 & 돌파</span>
             </div>
             <div class="mt-2.5 space-y-1 text-xs text-slate-300">
-              <div class="flex items-start gap-1.5"><span class="text-amber-400 font-bold">패시브:</span> 상시 피해 -15% 경감, 일반 감염체 밀치며 돌파(포위 저지), 10초마다 35 HP 결사 재생 방어막 자동 충전, 최대 HP +35</div>
+              <div class="flex items-start gap-1.5"><span class="text-amber-400 font-bold">패시브:</span> 상시 피해 -20% 경감, 모든 공격 피해 -4 고정 감쇄, 최대 HP 25% 초과 일격 피해 상한 캡, 근접 피격 가시 반사 충격파 (피해 35% 반사 & 1.5m 넉백, 2초 쿨), 일반 감염체 밀치며 돌파, 상태이상 지속시간 50% 단축, 10초마다 35 HP 재생 쉴드, 최대 HP +35</div>
               <div class="flex items-start gap-1.5"><span class="text-amber-400 font-bold">[C] 액티브:</span> <b class="text-white">『전술 도발 & 결사 요새』</b> (쿨 40초 / 6초 지속)</div>
-              <div class="text-[11px] text-slate-400 pl-3">· 18m 반경 내 모든 일반 감염체 어그로 강제 집중<br>· +80 임시 쉴드 즉시 획득 & 발동 중 받는 피해 추가 -40% 경감 (총 -50%)</div>
+              <div class="text-[11px] text-slate-400 pl-3">· 18m 반경 내 모든 일반 감염체 어그로 강제 집중<br>· +80 임시 쉴드 즉시 획득 & 발동 중 받는 피해 추가 -40% 경감 (총 -60%)</div>
             </div>
           </div>
           <div class="w-full py-2 rounded-xl bg-amber-500 group-hover:bg-amber-400 text-slate-950 font-black text-xs text-center transition">선봉장 선택</div>
@@ -649,12 +649,12 @@
                 <span class="text-2xl">💥</span>
                 <span class="text-base font-black text-rose-300">돌격수 (Striker)</span>
               </div>
-              <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-rose-950 border border-rose-500/40 text-rose-200">화력 & 관통</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-rose-950 border border-rose-500/40 text-rose-200">화력 & 치명관통</span>
             </div>
             <div class="mt-2.5 space-y-1 text-xs text-slate-300">
-              <div class="flex items-start gap-1.5"><span class="text-rose-400 font-bold">패시브:</span> 전 무기 기본 관통력 +1 (모든 탄환 1체 추가 관통), 탄약팩 습득량 +35%</div>
+              <div class="flex items-start gap-1.5"><span class="text-rose-400 font-bold">패시브:</span> <b class="text-amber-300">전 무기 기본 치명타 확률 +10%</b> (권총 35%, 돌소 30%, 샷건/유탄/레일건 10%), 전 무기 기본 관통력 +1 (모든 탄환 1체 추가 관통), 탄약팩 습득량 +35%</div>
               <div class="flex items-start gap-1.5"><span class="text-rose-400 font-bold">[C] 액티브:</span> <b class="text-white">『전술 과충전 (Overcharge)』</b> (쿨 30초 / 6초 지속)</div>
-              <div class="text-[11px] text-slate-400 pl-3">· 공격력 +25% & 연사속도 +35% (발사 딜레이 26% 감소)<br>· 탄속 +30%, 타격 스턴 +35% 및 추가 관통 +1(총 +2관통) 극딜 모드</div>
+              <div class="text-[11px] text-slate-400 pl-3">· 공격력 +25% & 연사속도 +35% (발사 딜레이 26% 감소)<br>· <b class="text-amber-300">치명타 확률 추가 +15% 극대화</b>, 탄속 +30%, 타격 스턴 +35% 및 추가 관통 +1 극딜</div>
             </div>
           </div>
           <div class="w-full py-2 rounded-xl bg-rose-500 group-hover:bg-rose-400 text-slate-950 font-black text-xs text-center transition">돌격수 선택</div>
@@ -671,9 +671,9 @@
               <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-emerald-950 border border-emerald-500/40 text-emerald-200">지원 & 치유</span>
             </div>
             <div class="mt-2.5 space-y-1 text-xs text-slate-300">
-              <div class="flex items-start gap-1.5"><span class="text-emerald-400 font-bold">패시브:</span> 아군 수동 구출 소생 시간 3.5초 (기본 8.0초), 회복제/스팀팩 사용 시 4m 내 아군에게 25% 효과 공유</div>
+              <div class="flex items-start gap-1.5"><span class="text-emerald-400 font-bold">패시브:</span> 아군 수동 구출 소생 시간 3.5초 (기본 8.0초), 회복제/스팀팩 사용 시 5m 내 아군에게 30% 효과 공유, 아군 빈사 시 이동속도 +25%</div>
               <div class="flex items-start gap-1.5"><span class="text-emerald-400 font-bold">[C] 액티브:</span> <b class="text-white">『나노 치유 안개』</b> (쿨 40초 / 7초 지속)</div>
-              <div class="text-[11px] text-slate-400 pl-3">· 5m 반경 나노 치유 안개 전개<br>· 안개 속 모든 아군 초당 +6 HP 재생 및 출혈·산성·중독 즉시 완전 정화</div>
+              <div class="text-[11px] text-slate-400 pl-3">· 5m 반경 나노 치유 안개 전개<br>· 안개 속 모든 아군 초당 +6 HP 재생 및 출혈·산성·감전·동상 즉시 완전 정화</div>
             </div>
           </div>
           <div class="w-full py-2 rounded-xl bg-emerald-500 group-hover:bg-emerald-400 text-slate-950 font-black text-xs text-center transition">의무관 선택</div>
@@ -687,12 +687,12 @@
                 <span class="text-2xl">🥷</span>
                 <span class="text-base font-black text-indigo-300">척후병 (Phantom Scout)</span>
               </div>
-              <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-indigo-950 border border-indigo-500/40 text-indigo-200">기동 & 암살</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-indigo-950 border border-indigo-500/40 text-indigo-200">기동 & 배후암살</span>
             </div>
             <div class="mt-2.5 space-y-1 text-xs text-slate-300">
-              <div class="flex items-start gap-1.5"><span class="text-indigo-400 font-bold">패시브:</span> 기본 이동속도 +15%, 회피 점프 도약 비거리 +25%, 스태미너 회복속도 +50% / 점프 소모량 -35%</div>
-              <div class="flex items-start gap-1.5"><span class="text-indigo-400 font-bold">[C] 액티브:</span> <b class="text-white">『연막 완전 은신 & 암살 관통샷』</b> (쿨 35초 / 7.5초 지속)</div>
-              <div class="text-[11px] text-slate-400 pl-3">· 즉시 연막 폭발 & 7.5초간 어그로 100% 해제 완전 은신 (이속 +20%)<br>· 은신 해제 첫 탄환은 2배 피해(보스 제외) 및 무한 관통 탄환 판정</div>
+              <div class="flex items-start gap-1.5"><span class="text-indigo-400 font-bold">패시브:</span> <b class="text-emerald-300">산성·감전·동상·슬로우 이속 감소 100% 완전 무효화</b>, <b class="text-amber-300">적 배후(등 뒤) 기습 시 치명타 확률 +25% & 치명 피해 +30% 증폭</b>, 기본 이동속도 +15%, 스태미너 회복속도 +50% / 점프·대시 소모 -35%</div>
+              <div class="flex items-start gap-1.5"><span class="text-indigo-400 font-bold">[C] 액티브:</span> <b class="text-white">『팬텀 클록 & 필살 암살』</b> (쿨 35초 / 7.5초 지속)</div>
+              <div class="text-[11px] text-slate-400 pl-3">· 즉시 연막 폭발 & 7.5초간 어그로 100% 해제 완전 은신 (이속 +25%)<br>· <b class="text-emerald-300">은신 해제 첫 타격: 보스 포함 100% 확정 약점 치명타 (무조건 크리티컬) + 방어구 100% 무시 관통</b><br>· 첫 타격 처치 시 쿨타임 5초 환급</div>
             </div>
           </div>
           <div class="w-full py-2 rounded-xl bg-indigo-500 group-hover:bg-indigo-400 text-slate-950 font-black text-xs text-center transition">척후병 선택</div>

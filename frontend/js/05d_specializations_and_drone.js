@@ -141,25 +141,35 @@
         try { effectsGroup.remove(player.healingZoneGroup); } catch (e) {}
         player.healingZoneGroup = null;
       }
+      // [v3.1 Z-Fighting 지글거림 완전 제거] polygonOffset 및 depthWrite: false 적용
       const grp = new THREE.Group();
-      grp.position.set(hx, 0.05, hz);
+      grp.position.set(hx, 0.08, hz);
 
       // 1. 외곽 발광 테두리 링
       const ringGeo = new THREE.RingGeometry(4.7, 5.1, 40);
-      const ringMat = new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x10b981, side: THREE.DoubleSide, transparent: true, opacity: 0.85,
+        depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1.0, polygonOffsetUnits: -4.0
+      });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
       ringMesh.rotation.x = -Math.PI / 2;
       grp.add(ringMesh);
 
       // 2. 내부 은은한 치유 안개 바닥 장판
       const discGeo = new THREE.CircleGeometry(4.7, 36);
-      const discMat = new THREE.MeshBasicMaterial({ color: 0x059669, side: THREE.DoubleSide, transparent: true, opacity: 0.28 });
+      const discMat = new THREE.MeshBasicMaterial({
+        color: 0x059669, side: THREE.DoubleSide, transparent: true, opacity: 0.28,
+        depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1.0, polygonOffsetUnits: -4.0
+      });
       const discMesh = new THREE.Mesh(discGeo, discMat);
       discMesh.rotation.x = -Math.PI / 2;
       grp.add(discMesh);
 
       // 3. 중앙 십자가(의료) 심볼
-      const crossMat = new THREE.MeshBasicMaterial({ color: 0x6ee7b7, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+      const crossMat = new THREE.MeshBasicMaterial({
+        color: 0x6ee7b7, side: THREE.DoubleSide, transparent: true, opacity: 0.9,
+        depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2.0, polygonOffsetUnits: -4.0
+      });
       const crossV = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 2.6), crossMat);
       crossV.rotation.x = -Math.PI / 2;
       crossV.position.y = 0.02;

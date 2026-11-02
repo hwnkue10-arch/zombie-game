@@ -106,6 +106,15 @@
         triggerSpecializationActive(me);
         return;
       }
+      if (code === "KeyT") {
+        if (e.repeat) return;
+        const revived = triggerDroneRevive(me);
+        if (!revived && game.specAvailable && !me.specialization) {
+          const spm = document.getElementById("spec-modal");
+          if (spm) spm.classList.toggle("hidden");
+        }
+        return;
+      }
       if (code === "KeyO") {
         const sm = document.getElementById("settings-modal");
         if (sm) sm.classList.toggle("hidden");
@@ -225,6 +234,50 @@
       SoundFX.play("revive");
     }
 
+    // [T] 의무 드론 원격 소생 수동 명령 출격 (구급키트 1개 소모, 90초 쿨타임)
+    function triggerDroneRevive(p) {
+      if (!p || p.downed || !p.drone || !p.drone.modules || !p.drone.modules.medi) return false;
+      const medi = p.drone.modules.medi;
+      if ((medi.level || 0) < 1) return false;
+      if ((medi.cooldown || 0) > 0) {
+        SoundFX.play("deny");
+        return false;
+      }
+      if ((medi.sectorRevivesUsed || 0) >= 2) {
+        SoundFX.play("deny");
+        return false;
+      }
+      if ((p.medkits || 0) < 1) {
+        SoundFX.play("deny");
+        return false;
+      }
+      if (p.drone.animState && p.drone.animState !== "IDLE") return false;
+
+      const downedMate = game.players.find(other =>
+        other.id !== p.id && other.downed && Math.hypot(other.x - p.x, other.z - p.z) <= 18.0
+      );
+      if (!downedMate) return false;
+
+      medi.cooldown = 90.0;
+      medi.sectorRevivesUsed = (medi.sectorRevivesUsed || 0) + 1;
+      p.medkits = Math.max(0, p.medkits - 1);
+      p.drone.animState = "FLYING_OUT";
+      p.drone.targetMateId = downedMate.id;
+      p.drone.worldX = p.x + 0.92;
+      p.drone.worldY = 2.15;
+      p.drone.worldZ = p.z - 0.45;
+      SoundFX.play("revive");
+
+      const safeBanner = document.getElementById("hud-safe-banner");
+      if (safeBanner) {
+        const bText = document.getElementById("hud-safe-banner-text");
+        if (bText) bText.textContent = `🛸 [의무 드론] [T] 수동 명령으로 ${downedMate.name} 구출을 위해 비행 출격!`;
+        safeBanner.classList.remove("hidden");
+        setTimeout(() => safeBanner.classList.add("hidden"), 3200);
+      }
+      return true;
+    }
+
     // [V] 360° 전방위 기절 밀치기 & 중간보스/보스 패턴 카운터 패링!
     function triggerMeleeBash(player, fromNetwork) {
       if (player.downed || (!fromNetwork && (player.bashCooldown > 0 || player.revivingTargetId !== null))) return;
@@ -234,17 +287,23 @@
       }
       SoundFX.play("shotgun");
 
-      const bashRad = getPlayerBashRadius(player);
+      const cqcLv = typeof getPlayerCqcLevel === "function" ? getPlayerCqcLevel(player) : 0;
+      const bashRad = getPlayerBashRadius(player) * (cqcLv >= 1 ? 1.25 : 1.0);
       const arcMesh = new THREE.Mesh(
         new THREE.RingGeometry(0.5, bashRad, 36),
-        new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide, transparent: true, opacity: 0.88 })
+        new THREE.MeshBasicMaterial({ color: cqcLv >= 1 ? 0xf97316 : 0xfacc15, side: THREE.DoubleSide, transparent: true, opacity: 0.88 })
       );
       arcMesh.rotation.x = -Math.PI / 2;
       arcMesh.position.set(player.x, 1.0, player.z);
       effectsGroup.add(arcMesh);
       game.particles.push({ mesh: arcMesh, life: 0.28, maxLife: 0.28, expand: 0.45 });
 
-      const bashDmg = 68 + game.currentRoomIndex * 18;
+      let bashDmg = (68 + game.currentRoomIndex * 18);
+      if (cqcLv >= 1) bashDmg = Math.round(bashDmg * 2.5); // 데미지 +150%
+
+      let anyHit = false;
+      let executedAny = false;
+
       for (let i = game.zombies.length - 1; i >= 0; i--) {
         const zmb = game.zombies[i];
         const dx = zmb.x - player.x;
@@ -252,6 +311,25 @@
         const dist = Math.hypot(dx, dz);
         const hitRange = zmb.spec.isMidBoss ? (bashRad + 1.4) : bashRad;
         if (dist <= hitRange) {
+          anyHit = true;
+          // [CQC 1Lv+] 아머 파쇄(-20% 방어력 감소) 디버프 3.0초 부여
+          if (cqcLv >= 1) {
+            zmb.armorShredTimer = 3.0;
+            zmb.armorShredMult = Math.max(zmb.armorShredMult || 1.0, 1.20);
+          }
+          // [CQC 2Lv+] 35% 확률 탄약 팩 즉시 드랍
+          if (cqcLv >= 2 && Math.random() < 0.35) {
+            spawnPickup("AMMO", zmb.x, zmb.z);
+          }
+          // [CQC 3Lv] 체력 25% 이하 일반 감염체 즉사 처형(Finisher)
+          const isNormalZombie = !zmb.spec.isBoss && !zmb.spec.isMidBoss && !zmb.spec.isNutrientHost;
+          if (cqcLv >= 3 && isNormalZombie && zmb.hp <= (zmb.maxHp || 100) * 0.25) {
+            damageZombie(i, 999999, (dx / (dist || 1)) * 32, (dz / (dist || 1)) * 32, 0, 0);
+            spawnBloodParticles(zmb.x, 1.2, zmb.z, 0xef4444, 12);
+            executedAny = true;
+            continue;
+          }
+
           // 1) 중간보스 돌진(chargeTimer > 0) 또는 영창 패턴(channelingTimer > 0) 중 [V] 적중 시 카운터 패링!
           if (zmb.spec.isMidBoss && !zmb.mbShieldActive && (zmb.chargeTimer > 0 || zmb.channelingTimer > 0)) {
             zmb.chargeTimer = 0;
@@ -272,8 +350,23 @@
             // 2) 최종보스 25% 기믹 황금 영양 숙주(HOST)를 [V]로 타격 시 보스 반대 방향으로 강력 넉백 + 3.5초 기절!
             damageZombie(i, bashDmg * 1.5, (dx / (dist || 1)) * 38, (dz / (dist || 1)) * 38, 3.5, 0);
           } else {
-            damageZombie(i, bashDmg, (dx / (dist || 1)) * 20, (dz / (dist || 1)) * 20, 1.65, 0);
+            const knockMult = (cqcLv >= 1) ? 28 : 20;
+            damageZombie(i, bashDmg, (dx / (dist || 1)) * knockMult, (dz / (dist || 1)) * knockMult, 1.65, 0);
           }
+        }
+      }
+
+      // [CQC 2Lv+] 적중 시 스태미너 +30 즉시 충전 리턴
+      if (cqcLv >= 2 && anyHit) {
+        player.stamina = Math.min(getPlayerMaxStamina(player), (player.stamina || 0) + 30);
+      }
+
+      // [CQC 3Lv] 즉사 처형 성공 시 2.5초간 스팀팩 폭주 모드 발동
+      if (cqcLv >= 3 && executedAny) {
+        player.stimBuffTimer = Math.max(player.stimBuffTimer || 0, 2.5);
+        SoundFX.play("revive");
+        if (typeof showCombatToast === "function") {
+          showCombatToast("⚡ [V] 근접 처형 성공! 2.5초간 아드레날린 폭주 모드 발동!");
         }
       }
 
