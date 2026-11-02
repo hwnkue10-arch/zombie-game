@@ -7,15 +7,15 @@ Three.js 기반의 웹 브라우저 3D 탑다운 전술 생존 슈팅 게임입�
 
 ## 🛠️ 기술 스택 (Tech Stack)
 
-### Frontend
-- **3D Graphics & Rendering**: [Three.js](https://threejs.org/) (r128)
-- **Audio Engine**: Web Audio API (절차적 합성 사운드 및 입체 음향)
-- **UI & Styling**: HTML5, Tailwind CSS, Vanilla JavaScript (ES6+ 모듈형 아키텍처)
-
-### Backend
-- **Runtime**: [Node.js](https://nodejs.org/) (>= 16.0.0)
-- **Networking**: WebSocket (RFC-6455 제로 디펜던시 내장 구현 및 경량 릴레이 서버)
-- **HTTP Server**: Node.js 내장 `http` 모듈 (단일 포트 정적 에셋 서빙)
+![3D Engine](https://img.shields.io/badge/3D%20Engine-Three.js%20r128-000000?logo=three.js&logoColor=white)
+![Language](https://img.shields.io/badge/Language-JavaScript%20(ES6+)-F7DF1E?logo=javascript&logoColor=black)
+![Styling](https://img.shields.io/badge/Styling-Tailwind%20CSS-38B2AC?logo=tailwindcss&logoColor=white)
+![Audio](https://img.shields.io/badge/Audio-Web%20Audio%20API-FF5722)
+![Runtime](https://img.shields.io/badge/Runtime-Node.js%20%3E%3D16-339933?logo=nodedotjs&logoColor=white)
+![Networking](https://img.shields.io/badge/Networking-WebSocket%20(RFC--6455)-E34F26?logo=socketdotio&logoColor=white)
+![Architecture](https://img.shields.io/badge/Architecture-Zero--Dependency-4F46E5)
+![Multiplayer](https://img.shields.io/badge/Multiplayer-4--Player%20Co--op-2563EB)
+![License](https://img.shields.io/badge/License-MIT-brightgreen)
 
 ---
 
