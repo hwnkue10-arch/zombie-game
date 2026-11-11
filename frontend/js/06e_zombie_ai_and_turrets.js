@@ -28,77 +28,178 @@
       return true;
     }
 
+    // [v3.2 경량 고성능 네비게이션] 근접 장애물 AABB 탐색 (연산 비용 O(1) 초경량)
+    function findNearestObstacle(x, z, searchDist = 2.4) {
+      let nearestOb = null, minD = searchDist;
+      const obstacles = game.obstacles;
+      if (obstacles) {
+        const len = obstacles.length;
+        for (let i = 0; i < len; i++) {
+          const ob = obstacles[i];
+          const nearX = Math.max(ob.x - ob.hw, Math.min(x, ob.x + ob.hw));
+          const nearZ = Math.max(ob.z - ob.hd, Math.min(z, ob.z + ob.hd));
+          const d = Math.hypot(x - nearX, z - nearZ);
+          if (d < minD) {
+            minD = d;
+            nearestOb = ob;
+          }
+        }
+      }
+      const doors = game.doors;
+      if (doors) {
+        for (let dIdx = 0; dIdx < doors.length; dIdx++) {
+          const d = doors[dIdx];
+          if (!d.open) {
+            const hw = d.w / 2, hd = d.d / 2;
+            const nearX = Math.max(d.x - hw, Math.min(x, d.x + hw));
+            const nearZ = Math.max(d.z - hd, Math.min(z, d.z + hd));
+            const dist = Math.hypot(x - nearX, z - nearZ);
+            if (dist < minD) {
+              minD = dist;
+              nearestOb = { x: d.x, z: d.z, hw, hd };
+            }
+          }
+        }
+      }
+      return nearestOb;
+    }
+
     function moveZombieSmart(z, nx, nz, speed, dt, target) {
       const step = speed * dt;
       const prevX = z.x;
       const prevZ = z.z;
 
-      // 이미 벽 미끄러짐/우회 기동 중인 경우
-      if ((z.slideTimer || 0) > 0 && z.slideDir !== 0) {
-        z.slideTimer -= dt;
-        const tx = -nz * z.slideDir;
-        const tz = nx * z.slideDir;
-        // 접선 방향 비중을 높이고 정면 방향 비중을 줄여 벽에 끼이지 않고 미끄러지듯 코너를 돌게 함
-        const moveDirX = nx * 0.20 + tx * 0.98;
-        const moveDirZ = nz * 0.20 + tz * 0.98;
-        const dirLen = Math.hypot(moveDirX, moveDirZ) || 1;
-        moveEntityWithCollision(z, (moveDirX / dirLen) * step * 1.05, (moveDirZ / dirLen) * step * 1.05, z.radius);
-        
-        const slideMoved = Math.hypot(z.x - prevX, z.z - prevZ);
-        if (slideMoved > step * 0.40) {
-          z.stuckCount = 0;
-          z.group.rotation.y = Math.atan2(tx, tz);
-          return;
+      // 1. [구석(Dead End/Pocket) 탈출 모드]: 'ㄱ'자 모서리에 갇혔을 때 후진하여 구석 밖으로 탈출
+      if ((z.escapeTimer || 0) > 0) {
+        z.escapeTimer -= dt;
+        moveEntityWithCollision(z, (z.escapeDirX || 0) * step * 1.25, (z.escapeDirZ || 0) * step * 1.25, z.radius);
+        z.group.rotation.y = Math.atan2(z.escapeDirX || 0, z.escapeDirZ || 1);
+        return;
+      }
+
+      // 2. [긴 벽 추종 모드 (Wall-Following Rail)]: 벽 끝에 도달하여 플레이어 시야(LoS)가 열릴 때까지 레일 타듯 벽과 평행하게 주행
+      if (z.followingWall && z.wallDirX !== undefined && z.wallDirZ !== undefined) {
+        // 벽을 타는 도중 플레이어와의 사선이 열렸는지 체크 (0.18초마다)
+        z.losCheckTimer = (z.losCheckTimer || 0) - dt;
+        if (z.losCheckTimer <= 0 && target) {
+          z.losCheckTimer = 0.18;
+          if (hasLineOfSight(z.x, z.z, target.x, target.z, z.radius)) {
+            // 벽 모서리를 완전히 돌아 시야 확보! 즉시 직진 모드로 복귀
+            z.followingWall = false;
+            z.stuckCount = 0;
+          }
+        }
+
+        if (z.followingWall) {
+          // 벽과 100% 평행한 접선 방향으로 주행 (벽을 더 찌르지 않고 레일 타듯 매끄럽게 질주)
+          moveEntityWithCollision(z, z.wallDirX * step * 1.12, z.wallDirZ * step * 1.12, z.radius);
+          const movedSlide = Math.hypot(z.x - prevX, z.z - prevZ);
+
+          if (movedSlide > step * 0.35) {
+            z.stuckCount = 0;
+            z.group.rotation.y = Math.atan2(z.wallDirX, z.wallDirZ);
+            return;
+          } else {
+            // 접선 방향 전진도 막혔다면 또 다른 벽(ㄱ자 구석)을 만난 것!
+            z.stuckCount = (z.stuckCount || 0) + 2;
+          }
         }
       }
 
-      // 기본 목표 방향 전진 시도
+      // 3. 기본 플레이어 방향 전진 시도
       moveEntityWithCollision(z, nx * step, nz * step, z.radius);
       const moved = Math.hypot(z.x - prevX, z.z - prevZ);
 
       // 벽이나 모서리에 가로막힘 감지
-      if (moved < step * 0.50) {
+      if (moved < step * 0.45) {
         z.stuckCount = (z.stuckCount || 0) + 1;
 
-        // 접선 벡터 (좌/우 90도 회피 방향)
-        const t1x = -nz, t1z = nx;
-        const t2x = nz, t2z = -nx;
+        // 근처 충돌 장애물 탐색
+        const ob = findNearestObstacle(z.x, z.z, z.radius + 1.8);
 
-        // 양방향 탐색 및 거리 평가
-        let pickSign = z.slideDir || (Math.random() < 0.5 ? 1 : -1);
+        if (ob) {
+          // 충돌한 면의 법선(Normal) 계산: X면 vs Z면
+          const dx = z.x - ob.x;
+          const dz = z.z - ob.z;
+          const normX = Math.abs(dx) / (ob.hw || 1);
+          const normZ = Math.abs(dz) / (ob.hd || 1);
 
-        // 정밀 탐색 반경 (스턱 횟수가 많아질수록 탐색 범위를 넓힘)
-        const probeDist = z.stuckCount > 2 ? 2.2 : 1.4;
-        const p1x = z.x + t1x * probeDist, p1z = z.z + t1z * probeDist;
-        const p2x = z.x + t2x * probeDist, p2z = z.z + t2z * probeDist;
-        const b1 = typeof isPointBlockedByWall === "function" ? isPointBlockedByWall(p1x, p1z, z.radius, false) : false;
-        const b2 = typeof isPointBlockedByWall === "function" ? isPointBlockedByWall(p2x, p2z, z.radius, false) : false;
+          let tangentX = 0, tangentZ = 0;
+          let wallNormalX = 0, wallNormalZ = 0;
 
-        if (!b1 && b2) {
-          pickSign = 1;
-        } else if (b1 && !b2) {
-          pickSign = -1;
-        } else if (!b1 && !b2 && target) {
-          // 둘 다 열려 있다면 목표 플레이어와의 유클리드 거리가 더 가까워지는 방향 선택
-          const d1 = Math.hypot(target.x - p1x, target.z - p1z);
-          const d2 = Math.hypot(target.x - p2x, target.z - p2z);
-          pickSign = d1 <= d2 ? 1 : -1;
-        } else if (b1 && b2) {
-          // 둘 다 막힌 'ㄱ'자 구석 모서리인 경우: 반대 방향으로 회전 시도
-          pickSign = (z.slideDir ? -z.slideDir : 1);
+          if (normX >= normZ) {
+            // 동/서쪽 벽에 부딪힘 -> 벽 법선은 X축, 접선(주행선)은 Z축
+            wallNormalX = Math.sign(dx) || 1;
+            // 타겟(플레이어)이 있는 방향의 Z축으로 달림
+            const targetSignZ = (target ? (target.z >= z.z ? 1 : -1) : (nz >= 0 ? 1 : -1));
+            tangentX = 0;
+            tangentZ = targetSignZ;
+          } else {
+            // 남/북쪽 벽에 부딪힘 -> 벽 법선은 Z축, 접선(주행선)은 X축
+            wallNormalZ = Math.sign(dz) || 1;
+            // 타겟(플레이어)이 있는 방향의 X축으로 달림
+            const targetSignX = (target ? (target.x >= z.x ? 1 : -1) : (nx >= 0 ? 1 : -1));
+            tangentX = targetSignX;
+            tangentZ = 0;
+          }
+
+          // 해당 접선 방향이 뚫려 있는지 전방 1.25m 검사
+          const probeDist = 1.25;
+          const p1x = z.x + tangentX * probeDist;
+          const p1z = z.z + tangentZ * probeDist;
+          const isTangentBlocked = typeof isPointBlockedByWall === "function" && isPointBlockedByWall(p1x, p1z, z.radius, false);
+
+          if (!isTangentBlocked) {
+            // 뚫려 있다면 벽 추종 레일 모드 활성화!
+            z.followingWall = true;
+            z.wallDirX = tangentX;
+            z.wallDirZ = tangentZ;
+            z.losCheckTimer = 0.15;
+            moveEntityWithCollision(z, tangentX * step * 1.12, tangentZ * step * 1.12, z.radius);
+            z.group.rotation.y = Math.atan2(tangentX, tangentZ);
+            return;
+          } else {
+            // 선호 접선 방향이 막혀 있다면 반대쪽 접선 시도
+            const oppX = -tangentX;
+            const oppZ = -tangentZ;
+            const p2x = z.x + oppX * probeDist;
+            const p2z = z.z + oppZ * probeDist;
+            const isOppBlocked = typeof isPointBlockedByWall === "function" && isPointBlockedByWall(p2x, p2z, z.radius, false);
+
+            if (!isOppBlocked) {
+              z.followingWall = true;
+              z.wallDirX = oppX;
+              z.wallDirZ = oppZ;
+              z.losCheckTimer = 0.15;
+              moveEntityWithCollision(z, oppX * step * 1.12, oppZ * step * 1.12, z.radius);
+              z.group.rotation.y = Math.atan2(oppX, oppZ);
+              return;
+            }
+          }
+
+          // [핵심: 'ㄱ'자 구석(Pocket) 탈출 판정!]
+          // 정면도 막히고, 좌/우 접선도 모두 막힌 경우 -> 후진 탈출 발동!
+          z.escapeTimer = 0.65;
+          // 벽에서 밀려나는 법선 벡터 + 플레이어 반대 방향(후진) 결합
+          const escX = wallNormalX * 0.75 - nx * 0.65;
+          const escZ = wallNormalZ * 0.75 - nz * 0.65;
+          const escLen = Math.hypot(escX, escZ) || 1;
+          z.escapeDirX = escX / escLen;
+          z.escapeDirZ = escZ / escLen;
+          z.followingWall = false;
+          moveEntityWithCollision(z, z.escapeDirX * step * 1.25, z.escapeDirZ * step * 1.25, z.radius);
+          z.group.rotation.y = Math.atan2(z.escapeDirX, z.escapeDirZ);
+        } else {
+          // 일반 단순 스턱 시 좌우 90도 회피
+          const tx = -nz, tz = nx;
+          moveEntityWithCollision(z, tx * step, tz * step, z.radius);
+          z.group.rotation.y = Math.atan2(tx, tz);
         }
-
-        z.slideDir = pickSign;
-        // 심각한 스턱 상태면 슬라이드 유지 시간을 대폭 늘려 완전히 코너를 돌게 함
-        z.slideTimer = z.stuckCount > 3 ? 0.95 : 0.65;
-
-        const sx = -nz * pickSign;
-        const sz = nx * pickSign;
-        // 탈출 방향으로 즉시 이동
-        moveEntityWithCollision(z, sx * step * 1.15, sz * step * 1.15, z.radius);
-        z.group.rotation.y = Math.atan2(sx, sz);
       } else {
         z.stuckCount = Math.max(0, (z.stuckCount || 0) - 1);
+        if (z.stuckCount === 0) {
+          z.followingWall = false;
+        }
       }
     }
 
